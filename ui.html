@@ -1,0 +1,3405 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manual QA Tool</title>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --surface: #1e293b;
+            --surface2: #273449;
+            --border: #334155;
+            --accent: #3b82f6;
+            --accent2: #6366f1;
+            --ok: #10b981;
+            --fail: #ef4444;
+            --warn: #f59e0b;
+            --text: #f1f5f9;
+            --muted: #94a3b8;
+            --figma: #a855f7;
+            --dev: #06b6d4;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: system-ui, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+        }
+
+        /* ─── Layout ─── */
+        .app {
+            display: grid;
+            grid-template-columns: 340px 1fr;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .sidebar {
+            background: var(--surface);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .main {
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* ─── Top bar ─── */
+        .top-bar {
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .top-bar h1 {
+            font-size: 0.95rem;
+            font-weight: 700;
+            flex: 1;
+        }
+
+        .top-bar .sub {
+            font-size: 0.65rem;
+            color: var(--muted);
+        }
+
+        /* ─── CU Selector ─── */
+        .cu-section {
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--border);
+            background: #0f172a88;
+        }
+
+        .cu-label {
+            font-size: 0.6rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--muted);
+            margin-bottom: 6px;
+        }
+
+        .cu-row {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+        }
+
+        .cu-select {
+            flex: 1;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text);
+            font-size: 0.8rem;
+            padding: 6px 10px;
+            outline: none;
+            cursor: pointer;
+        }
+
+        .cu-select:focus {
+            border-color: var(--accent);
+        }
+
+        .btn-icon {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--muted);
+            cursor: pointer;
+            padding: 6px 9px;
+            font-size: 0.85rem;
+            transition: all 0.15s;
+            white-space: nowrap;
+        }
+
+        .btn-icon:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .btn-icon.danger {
+            color: var(--fail);
+            opacity: 0.8;
+        }
+        
+        .btn-icon.danger:hover {
+            border-color: var(--fail);
+            color: var(--fail);
+            opacity: 1;
+            background: #fee2e222;
+        }
+
+        /* ─── Meta form ─── */
+        .meta-section {
+            padding: 12px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .meta-label {
+            font-size: 0.6rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--muted);
+            margin-bottom: 6px;
+        }
+
+        .meta-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        input[type=text],
+        textarea,
+        select {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text);
+            font-size: 0.8rem;
+            padding: 7px 10px;
+            width: 100%;
+            outline: none;
+            transition: border-color 0.15s;
+        }
+
+        input[type=text]:focus,
+        textarea:focus,
+        select:focus {
+            border-color: var(--accent);
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 70px;
+            font-family: inherit;
+        }
+
+        /* ─── Modern Switch (Toggle) ─── */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 32px;
+            height: 18px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            inset: 0;
+            background-color: var(--surface2);
+            transition: .3s;
+            border-radius: 20px;
+            border: 1px solid var(--border);
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 12px;
+            width: 12px;
+            left: 2px;
+            bottom: 2px;
+            background-color: var(--muted);
+            transition: .3s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background-color: var(--accent);
+            border-color: var(--accent);
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(14px);
+            background-color: white;
+        }
+
+        /* ─── Issues list ─── */
+        .issues-header {
+            padding: 10px 12px 6px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .issues-header span {
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--muted);
+            font-weight: 800;
+        }
+
+        .issues-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0 8px 8px;
+        }
+
+        .issue-item {
+            padding: 9px 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            border: 1px solid transparent;
+            margin-bottom: 3px;
+            transition: all 0.15s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .issue-item:hover {
+            background: var(--surface2);
+            border-color: var(--border);
+        }
+
+        .issue-item.active {
+            background: var(--surface2);
+            border-color: var(--accent);
+        }
+
+        .issue-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .issue-dot.FAIL {
+            background: var(--fail);
+        }
+
+        .issue-dot.OK {
+            background: var(--ok);
+        }
+
+        .issue-dot.WARNING {
+            background: var(--warn);
+        }
+
+        .issue-name {
+            font-size: 0.8rem;
+            font-weight: 500;
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .issue-del {
+            font-size: 0.72rem;
+            padding: 2px 5px;
+            border-radius: 4px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: var(--fail);
+            opacity: 0.6;
+            transition: all 0.2s;
+        }
+
+        .issue-del:hover {
+            opacity: 1;
+            background: #fee2e244;
+        }
+
+        .issue-excel {
+            font-size: 0.85rem;
+            padding: 4px 6px;
+            border-radius: 6px;
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+            cursor: pointer;
+            color: var(--ok);
+            transition: all 0.2s;
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .issue-excel:hover {
+            background: rgba(16, 185, 129, 0.2);
+            border-color: var(--ok);
+            transform: translateY(-1px);
+        }
+
+        /* ─── Bottom actions ─── */
+        .sidebar-actions {
+            padding: 10px 12px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .sidebar-footer {
+            padding: 8px 16px;
+            text-align: center;
+            font-size: 0.62rem;
+            color: #475569;
+            border-top: 1px solid var(--border);
+        }
+
+        /* ─── Buttons ─── */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 0.82rem;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            transition: all 0.15s;
+            width: 100%;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #2563eb;
+        }
+
+        .btn-success {
+            background: var(--ok);
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #059669;
+        }
+
+        .btn-ghost {
+            background: var(--surface2);
+            color: var(--text);
+            border: 1px solid var(--border);
+        }
+
+        .btn-ghost:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        /* ─── Main content ─── */
+        .main-header {
+            padding: 18px 24px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .main-header h2 {
+            font-size: 1rem;
+            font-weight: 700;
+            flex: 1;
+        }
+
+        .status-select {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text);
+            font-size: 0.8rem;
+            padding: 6px 10px;
+            width: 120px;
+        }
+
+        .editor {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+        }
+
+        .field-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .field-label {
+            font-size: 0.68rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--muted);
+            font-weight: 700;
+        }
+
+        /* ─── Image upload zones ─── */
+        .images-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+        }
+
+        .upload-zone {
+            border: 2px dashed var(--border);
+            border-radius: 12px;
+            padding: 14px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 7px;
+            cursor: pointer;
+            transition: all 0.2s;
+            min-height: 160px;
+            position: relative;
+        }
+
+        .upload-zone.figma {
+            border-color: #a855f744;
+        }
+
+        .upload-zone.figma:hover,
+        .upload-zone.figma.drag {
+            border-color: var(--figma);
+            background: #a855f708;
+        }
+
+        .upload-zone.dev {
+            border-color: #06b6d444;
+        }
+
+        .upload-zone.dev:hover,
+        .upload-zone.dev.drag {
+            border-color: var(--dev);
+            background: #06b6d408;
+        }
+
+        .upload-zone input[type=file] {
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        .upload-icon {
+            font-size: 1.8rem;
+        }
+
+        .upload-label {
+            font-size: 0.75rem;
+            font-weight: 700;
+        }
+
+        .upload-label.figma {
+            color: var(--figma);
+        }
+
+        .upload-label.dev {
+            color: var(--dev);
+        }
+
+        .upload-hint {
+            font-size: 0.68rem;
+            color: var(--muted);
+        }
+
+        .upload-preview {
+            width: 100%;
+            border-radius: 8px;
+            object-fit: cover;
+            max-height: 140px;
+            display: none;
+        }
+
+        .upload-preview.visible {
+            display: block;
+        }
+
+        .remove-img {
+            font-size: 0.68rem;
+            color: var(--muted);
+            cursor: pointer;
+            background: none;
+            border: none;
+        }
+
+        .remove-img:hover {
+            color: var(--fail);
+        }
+
+        /* ─── Save bar ─── */
+        .save-bar {
+            padding: 12px 24px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .save-bar .spacer {
+            flex: 1;
+        }
+
+        .save-msg {
+            font-size: 0.78rem;
+            color: var(--ok);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .save-msg.visible {
+            opacity: 1;
+        }
+
+        /* ─── Empty state ─── */
+        .empty-state {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            color: var(--muted);
+        }
+
+        .empty-state .icon {
+            font-size: 2.5rem;
+        }
+
+        .empty-state p {
+            font-size: 0.85rem;
+        }
+
+        /* ─── Modal ─── */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: #00000090;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            display: none;
+        }
+
+        .modal-overlay.open {
+            display: flex;
+        }
+
+        .modal {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 28px;
+            width: 420px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .modal h3 {
+            font-size: 1rem;
+            font-weight: 700;
+        }
+
+        .modal-sub {
+            font-size: 0.82rem;
+            color: var(--muted);
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 8px;
+            justify-content: flex-end;
+        }
+
+        .modal-actions .btn {
+            width: auto;
+            padding: 8px 20px;
+        }
+
+        .btn-danger {
+            background: var(--fail);
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+
+        /* ─── Toast ─── */
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 12px 20px;
+            font-size: 0.82rem;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            transform: translateY(20px);
+            opacity: 0;
+            transition: all 0.3s;
+            z-index: 999;
+        }
+
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        .toast.ok {
+            border-color: var(--ok);
+        }
+
+        .toast.error {
+            border-color: var(--fail);
+        }
+
+        /* ─── Scrollbar ─── */
+        ::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 4px;
+        }
+
+        /* Placeholder for contenteditable obs editor */
+        [contenteditable][data-placeholder]:empty::before {
+            content: attr(data-placeholder);
+            color: var(--muted);
+            pointer-events: none;
+            font-style: italic;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="app">
+        <!-- ═══ SIDEBAR ═══ -->
+        <div class="sidebar">
+            <div class="top-bar">
+                <div>
+                    <h1>🧪 Manual QA Tool</h1>
+                    <div class="sub">Gestión de pruebas</div>
+                </div>
+            </div>
+
+            <!-- CU Selector -->
+            <div class="cu-section">
+                <div class="cu-label">Caso de uso activo</div>
+                <div class="cu-row">
+                    <select class="cu-select" id="cu-select" title="Seleccionar caso de uso activo" onchange="switchCU(this.value)">
+                        <option value="">— Sin casos —</option>
+                    </select>
+                    <button class="btn-icon" title="Nuevo CU" onclick="openNewCUModal()">＋</button>
+                    <button class="btn-icon danger" title="Eliminar CU" onclick="deleteCU()">🗑</button>
+                </div>
+            </div>
+
+            <!-- Meta Config -->
+            <div class="meta-section">
+                <!-- Configuracion Collapse -->
+                <div class="meta-label meta-collapse-header"
+                    onclick="document.getElementById('meta-content').style.display = document.getElementById('meta-content').style.display === 'none' ? 'block' : 'none'">
+                    <span>⚙️ Configuración del caso</span>
+                    <span class="expand-icon">▼ Expandir</span>
+                </div>
+                <div id="meta-content" class="mt-12" style="display:none;">
+                    <div class="meta-grid">
+                        <input type="text" id="tester" placeholder="Tester" oninput="scheduleMetaSave()">
+                        <input type="text" id="caso_de_uso" placeholder="Descripción del CU"
+                            oninput="scheduleMetaSave()">
+                        <input type="text" id="url_ambiente" placeholder="URL del ambiente"
+                            oninput="scheduleMetaSave()">
+                        <input type="text" id="url_figma" placeholder="URL de Figma" oninput="scheduleMetaSave()"
+                            class="border-figma">
+                    </div>
+                </div>
+
+                <!-- Navs / SO Collapse -->
+                <div class="meta-label meta-collapse-header mt-15"
+                    onclick="document.getElementById('nav-content').style.display = document.getElementById('nav-content').style.display === 'none' ? 'block' : 'none'">
+                    <span>🌐 Navegadores y Sistemas Operativos</span>
+                    <span class="expand-icon">▼ Expandir</span>
+                </div>
+                <div id="nav-content" class="mt-10" style="display:none;">
+                    <div id="nav-group" class="flex-wrap-gap-10 mb-10 text-08">
+                        <label><input type="checkbox" value="Chrome" onchange="scheduleMetaSave()"> Chrome</label>
+                        <label><input type="checkbox" value="Edge" onchange="scheduleMetaSave()"> Edge</label>
+                        <label><input type="checkbox" value="Firefox" onchange="scheduleMetaSave()"> Firefox</label>
+                        <label><input type="checkbox" value="Safari" onchange="scheduleMetaSave()"> Safari</label>
+                    </div>
+                    <div id="so-group" class="flex-wrap-gap-10 text-08">
+                        <label><input type="checkbox" value="Windows" onchange="scheduleMetaSave()"> Windows</label>
+                        <label><input type="checkbox" value="macOS" onchange="scheduleMetaSave()"> macOS</label>
+                        <label><input type="checkbox" value="Linux" onchange="scheduleMetaSave()"> Linux</label>
+                        <label><input type="checkbox" value="Android" onchange="scheduleMetaSave()"> Android</label>
+                        <label><input type="checkbox" value="iOS" onchange="scheduleMetaSave()"> iOS</label>
+                    </div>
+                </div>
+
+                <!-- Conclusion (Visible) -->
+                <div class="meta-label mt-15">
+                    <button class="btn btn-ghost btn-conclusion w-full flex-center"
+                        onclick="openConclusionModal()">📝 Redactar Conclusión Global</button>
+                </div>
+            </div>
+
+            <!-- Issues -->
+            <div class="issues-header">
+                <div>
+                    <span>Issues (<span id="issue-count">0</span>)</span>
+                    <div id="side-stats-summary" class="stats-summary-text">
+                        CALCULANDO...</div>
+                </div>
+                <button class="btn btn-ghost btn-xs"
+                    onclick="newIssue()">+ Nuevo</button>
+            </div>
+            <div class="issues-list" id="issues-list"></div>
+
+            <div class="sidebar-actions">
+                <button class="btn btn-primary mb-10 btn-indigo"
+                    onclick="showGlobalStats()">🌍 Estadísticas Globales</button>
+                <button class="btn btn-ghost mb-10 btn-dark"
+                    onclick="openHistoryModal()">📜 Historial de Ejecuciones</button>
+                <button class="btn btn-success mb-10" style="background:#10b981; border:none;"
+                    onclick="exportFullMatrixToExcel()">📊 Exportar Matriz (Excel)</button>
+                <div style="display:flex; gap:8px;">
+                    <button class="btn btn-success" style="flex:1; padding:8px 5px; font-size:0.8rem;"
+                        onclick="generateReport()">📄 Reporte CU</button>
+                    <button class="btn btn-dev"
+                        style="flex:1; background:#60a5fa; color:white; border:none; border-radius:8px; font-weight:700; cursor:pointer; font-size:0.8rem; padding:8px 5px; transition:0.2s;"
+                        onmouseover="this.style.background='#3b82f6'" onmouseout="this.style.background='#60a5fa'"
+                        onclick="openGlobalReportModal()">🌍 Global</button>
+                </div>
+            </div>
+            <div class="sidebar-footer">QA Tools By Erich Petrocelli</div>
+        </div>
+
+        <!-- ═══ MAIN ═══ -->
+        <div class="main" id="main">
+            <div class="empty-state" id="empty-state">
+                <div class="icon">📋</div>
+                <p id="empty-text">Seleccioná un CU o creá uno nuevo</p>
+                <button class="btn btn-primary" style="width:auto;padding:9px 22px" onclick="openNewCUModal()">+ Crear
+                    primer CU</button>
+            </div>
+
+            <div id="stats-container" class="stats-container-view" style="display:none;">
+                <div class="flex-between mb-20">
+                    <h2 id="stats-title" class="stats-title-main">📊 Estadísticas del Caso de Uso</h2>
+                    <button class="btn-icon"
+                        onclick="document.getElementById('stats-container').style.display='none'; document.getElementById('empty-state').style.display='flex';"
+                        title="Cerrar Estadísticas">✕</button>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stats-card">
+                        <div class="stats-value" id="st-total">0</div>
+                        <div class="stats-label uppercase-tracking">Total Tests</div>
+                    </div>
+                    <div class="stats-card ok">
+                        <div class="stats-value" id="st-ok" style="color:var(--ok);">0</div>
+                        <div class="stats-label uppercase-tracking" style="color:var(--ok);">Pass (OK)</div>
+                    </div>
+                    <div class="stats-card fail">
+                        <div class="stats-value" id="st-fail" style="color:var(--fail);">0</div>
+                        <div class="stats-label uppercase-tracking" style="color:var(--fail);">Errores (FAIL)</div>
+                    </div>
+                    <div class="stats-card warn">
+                        <div class="stats-value" id="st-warn" style="color:var(--warn);">0</div>
+                        <div class="stats-label uppercase-tracking" style="color:var(--warn);">Warnings</div>
+                    </div>
+                    <div class="stats-card pending">
+                        <div class="stats-value" id="st-pending" style="color:var(--text-muted);">0</div>
+                        <div class="stats-label uppercase-tracking" style="color:var(--text-muted);">Pendientes</div>
+                    </div>
+                </div>
+
+                <div class="stats-card-wide mb-30">
+                    <div class="stats-label-wide uppercase-tracking mb-10">Porcentaje de Aceptación</div>
+                    <div class="progress-container">
+                        <div id="st-bar-ok" class="progress-bar" style="background:var(--ok); width:0%;"></div>
+                        <div id="st-bar-warn" class="progress-bar" style="background:var(--warn); width:0%;"></div>
+                        <div id="st-bar-fail" class="progress-bar" style="background:var(--fail); width:0%;"></div>
+                    </div>
+                    <div style="margin-top:12px; font-size:1.1rem; font-weight:800; text-align:right;" id="st-perc">
+                        Aceptación: 0%</div>
+                </div>
+
+                <!-- TREE VIEW SECTION -->
+                <div class="stats-card-wide mb-30">
+                    <h3 class="stats-tree-title">
+                        Árbol de Calidad (CU → HU → Test)
+                    </h3>
+                    <div id="stats-tree-container" class="stats-tree-list">
+                        <div class="stats-loading-msg">Cargando jerarquía...</div>
+                    </div>
+                </div>
+
+                <div class="stats-header-row mb-15">
+                    <h3 class="stats-subtitle">Listado de Issues</h3>
+                    <div class="flex-gap-10">
+                        <button onclick="openGeminiGenModal()" class="btn-ai" style="font-size:0.78rem; padding:6px 14px;">
+                            ✨ AI Tool
+                        </button>
+                        <select id="st-filter-status" onchange="renderFilteredStats()" class="st-select">
+                            <option value="ALL">Todos los Estados</option>
+                            <option value="OK">OK</option>
+                            <option value="FAIL">FAIL</option>
+                            <option value="WARNING">WARNING</option>
+                        </select>
+                        <select id="st-filter-sev" onchange="renderFilteredStats()" class="st-select">
+                            <option value="ALL">Todas las Criticidades</option>
+                            <option value="CRÍTICA">Crítica</option>
+                            <option value="ALTA">Alta</option>
+                            <option value="MEDIA">Media</option>
+                            <option value="BAJA">Baja</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="st-issues-list" class="stats-issues-list"></div>
+            </div>
+
+            <div id="editor-container" style="display:none; flex:1; overflow:hidden; flex-direction:column;">
+                <div class="main-header">
+                    <h2 id="editor-title">Nuevo Issue</h2>
+                    <select class="status-select" id="status" onchange="toggleErrorDetails()">
+                        <option value="FAIL">❌ FAIL</option>
+                        <option value="OK">✅ OK</option>
+                        <option value="WARNING">⚠️ WARNING</option>
+                    </select>
+                </div>
+
+                <div class="editor">
+                    <div style="display:flex; gap:15px; margin-bottom:15px;">
+                        <div class="field-group flex-1 no-mb">
+                            <div class="field-label">Módulo / Sección</div>
+                            <input type="text" id="modulo" placeholder="Ej: Buscador, ABM, Reportes"
+                                oninput="updateEditorTitle()">
+                        </div>
+                        <div class="field-group flex-2 no-mb">
+                            <div class="field-label">Título del issue / Feature</div>
+                            <input type="text" id="feature" placeholder="Ej: Pantalla de filtros — botón Aplicar"
+                                oninput="updateEditorTitle()">
+                        </div>
+                    </div>
+                    <div class="field-group editor-tests-section mb-20">
+                        <div class="field-label flex-between">
+                            <span>Lista de Tests (Criterios de Aceptación)</span>
+                            <div class="flex-gap-10">
+                                <button onclick="openGeminiGenModal()" class="btn-ai">
+                    ✨ AI Tool
+                </button>
+                                <button class="btn btn-ghost btn-xs"
+                                    onclick="addSectionRow()">+ Agregar Sección Padre</button>
+                                <button class="btn btn-ghost btn-xs"
+                                    onclick="addSideBySideRow()">+ Agregar Test Individual</button>
+                            </div>
+                        </div>
+                        <div class="editor-help-text mb-10">
+                            Podés pegar debajo una lista de pruebas (una por línea) y presionar <strong>Generar
+                                Cards</strong> para crear automáticamente múltiples tests donde podrás adjuntar
+                            evidencias Side-by-Side (Figma vs Dev) y el estado de cada prueba.
+                        </div>
+                        <div class="flex-gap-10 mb-15">
+                            <textarea id="bulk-test-input"
+                                placeholder="- Validar login exitoso\n- Validar formato correo..." rows="3"
+                                style="flex:1;"></textarea>
+                            <button class="btn btn-primary btn-auto-nowrap" onclick="generateTestCardsFromText()">Generar Cards</button>
+                        </div>
+                        <div class="editor-tests-header mb-12">
+                            <div class="uppercase-bold-text">
+                                ORDEN DE PRUEBAS / FILTROS</div>
+                            <div class="flex-center-gap-8">
+                                <span class="label-xs-bold">Ver por estado:</span>
+                                <select id="sbs-filter" onchange="currentSbsFilter = this.value; renderSBS();" class="st-select-xs">
+                                    <option value="ALL">🔍 Todos</option>
+                                    <option value="PENDING">⏳ Pendientes</option>
+                                    <option value="OK">✅ Pasó</option>
+                                    <option value="WARNING">⚠️ Alerta</option>
+                                    <option value="FAIL">❌ Falló</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div id="side-by-side-container" class="stats-issues-list"></div>
+                    </div>
+
+                    <div id="error-details-section" class="error-details-box">
+                        <h3 id="error-details-title" class="error-details-title">Detalles del Error</h3>
+
+                        <div class="field-group">
+                            <div class="field-label">Tipo de error (pueden ser varios)</div>
+                            <div id="tipo_error" class="flex-wrap-gap-10">
+                                <label><input type="checkbox" value="Funcional"> Funcional</label>
+                                <label><input type="checkbox" value="Validación"> Validación</label>
+                                <label><input type="checkbox" value="Datos"> Datos</label>
+                                <label><input type="checkbox" value="UI"> UI</label>
+                                <label><input type="checkbox" value="Texto"> Texto</label>
+                                <label><input type="checkbox" value="Integración"> Integración</label>
+                                <label><input type="checkbox" value="Seguridad"> Seguridad</label>
+                                <label><input type="checkbox" value="Rendimiento"> Rendimiento</label>
+                            </div>
+                        </div>
+
+                        <div class="editor-row gap-15">
+                            <div class="field-group" style="flex:1">
+                                <div class="field-label">Severidad</div>
+                                <select id="severidad">
+                                    <option value="Baja">Baja</option>
+                                    <option value="Media" selected>Media</option>
+                                    <option value="Alta">Alta</option>
+                                    <option value="Crítica">Crítica</option>
+                                </select>
+                            </div>
+                            <div class="field-group" style="flex:1">
+                                <div class="field-label">Ambiente</div>
+                                <input type="text" id="ambiente_error" placeholder="Ej: dev, uat, prod">
+                            </div>
+                        </div>
+
+                        <div class="field-group no-mb">
+                            <div class="field-label flex-between">
+                                <span>Pasos para reproducir</span>
+                                <span class="help-text-xs">Soporta
+                                    viñetas y checklists markdown</span>
+                            </div>
+                            <textarea id="pasos_reproducir" rows="3"
+                                placeholder="1. Entrar a...\n2. Hacer clic en..."></textarea>
+                        </div>
+                    </div>
+                    <!-- Evidence Gallery Only for General Logs -->
+                    <div class="field-group">
+                        <div class="field-label flex-between">
+                            <span>Evidencia adicional de Error Global <span
+                                    class="label-muted-xs">(logs, chats,
+                                    network…)</span></span>
+                            <span class="label-muted-xs">Hover + Ctrl+V
+                                &nbsp;·&nbsp; Drag &amp; Drop &nbsp;·&nbsp; Clic</span>
+                        </div>
+                        <div id="zone-ev" class="upload-drop-zone"
+                            ondragover="onEvidDrag(event)" ondragleave="offEvidDrag()" ondrop="onEvidDrop(event)"
+                            onmouseenter="lastHoveredZone='ev'">
+                            <input type="file" accept="image/*,video/*" multiple id="file-ev"
+                                class="input-file-overlay"
+                                onchange="onEvidSelect(event)">
+                            <span style="font-size:1.2rem">📎</span>
+                            <span id="ev-hint" class="hint-text-xs">Arrastrá imágenes acá, o
+                                hacé clic para seleccionar</span>
+                        </div>
+                        <div id="ev-gallery" class="flex-wrap-gap-8 mt-4"></div>
+                    </div>
+
+                </div>
+            </div>
+
+            <div class="save-bar">
+                <span class="save-msg" id="save-msg">✅ Guardado</span>
+                <div class="spacer"></div>
+                <button class="btn btn-ghost btn-auto-px" onclick="saveAndContinue()">💾
+                    Guardar
+                    y continuar</button>
+                <button class="btn btn-primary btn-auto-px" onclick="saveAndReport()">📄
+                    Guardar
+                    y generar reporte</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ─── Modal nuevo CU ─── -->
+    <div class="modal-overlay" id="modal-new-cu">
+        <div class="modal">
+            <h3>Nuevo Caso de Uso</h3>
+            <div class="flex-column gap-8">
+                <input type="text" id="new-cu-name" placeholder="Nombre del caso de uso (ej: Gestion de Gastos)">
+                <input type="text" id="new-cu-tester" placeholder="Tester">
+                <input type="text" id="new-cu-url" placeholder="URL del ambiente">
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-ghost" onclick="closeModal('modal-new-cu')">Cancelar</button>
+                <button class="btn btn-primary" onclick="createCU()">Crear</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ─── Modal confirmación eliminar ─── -->
+    <div class="modal-overlay" id="modal-confirm">
+        <div class="modal">
+            <h3 id="confirm-title">Confirmar</h3>
+            <p class="modal-sub" id="confirm-msg">¿Estás seguro?</p>
+            <div class="modal-actions">
+                <button class="btn btn-ghost" onclick="closeModal('modal-confirm')">Cancelar</button>
+                <button class="btn btn-danger" id="confirm-ok">Eliminar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ─── Modal Conclusión QA ─── -->
+    <div class="modal-overlay" id="modal-conclusion">
+        <div class="modal modal-wide">
+            <div class="modal-header-actions mb-15">
+                <h3 class="no-m">📝 Conclusión QA Global</h3>
+                <div class="flex-gap-10">
+                    <button class="btn btn-ghost btn-gemini"
+                        onclick="window.open('https://gemini.google.com/gem/14LgAPPmZ54w0X7d8b_xBuTCaEfq8DzNh?usp=sharing', '_blank')"
+                        title="Abre el Asistente Redactor en una nueva pestaña">✨ Redactor Gemini</button>
+                    <button class="btn btn-ghost btn-copy"
+                        onclick="copyDataForGemini()"
+                        title="Copia los datos de este CU en formato ideal para el Asistente Gemini">📋 Copiar Datos
+                        CU</button>
+                </div>
+            </div>
+            <div class="flex-column gap-8">
+                <textarea id="conclusion_qa"
+                    placeholder="Escribe aquí el resumen y conclusión final del testing general de este módulo..."
+                    class="conclusion-textarea"
+                    oninput="scheduleMetaSave()"></textarea>
+            </div>
+            <div class="modal-actions mt-20">
+                <button class="btn btn-ghost" onclick="closeModal('modal-conclusion')">Cerrar</button>
+                <button class="btn btn-primary" onclick="forceSaveMeta(true)">💾 Guardar Conclusión</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+        let data = { tester: '', caso_de_uso: '', url_ambiente: '', pruebas: [] };
+        let activeCU = null;
+        let currentIdx = -1;
+        let metaSaveTimer = null;
+        let sbsPairs = []; // Array of pairs { figma: {src, file}, dev: {src, file} }
+        let lastHoveredZone = null;
+        let currentSbsFilter = 'ALL';
+        let currentStatsData = [];
+
+        async function openHistoryModal() {
+            openModal('modal-history');
+            const content = document.getElementById('history-content');
+            content.innerHTML = '<div style="text-align:center; padding: 40px; color:var(--muted);">⏳ Cargando historial...</div>';
+            
+            try {
+                const res = await fetch('/api/history');
+                const runs = await res.json();
+                
+                if (runs.length === 0) {
+                    content.innerHTML = '<div style="text-align:center; padding: 40px; color:var(--muted);">No hay ejecuciones registradas.</div>';
+                    return;
+                }
+                
+                let html = '<div style="display:flex; flex-direction:column; gap:12px;">';
+                runs.forEach(run => {
+                    const date = new Date(run.created_at).toLocaleString();
+                    const typeLabel = run.run_type === 'RETEST' ? '🔄 RETEST' : '🚀 FULL RUN';
+                    const typeColor = run.run_type === 'RETEST' ? 'var(--warn)' : 'var(--dev)';
+                    
+                    html += `
+                        <div style="background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px; display:flex; justify-content:space-between; align-items:center;">
+                            <div>
+                                <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
+                                    <span style="background:${typeColor}20; color:${typeColor}; font-size:0.65rem; padding:2px 8px; border-radius:10px; font-weight:800;">${typeLabel}</span>
+                                    <span style="font-weight:700; color:var(--text);">Run #${run.id}</span>
+                                </div>
+                                <div style="font-size:0.8rem; color:var(--muted);">📅 ${date} | 🧑‍💻 ${run.tester || 'N/A'}</div>
+                                ${run.parent_run_id ? `<div style="font-size:0.75rem; color:var(--accent); margin-top:4px;">🔗 Derivado del Run #${run.parent_run_id}</div>` : ''}
+                            </div>
+                            <div style="display:flex; gap:8px;">
+                                <button class="btn" style="padding:6px 12px; font-size:0.75rem; background:var(--surface2);" onclick="window.open('/api/report/${run.id}', '_blank')">📄 Ver Reporte</button>
+                                <button class="btn btn-dev" style="padding:6px 12px; font-size:0.75rem; background:var(--fail); color:white; border:none;" onclick="createRetest(${run.id})">🔄 Crear Retest</button>
+                            </div>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+                content.innerHTML = html;
+            } catch (e) {
+                content.innerHTML = `<div style="text-align:center; padding: 40px; color:var(--fail);">❌ Error al cargar historial: ${e.message}</div>`;
+            }
+        }
+
+        async function createBug(index) {
+            const pair = sbsPairs[index];
+            if (!pair.execution_id) {
+                toast('⚠️ Debés guardar los cambios primero para generar un ID de ejecución.', 'error');
+                return;
+            }
+            
+            const title = prompt('Resumen del Bug:', `Bug en: ${pair.title}`);
+            if (!title) return;
+            
+            const desc = prompt('Descripción / Pasos:', '1. Ir a...\n2. Observar que...');
+            
+            try {
+                const res = await fetch('/api/defects', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        execution_id: pair.execution_id,
+                        title: title,
+                        description: desc,
+                        severity: pair.severity || 'Media'
+                    })
+                });
+                const json = await res.json();
+                if (json.ok) {
+                    toast('🐞 Bug creado correctamente', 'ok');
+                    if (!pair.defects) pair.defects = [];
+                    pair.defects.push({ id: json.defect_id, title: title, status: 'OPEN' });
+                    renderSBS();
+                } else {
+                    toast('❌ Error: ' + json.error, 'error');
+                }
+            } catch (e) {
+                toast('❌ Error de conexión', 'error');
+            }
+        }
+
+        async function markBugFixed(bugId, index) {
+            if (!confirm('¿Marcar este bug como FIXED?')) return;
+            
+            try {
+                const res = await fetch(`/api/defects/${bugId}/status`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: 'FIXED' })
+                });
+                const json = await res.json();
+                if (json.ok) {
+                    toast('✅ Bug marcado como FIXED', 'ok');
+                    const bug = sbsPairs[index].defects.find(b => b.id === bugId);
+                    if (bug) bug.status = 'FIXED';
+                    renderSBS();
+                } else {
+                    toast('❌ Error: ' + json.error, 'error');
+                }
+            } catch (e) {
+                toast('❌ Error de conexión', 'error');
+            }
+        }
+
+        async function createRetest(runId) {
+            if (!confirm(`¿Estás seguro de que querés iniciar un Retest basado en el Run #${runId}?\n\nSolo se incluirán los tests que fallaron y cuyos bugs asociados estén marcados como FIXED.`)) return;
+            
+            toast('⏳ Creando Retest...', '');
+            try {
+                const res = await fetch(`/api/runs/${runId}/retest`, { method: 'POST' });
+                const json = await res.json();
+                
+                if (json.ok) {
+                    toast('✅ Retest creado. Reiniciando vista...', 'ok');
+                    closeModal('modal-history');
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    toast('❌ Error: ' + json.error, 'error');
+                }
+            } catch (e) {
+                toast('❌ Error de conexión', 'error');
+            }
+        }
+
+        // ─── Init ───
+        async function init() {
+            const res = await fetch('/api/casos');
+            const json = await res.json();
+            activeCU = json.active;
+            populateCUSelect(json.casos, activeCU);
+            if (activeCU) await loadCU(activeCU);
+            else showNoIssueState();
+        }
+
+        function populateCUSelect(casos, active) {
+            const sel = document.getElementById('cu-select');
+            sel.innerHTML = casos.length === 0
+                ? '<option value="">— Sin casos —</option>'
+                : casos.map(c => `<option value="${c}" ${c === active ? 'selected' : ''}>${c.replace(/_/g, ' ')}</option>`).join('');
+        }
+
+        async function loadCU(name) {
+            const res = await fetch('/api/data');
+            data = await res.json();
+            activeCU = name;
+            document.getElementById('tester').value = data.tester || '';
+            document.getElementById('caso_de_uso').value = data.caso_de_uso || '';
+            document.getElementById('url_ambiente').value = data.url_ambiente || '';
+            document.getElementById('url_figma').value = data.url_figma || '';
+            document.getElementById('conclusion_qa').value = data.conclusion_qa || '';
+            const navs = Array.isArray(data.navegadores) ? data.navegadores : (data.navegadores ? data.navegadores.split(',').map(s => s.trim()) : []);
+            document.querySelectorAll('#nav-group input[type="checkbox"]').forEach(cb => cb.checked = navs.includes(cb.value));
+            const sos = Array.isArray(data.sistemas_operativos) ? data.sistemas_operativos : (data.sistemas_operativos ? data.sistemas_operativos.split(',').map(s => s.trim()) : []);
+            document.querySelectorAll('#so-group input[type="checkbox"]').forEach(cb => cb.checked = sos.includes(cb.value));
+            currentIdx = -1;
+            document.getElementById('editor-container').style.display = 'none';
+            document.getElementById('empty-state').style.display = 'none';
+            renderList();
+            setTimeout(() => showStats(), 50);
+        }
+
+        function showNoIssueState() {
+            document.getElementById('empty-text').textContent = 'Seleccioná un CU o creá uno nuevo';
+            document.getElementById('empty-state').style.display = '';
+            document.getElementById('editor-container').style.display = 'none';
+        }
+
+        // ─── CU management ───
+        async function switchCU(name) {
+            if (!name) return;
+            const res = await fetch('/api/casos/select', { method: 'POST', body: JSON.stringify({ name }), headers: { 'Content-Type': 'application/json' } });
+            const json = await res.json();
+            data = json.data;
+            activeCU = name;
+            currentIdx = -1;
+            document.getElementById('tester').value = data.tester || '';
+            document.getElementById('caso_de_uso').value = data.caso_de_uso || '';
+            document.getElementById('url_ambiente').value = data.url_ambiente || '';
+            document.getElementById('url_figma').value = data.url_figma || '';
+            document.getElementById('conclusion_qa').value = data.conclusion_qa || '';
+            const navs = Array.isArray(data.navegadores) ? data.navegadores : (data.navegadores ? data.navegadores.split(',').map(s => s.trim()) : []);
+            document.querySelectorAll('#nav-group input[type="checkbox"]').forEach(cb => cb.checked = navs.includes(cb.value));
+            const sos = Array.isArray(data.sistemas_operativos) ? data.sistemas_operativos : (data.sistemas_operativos ? data.sistemas_operativos.split(',').map(s => s.trim()) : []);
+            document.querySelectorAll('#so-group input[type="checkbox"]').forEach(cb => cb.checked = sos.includes(cb.value));
+            document.getElementById('editor-container').style.display = 'none';
+            document.getElementById('empty-state').style.display = 'none';
+            renderList();
+            showStats();
+            toast(`CU: ${name.replace(/_/g, ' ')}`, 'ok');
+        }
+
+        function openNewCUModal() {
+            document.getElementById('new-cu-name').value = '';
+            document.getElementById('new-cu-tester').value = '';
+            document.getElementById('new-cu-url').value = '';
+            document.getElementById('modal-new-cu').classList.add('open');
+            setTimeout(() => document.getElementById('new-cu-name').focus(), 100);
+        }
+
+        function openConclusionModal() {
+            document.getElementById('modal-conclusion').classList.add('open');
+            setTimeout(() => document.getElementById('conclusion_qa').focus(), 100);
+        }
+
+        async function copyDataForGemini() {
+            if (!activeCU || !data) return toast('No hay datos para copiar', 'error');
+
+            let totalTests = 0, okTests = 0, failTests = 0, warnTests = 0, pendingTests = 0;
+            let issuesList = [];
+
+            if (data.pruebas) {
+                data.pruebas.forEach(p => {
+                    const tList = p.test_list || p.test_list_v2 || [];
+                    let itemText = `### HU/Módulo: ${p.feature || 'Sin título'} (${p.modulo || 'General'})\n`;
+                    itemText += `Estado Global: ${(p.status || 'PENDING').toUpperCase()} | Severidad: ${p.severidad || 'Media'}`;
+
+                    if (tList.length > 0) {
+                        itemText += `\nTests evaluados:`;
+                        tList.forEach(t => {
+                            if (t.isSection) {
+                                itemText += `\n-- SECCIÓN: ${t.title} --`;
+                                return;
+                            }
+                            totalTests++;
+                            const tSt = (t.status || 'PENDING').toUpperCase();
+                            const tIcon = tSt === 'OK' ? '🟢' : (tSt === 'FAIL' ? '🔴' : (tSt === 'WARNING' ? '🟡' : '⏳'));
+                            if (tSt === 'OK') okTests++;
+                            else if (tSt === 'FAIL') failTests++;
+                            else if (tSt === 'WARNING') warnTests++;
+                            else pendingTests++;
+
+                            itemText += `\n  ${tIcon} [${tSt}] ${t.title || 'Prueba técnica'}`;
+                            if (tSt !== 'OK' && (t.errorTypes?.length > 0 || t.obs)) {
+                                if (t.errorTypes?.length > 0) itemText += ` | Tipos: ${t.errorTypes.join(', ')}`;
+                                if (t.severity) itemText += ` | Severidad: ${t.severity}`;
+                                if (t.obs) itemText += `\n    └─ Obs: ${t.obs}`;
+                            }
+                        });
+                    } else {
+                        // Fallback legacy
+                        totalTests++;
+                        const st = (p.status || 'FAIL').toUpperCase();
+                        const tIcon = st === 'OK' ? '🟢' : (st === 'FAIL' ? '🔴' : '🟡');
+                        if (st === 'OK') okTests++;
+                        else if (st === 'WARNING') warnTests++;
+                        else failTests++;
+                        itemText += `\n${tIcon} [${st}] Status único de la HU.`;
+                    }
+
+                    if (p.observaciones) itemText += `\nNotas HU: ${p.observaciones}`;
+                    issuesList.push(itemText);
+                });
+            }
+
+            const acceptanceScore = totalTests ? (okTests / totalTests * 100) : 0;
+            const reportText = `REPORTE DE QA DETALLADO PARA GEMINI
+Caso de Uso: ${data.caso_de_uso || activeCU}
+Módulo: ${activeCU}
+
+📊 ESTADÍSTICAS POR TESTS INDIVIDUALES:
+- Total Tests: ${totalTests}
+- 🟢 Aprobados (OK): ${okTests}
+- 🔴 Fallidos (FAIL): ${failTests}
+- 🟡 Advertencias (WARNING): ${warnTests}
+- ⏳ Pendientes (PENDING): ${pendingTests}
+- Score de Calidad: ${acceptanceScore.toFixed(1)}%
+
+📋 DESGLOSE DETALLADO DE PRUEBAS:
+${issuesList.length > 0 ? issuesList.join('\n\n') : 'Sin registros.'}
+
+---
+CONTEXTO PARA GEMINI:
+Analiza los resultados de cada prueba individual listada arriba. Elabora una conclusión QA global profesional que destaque los puntos críticos, los criterios de aceptación cumplidos y los riesgos detectados. Proporciona una lectura ejecutiva sobre la calidad del software en este Módulo.`;
+
+            try {
+                await navigator.clipboard.writeText(reportText);
+                toast('📋 Datos detallados copiados para Gemini.', 'ok');
+            } catch (e) {
+                console.error('Error al copiar:', e);
+                toast('❌ Error al acceder al portapapeles.', 'error');
+            }
+        }
+
+        function openModal(id) {
+            document.getElementById(id).classList.add('open');
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).classList.remove('open');
+        }
+
+        function showConfirm(title, msg, onOk) {
+            document.getElementById('confirm-title').textContent = title;
+            document.getElementById('confirm-msg').textContent = msg;
+            const btn = document.getElementById('confirm-ok');
+            btn.onclick = () => { closeModal('modal-confirm'); onOk(); };
+            document.getElementById('modal-confirm').classList.add('open');
+        }
+
+        async function createCU() {
+            const name = document.getElementById('new-cu-name').value.trim();
+            if (!name) return toast('Ingresá un nombre para el CU', 'error');
+            const tester = document.getElementById('new-cu-tester').value.trim();
+            const url = document.getElementById('new-cu-url').value.trim();
+            const res = await fetch('/api/casos/new', {
+                method: 'POST',
+                body: JSON.stringify({ name, tester, url }),
+                headers: { 'Content-Type': 'application/json' }
+            });
+            const json = await res.json();
+            if (json.ok) {
+                closeModal('modal-new-cu');
+                populateCUSelect(json.cases, json.name);
+                await switchCU(json.name);
+            }
+        }
+
+        function deleteCU() {
+            if (!activeCU) return;
+            showConfirm(
+                'Eliminar Caso de Uso',
+                `Eliminar "${activeCU.replace(/_/g, ' ')}" ? Se borraran todos sus issues.`,
+                async () => {
+                    const res = await fetch('/api/casos/delete', { method: 'POST', body: JSON.stringify({ name: activeCU }), headers: { 'Content-Type': 'application/json' } });
+                    const json = await res.json();
+                    populateCUSelect(json.casos, json.newActive);
+                    if (json.newActive) {
+                        await switchCU(json.newActive);
+                    } else {
+                        activeCU = null;
+                        data = { tester: '', caso_de_uso: '', url_ambiente: '', pruebas: [] };
+                        document.getElementById('tester').value = '';
+                        document.getElementById('caso_de_uso').value = '';
+                        document.getElementById('url_ambiente').value = '';
+                        document.getElementById('url_figma').value = '';
+                        document.querySelectorAll('#nav-group input[type="checkbox"]').forEach(cb => cb.checked = false);
+                        document.querySelectorAll('#so-group input[type="checkbox"]').forEach(cb => cb.checked = false);
+                        currentIdx = -1;
+                        showNoIssueState();
+                        renderList();
+                    }
+                }
+            );
+        }
+
+        // ─── List ───
+        function renderList() {
+            const list = document.getElementById('issues-list');
+            document.getElementById('issue-count').textContent = data.pruebas.length;
+            list.innerHTML = data.pruebas.map((p, i) => {
+                const tList = p.test_list || p.test_list_v2 || [];
+                let total = 0, ok = 0, fail = 0, warn = 0, pending = 0;
+
+                if (tList && tList.length > 0) {
+                    tList.forEach(t => {
+                        if (t.isSection) return;
+                        total++;
+                        const st = (t.status || 'PENDING').toUpperCase();
+                        if (st === 'OK') ok++;
+                        else if (st === 'FAIL') fail++;
+                        else if (st === 'WARNING') warn++;
+                        else pending++;
+                    });
+                } else {
+                    total = 1;
+                    const st = (p.status || 'PENDING').toUpperCase();
+                    if (st === 'OK') ok++;
+                    else if (st === 'FAIL') fail++;
+                    else if (st === 'WARNING') warn++;
+                    else pending++;
+                }
+
+                const pct = total > 0 ? (ok / total * 100) : 0;
+                const pctColor = pct >= 90 ? 'var(--ok)' : (pct >= 60 ? 'var(--warn)' : 'var(--fail)');
+
+                return `
+                <div class="issue-item ${currentIdx === i ? 'active' : ''}" onclick="selectIssue(${i})" style="padding:10px 12px; border-radius:10px; margin-bottom:4px;">
+                    <div style="display:flex; align-items:center; gap:10px; width:100%;">
+                        <div class="issue-dot ${p.status}" style="width:8px; height:8px; flex-shrink:0;"></div>
+                        <div class="issue-name" style="font-weight:600; font-size:0.82rem; flex:1;">${p.feature || 'Sin título'}</div>
+                        <div style="font-size:0.65rem; font-weight:800; color:${pctColor}; background:${pctColor}15; padding:2px 8px; border-radius:12px; border:1px solid ${pctColor}33; white-space:nowrap; flex-shrink:0;">
+                            ${pct.toFixed(0)}%
+                        </div>
+                        <button class="issue-del" onclick="deleteIssue(event,${i})" style="margin-left:4px; opacity:0.5;">✕</button>
+                    </div>
+                </div>
+                `;
+            }).join('');
+
+            // Also update global side summary
+            renderStatsUI(data.pruebas, false);
+        }
+
+        // ─── Select / New ───
+        function selectIssue(idx) {
+            if (idx < 0 || idx >= data.pruebas.length) return;
+            const p = data.pruebas[idx];
+            currentIdx = idx;
+
+            document.getElementById('feature').value = p.feature || '';
+            document.getElementById('modulo').value = p.modulo || '';
+            document.getElementById('status').value = p.status || 'FAIL';
+
+            const tipoError = p.tipo_error || [];
+            document.querySelectorAll('#tipo_error input[type="checkbox"]').forEach(cb => {
+                cb.checked = Array.isArray(tipoError) ? tipoError.includes(cb.value) : false;
+            });
+            document.getElementById('severidad').value = p.severidad || 'Media';
+            document.getElementById('ambiente_error').value = p.ambiente_error || '';
+            document.getElementById('pasos_reproducir').value = p.pasos_reproducir || '';
+            toggleErrorDetails();
+
+            sbsPairs = [];
+            const tList = p.test_list_v2 || p.test_list || [];
+            if (tList.length > 0) {
+                sbsPairs = tList.map(t => {
+                    let evType = t.evType || 'SBS';
+
+                    let sbsArr = [];
+                    if (t.sbs && Array.isArray(t.sbs)) {
+                        sbsArr = t.sbs.map(row => ({
+                            figma: { src: row.figma || null, file: null, dataUrl: null },
+                            dev: { src: row.dev || null, file: null, dataUrl: null }
+                        }));
+                    } else if (t.figma || t.dev) {
+                        // Legacy single row converter mapping
+                        sbsArr.push({
+                            figma: { src: t.figma || null, file: null, dataUrl: null },
+                            dev: { src: t.dev || null, file: null, dataUrl: null }
+                        });
+                    }
+                    if (sbsArr.length === 0 && !t.isSection) {
+                        sbsArr.push({ figma: { src: null, file: null, dataUrl: null }, dev: { src: null, file: null, dataUrl: null } });
+                    }
+
+                    let simpleArr = [];
+                    if (t.simple && Array.isArray(t.simple)) {
+                        simpleArr = t.simple.map(src => ({ src: src || null, file: null, dataUrl: null }));
+                    }
+
+                    return {
+                        title: t.title || '',
+                        status: t.status || 'PENDING',
+                        isSection: !!t.isSection,
+                        evType: evType,
+                        sbs: sbsArr,
+                        simple: simpleArr,
+                        sqlList: t.sqlList || (t.sqlQuery || t.sqlResult ? [{ query: t.sqlQuery || '', result: t.sqlResult || '' }] : []),
+                        errorTypes: t.errorTypes || [],
+                        severity: t.severity || 'Media',
+                        impact: t.impact || 'Media',
+                        probability: t.probability || 'Media',
+                        obs: t.obs || '',
+                        showObs: !!t.obs,
+                        expanded: !!t.expanded,
+                        execution_id: t.execution_id || null,
+                        is_from_parent: !!t.is_from_parent,
+                        defects: t.defects || []
+                    };
+                });
+            } else {
+                let fLen = Array.isArray(p.figma) ? p.figma.length : (p.figma ? 1 : 0);
+                let dLen = Array.isArray(p.dev) ? p.dev.length : (p.dev ? 1 : 0);
+
+                let obsLines = [];
+                if (p.observaciones) {
+                    obsLines = p.observaciones.split('\n').map(l => l.replace(/^[-* 1-9.]+\s*/, '').trim()).filter(l => l);
+                }
+                if (obsLines.length === 0 && p.observaciones) {
+                    obsLines = [p.observaciones]; // single block if regex stripped it all
+                }
+
+                let maxLen = Math.max(fLen, dLen, obsLines.length);
+
+                for (let i = 0; i < maxLen; i++) {
+                    let title = obsLines[i] || `Prueba / Captura ${i + 1} `;
+                    sbsPairs.push({
+                        title: title,
+                        status: 'PENDING',
+                        isSection: false,
+                        evType: 'SBS',
+                        sbs: [{
+                            figma: { src: Array.isArray(p.figma) ? p.figma[i] : (i === 0 ? p.figma : null), file: null, dataUrl: null },
+                            dev: { src: Array.isArray(p.dev) ? p.dev[i] : (i === 0 ? p.dev : null), file: null, dataUrl: null }
+                        }],
+                        simple: [],
+                        impact: p.severidad || 'Media',
+                        probability: 'Media',
+                        errorTypes: p.tipo_error || [],
+                        severity: p.severidad || 'Media',
+                        obs: '',
+                        showObs: false
+                    });
+                }
+            }
+            renderSBS();
+
+            // Load evidence gallery
+            pendingEvidencias = [];
+            existingEvidencias = Array.isArray(p.evidencias) ? [...p.evidencias] : [];
+            renderEvidGallery();
+            updateEditorTitle();
+            showEditor(p.feature || 'Nuevo Issue');
+            renderList();
+        }
+
+        function newIssue() {
+            if (!activeCU) return toast('Creá un Caso de Uso primero', 'error');
+            function clearEditor() {
+                currentIdx = -1;
+                document.getElementById('feature').value = '';
+                document.getElementById('modulo').value = '';
+                document.getElementById('status').value = 'FAIL';
+
+                document.querySelectorAll('#tipo_error input[type="checkbox"]').forEach(cb => cb.checked = false);
+                document.getElementById('severidad').value = 'Media';
+                document.getElementById('ambiente_error').value = '';
+                document.getElementById('pasos_reproducir').value = '';
+                toggleErrorDetails();
+
+                sbsPairs = [];
+                renderSBS();
+                clearEvidGallery();
+                updateEditorTitle();
+                showEditor('Nuevo Issue');
+                renderList();
+            }
+            clearEditor();
+        }
+
+        function showEditor(title) {
+            document.getElementById('empty-state').style.display = 'none';
+            const stats = document.getElementById('stats-container');
+            if (stats) stats.style.display = 'none';
+            const ec = document.getElementById('editor-container');
+            ec.style.display = 'flex';
+            ec.style.flexDirection = 'column';
+            ec.style.flex = '1';
+            ec.style.overflow = 'hidden';
+            document.getElementById('editor-title').textContent = title;
+        }
+
+        function toggleErrorDetails() {
+            const st = document.getElementById('status').value;
+            const sec = document.getElementById('error-details-section');
+            const title = document.getElementById('error-details-title');
+            if (sec) {
+                sec.style.display = (st === 'FAIL' || st === 'WARNING') ? 'block' : 'none';
+                if (st === 'WARNING') {
+                    sec.style.background = '#fef3c71a';
+                    sec.style.borderColor = '#fde68a';
+                    title.style.color = '#d97706';
+                    title.textContent = 'Detalles del Warning';
+                } else {
+                    sec.style.background = '#fee2e21a';
+                    sec.style.borderColor = '#fee2e2';
+                    title.style.color = '#ef4444';
+                    title.textContent = 'Detalles del Error';
+                }
+            }
+        }
+
+        function updateEditorTitle() {
+            const f = document.getElementById('feature').value.trim();
+            const m = document.getElementById('modulo').value.trim();
+
+            let title = '';
+            if (m && f) title = `[${m}] ${f} `;
+            else if (m) title = m;
+            else if (f) title = f;
+            else title = 'Nuevo Issue';
+
+            document.getElementById('editor-title').textContent = title;
+        }
+
+        function addSideBySideRow(title = '') {
+            sbsPairs.push({
+                title,
+                status: 'PENDING',
+                isSection: false,
+                evType: 'SBS',
+                expanded: false,
+                sbs: [{ figma: { src: null, file: null, dataUrl: null }, dev: { src: null, file: null, dataUrl: null } }],
+                simple: [],
+                sqlList: []
+            });
+            renderSBS();
+        }
+
+        function addSectionRow(title = 'Nueva Sección') {
+            sbsPairs.push({
+                isSection: true,
+                title,
+                status: 'PENDING',
+                evType: 'SBS',
+                sbs: [],
+                simple: []
+            });
+            renderSBS();
+        }
+
+        function addTestToSection(index) {
+            sbsPairs.splice(index + 1, 0, {
+                title: '',
+                status: 'PENDING',
+                isSection: false,
+                evType: 'SBS',
+                expanded: false,
+                sbs: [{ figma: { src: null, file: null, dataUrl: null }, dev: { src: null, file: null, dataUrl: null } }],
+                simple: [],
+                sqlList: [],
+                errorTypes: [],
+                severity: 'Media',
+                impact: 'Media',
+                probability: 'Media',
+                obs: '',
+                showObs: false
+            });
+            renderSBS();
+        }
+
+        function generateTestCardsFromText() {
+            const text = document.getElementById('bulk-test-input').value.trim();
+            if (!text) return;
+            const lines = text.split('\n');
+            lines.forEach(l => {
+                const line = l.trim();
+                if (!line) return;
+
+                if (/^\d+\.\s/.test(line)) {
+                    sbsPairs.push({
+                        isSection: true,
+                        title: line,
+                        status: 'PENDING',
+                        evType: 'SBS',
+                        expanded: false,
+                        sbs: [],
+                        simple: []
+                    });
+                } else {
+                    const cleanTitle = line.replace(/^[-* 1-9.]+\s*/, '').trim();
+                    sbsPairs.push({
+                        title: cleanTitle,
+                        status: 'PENDING',
+                        isSection: false,
+                        evType: 'SBS',
+                        expanded: false,
+                        sbs: [{ figma: { src: null, file: null, dataUrl: null }, dev: { src: null, file: null, dataUrl: null } }],
+                        simple: [],
+                        sqlList: []
+                    });
+                }
+            });
+            document.getElementById('bulk-test-input').value = '';
+            renderSBS();
+        }
+
+        function confirmAction(title, msg, onOk) {
+            document.getElementById('confirm-title').innerText = title;
+            document.getElementById('confirm-msg').innerText = msg;
+            const okBtn = document.getElementById('confirm-ok');
+            const newOkBtn = okBtn.cloneNode(true);
+            okBtn.parentNode.replaceChild(newOkBtn, okBtn);
+            newOkBtn.onclick = () => {
+                onOk();
+                closeModal('modal-confirm');
+            };
+            openModal('modal-confirm');
+        }
+
+        function removeSBS(index) {
+            const isSection = sbsPairs[index].isSection;
+            const title = isSection ? 'Eliminar Sección' : 'Eliminar Test';
+            const msg = isSection
+                ? '¿Seguro que deseás eliminar esta SECCIÓN y todas sus pruebas? (Los sub-elementos no se borran sino que subirán de nivel)'
+                : '¿Seguro que deseás eliminar este TEST?';
+
+            confirmAction(title, msg, () => {
+                sbsPairs.splice(index, 1);
+                renderSBS();
+                renderList();
+            });
+        }
+
+        function updateTestStatus(index, status) {
+            sbsPairs[index].status = status;
+            if (status === 'FAIL' || status === 'WARNING') {
+                if (!sbsPairs[index].errorTypes) sbsPairs[index].errorTypes = [];
+                if (!sbsPairs[index].severity) sbsPairs[index].severity = 'Media';
+                if (!sbsPairs[index].impact) sbsPairs[index].impact = 'Media';
+                if (!sbsPairs[index].probability) sbsPairs[index].probability = 'Media';
+            }
+            renderSBS();
+            renderList(); // Real-time feedback in sidebar
+        }
+        function toggleTestErrorType(index, type) {
+            if (!sbsPairs[index].errorTypes) sbsPairs[index].errorTypes = [];
+            const idx = sbsPairs[index].errorTypes.indexOf(type);
+            if (idx === -1) sbsPairs[index].errorTypes.push(type);
+            else sbsPairs[index].errorTypes.splice(idx, 1);
+            renderSBS();
+        }
+        function toggleTestObs(index) {
+            sbsPairs[index].showObs = !sbsPairs[index].showObs;
+            renderSBS();
+        }
+
+        function toggleExpansion(index) {
+            sbsPairs[index].expanded = !sbsPairs[index].expanded;
+            renderSBS();
+        }
+
+        function switchEvType(index, type) {
+            sbsPairs[index].evType = type;
+            renderSBS();
+        }
+
+        function addSbsRow(index) {
+            sbsPairs[index].sbs.push({ figma: { src: null, file: null, dataUrl: null }, dev: { src: null, file: null, dataUrl: null } });
+            renderSBS();
+        }
+        function removeSbsRow(index, subIndex) {
+            confirmAction('Eliminar Fila', '¿Seguro que deseás eliminar esta fila de comparación (Figma vs Dev)?', () => {
+                sbsPairs[index].sbs.splice(subIndex, 1);
+                renderSBS();
+            });
+        }
+        function addSqlRow(index) {
+            if (!sbsPairs[index].sqlList) sbsPairs[index].sqlList = [];
+            sbsPairs[index].sqlList.push({ query: '', result: '' });
+            renderSBS();
+        }
+        function removeSqlRow(index, subIndex) {
+            confirmAction('Eliminar Bloque SQL', '¿Seguro que deseás eliminar este bloque de evidencia SQL?', () => {
+                sbsPairs[index].sqlList.splice(subIndex, 1);
+                renderSBS();
+            });
+        }
+        function clearSbsFile(type, index, subIndex) {
+            confirmAction('Quitar Imagen', '¿Seguro que deseás quitar esta imagen?', () => {
+                sbsPairs[index].sbs[subIndex][type] = { src: null, file: null, dataUrl: null };
+                renderSBS();
+            });
+        }
+
+        function addSimpleImage(index) {
+            sbsPairs[index].simple.push({ src: null, file: null, dataUrl: null });
+            renderSBS();
+        }
+        function removeSimpleImage(index, subIndex) {
+            confirmAction('Quitar Imagen', '¿Seguro que deseás quitar esta imagen de la galería?', () => {
+                sbsPairs[index].simple.splice(subIndex, 1);
+                renderSBS();
+            });
+        }
+        function clearSimpleImage(index, subIndex) {
+            confirmAction('Vaciar Imagen', '¿Seguro que deseás vaciar esta imagen?', () => {
+                sbsPairs[index].simple[subIndex] = { src: null, file: null, dataUrl: null };
+                renderSBS();
+            });
+        }
+        function applyFileToSbs(file, type, index, subIndex) {
+            if (!file || (!file.type.startsWith('image/') && !file.type.startsWith('video/'))) return;
+            const reader = new FileReader();
+            reader.onload = ev => {
+                sbsPairs[index].sbs[subIndex][type] = { src: null, file: file, dataUrl: ev.target.result };
+                renderSBS();
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function applyFileToSimple(file, index, subIndex) {
+            if (!file || (!file.type.startsWith('image/') && !file.type.startsWith('video/'))) return;
+            const reader = new FileReader();
+            reader.onload = ev => {
+                sbsPairs[index].simple[subIndex] = { src: null, file: file, dataUrl: ev.target.result };
+                renderSBS();
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function selectSbsFile(e, type, index, subIndex) {
+            applyFileToSbs(e.target.files[0], type, index, subIndex);
+        }
+        function dropSbsFile(e, type, index, subIndex) {
+            e.preventDefault();
+            applyFileToSbs(e.dataTransfer.files[0], type, index, subIndex);
+        }
+
+        function selectSimpleFile(e, index, subIndex) {
+            applyFileToSimple(e.target.files[0], index, subIndex);
+        }
+        function dropSimpleFile(e, index, subIndex) {
+            e.preventDefault();
+            applyFileToSimple(e.dataTransfer.files[0], index, subIndex);
+        }
+
+        function renderSBS() {
+            const container = document.getElementById('side-by-side-container');
+            if (sbsPairs.length === 0) {
+                container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);background:var(--input-bg);border-radius:12px;border:2px dashed var(--border)">✨ No hay pruebas definidas. Usá la <b>AI Tool</b> o agregá tests manualmente para comenzar.</div>';
+                return;
+            }
+
+            let htmlStr = '';
+
+            // Generate quick navigation if there are multiple sections
+            const sections = sbsPairs.filter(p => p.isSection);
+            if (sections.length > 1) {
+                htmlStr += `
+                <nav style="background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:10px; margin-bottom:20px; display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
+                    <span style="font-size:0.7rem; font-weight:800; color:var(--muted); text-transform:uppercase;">Ir a:</span>
+                    ${sections.map((s, idx) => `
+                        <a href="#section-${idx}" style="color:var(--accent); text-decoration:none; font-size:0.75rem; font-weight:700; background:rgba(255,255,255,0.03); padding:4px 10px; border-radius:6px; border:1px solid var(--border); transition:0.2s;" onmouseover="this.style.background='var(--border)'" onmouseout="this.style.background='rgba(255,255,255,0.03)'">
+                            ${(s.title || 'Sección sin nombre').substring(0, 20)}${(s.title?.length > 20 ? '...' : '')}
+                        </a>
+                    `).join('')}
+                </nav>
+                `;
+            }
+
+            let currentSectionIdx = 0;
+            let insideGroup = false;
+
+            sbsPairs.forEach((pair, index) => {
+                if (currentSbsFilter !== 'ALL' && !pair.isSection && pair.status !== currentSbsFilter) {
+                    return;
+                }
+                const titleStr = (pair.title || '').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                const statusStr = pair.status || 'PENDING';
+
+                if (pair.isSection) {
+                    if (insideGroup) {
+                        htmlStr += '</section>'; // close previous group
+                    }
+                    insideGroup = true;
+                    // Using <section> and <details> for the whole group
+                    htmlStr += `
+                    <section id="section-${currentSectionIdx++}" style="border:1px solid var(--border); border-radius:12px; margin-bottom:20px; background:var(--surface2); overflow:hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);" class="section-group">
+                        <header style="background:rgba(0,0,0,0.2); padding:10px 16px; display:flex; align-items:center; gap:10px; border-bottom:1px solid var(--border);">
+                             <span style="font-size:1.1rem;">📁</span>
+                             <textarea oninput="sbsPairs[${index}].title = this.value; this.style.height='auto'; this.style.height=(this.scrollHeight)+'px';" rows="1" style="flex:1; padding:4px 0; border:none; background:transparent; font-size:0.95rem; font-family:inherit; font-weight:800; color:var(--dev); resize:none; overflow:hidden; min-height:0; height:auto; line-height:1.2;" placeholder="Nombre de la Sección...">${titleStr}</textarea>
+                             <div style="display:flex; gap:8px;">
+                                 <button onclick="addTestToSection(${index})" style="background:var(--dev); color:white; border:none; border-radius:6px; cursor:pointer; font-weight:700; font-size:0.7rem; padding: 5px 12px; transition:0.2s;" onmouseover="this.style.filter='brightness(1.1)';" onmouseout="this.style.filter='none';">＋ Test</button>
+                                 <button onclick="removeSBS(${index})" style="background:rgba(239, 68, 68, 0.1); color:var(--fail); border:1px solid rgba(239, 68, 68, 0.2); border-radius:6px; cursor:pointer; font-weight:700; font-size:0.7rem; padding: 5px 10px; transition:0.2s;" onmouseover="this.style.background='var(--fail)'; this.style.color='white';">Eliminar</button>
+                             </div>
+                        </header>
+                        <div style="display:flex; flex-direction:column; gap:12px; padding:15px;">
+                    `;
+                    return;
+                }
+
+                const evType = pair.evType || 'SBS';
+
+                // Status mapping with icons
+                const statusInfo = {
+                    'OK': { icon: '✔', label: 'PASS', color: 'var(--ok)' },
+                    'FAIL': { icon: '❌', label: 'FAIL', color: 'var(--fail)' },
+                    'WARNING': { icon: '⚠️', label: 'WARN', color: 'var(--warn)' },
+                    'PENDING': { icon: '⏳', label: 'PEND', color: 'var(--muted)' }
+                }[statusStr];
+
+                let hasEv = (pair.sbs && pair.sbs.some(row => row.figma?.src || row.figma?.dataUrl || row.dev?.src || row.dev?.dataUrl)) || 
+                            (pair.simple && pair.simple.some(img => img.src || img.dataUrl)) ||
+                            (pair.sqlList && pair.sqlList.some(sql => sql.query?.trim() || sql.result?.trim()));
+
+                // Evidence Logic (simplified for readability in the loop)
+                let evGalleryHtml = '';
+                if (evType === 'SBS') {
+                    evGalleryHtml = pair.sbs.map((row, subIndex) => `
+                        <div style="margin-bottom:15px; border:1px solid var(--border); border-radius:8px; padding:10px; background:rgba(0,0,0,0.1);">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                                <span style="font-size:0.65rem; color:var(--muted); font-weight:800; text-transform:uppercase;">⚖️ Comparativa #${subIndex + 1}</span>
+                                <button onclick="removeSbsRow(${index}, ${subIndex})" style="background:transparent; color:var(--fail); border:1px solid rgba(239, 68, 68, 0.3); border-radius:4px; padding:2px 8px; font-size:0.6rem; cursor:pointer;">Eliminar Fila</button>
+                            </div>
+                            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+                                <div style="display:flex; flex-direction:column; gap:6px;">
+                                    <div style="font-size:0.65rem;font-weight:800;color:var(--figma);">🎨 Figma / Spec.</div>
+                                    ${generateDropzoneHTML('sbs', index, subIndex, 'figma', row.figma)}
+                                </div>
+                                <div style="display:flex; flex-direction:column; gap:6px;">
+                                    <div style="font-size:0.65rem;font-weight:800;color:var(--dev);">💻 Dev / Real</div>
+                                    ${generateDropzoneHTML('sbs', index, subIndex, 'dev', row.dev)}
+                                </div>
+                            </div>
+                        </div>
+                    `).join('');
+                    evGalleryHtml += `
+                        <button onclick="addSbsRow(${index})" style="width:100%; background:var(--surface2); color:var(--text); border:1px dashed var(--border); padding:8px; border-radius:8px; font-size:0.75rem; cursor:pointer; transition:0.2s;" onmouseover="this.style.borderColor='var(--accent)'">＋ Agregar nueva comparativa</button>
+                    `;
+                } else if (evType === 'SIMPLE') {
+                    evGalleryHtml = `
+                        <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap:10px;">
+                            ${pair.simple.map((img, subIndex) => `
+                                <div style="position:relative;">
+                                    ${generateDropzoneHTML('simple', index, subIndex, 'simple', img)}
+                                    <button onclick="removeSimpleImage(${index}, ${subIndex})" style="position:absolute; top:-5px; right:-5px; background:var(--fail); color:white; border:none; border-radius:50%; width:20px; height:20px; cursor:pointer; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 4px rgba(0,0,0,0.3);">×</button>
+                                </div>
+                            `).join('')}
+                            <button onclick="addSimpleImage(${index})" style="height:120px; border:2px dashed var(--border); border-radius:10px; background:rgba(255,255,255,0.02); color:var(--muted); cursor:pointer;">＋</button>
+                        </div>
+                    `;
+                } else if (evType === 'SQL') {
+                    if (!pair.sqlList) pair.sqlList = [];
+                    evGalleryHtml = pair.sqlList.map((sqlItem, subIndex) => `
+                        <div style="display:flex; flex-direction:column; gap:12px; border:1px solid var(--border); border-radius:8px; padding:15px; background:rgba(0,0,0,0.1); margin-bottom:15px;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0px;">
+                                <span style="font-size:0.65rem; color:var(--muted); font-weight:800; text-transform:uppercase;">🔍 Evidencia SQL #${subIndex + 1}</span>
+                                <button onclick="removeSqlRow(${index}, ${subIndex})" style="background:transparent; color:var(--fail); border:1px solid rgba(239, 68, 68, 0.3); border-radius:4px; padding:2px 8px; font-size:0.6rem; cursor:pointer;">Eliminar Bloque</button>
+                            </div>
+                            <div style="display:flex; flex-direction:column; gap:6px;">
+                                <div style="font-size:0.65rem; font-weight:800; color:var(--accent);">Consulta SQL</div>
+                                <textarea oninput="sbsPairs[${index}].sqlList[${subIndex}].query = this.value; this.style.height='auto'; this.style.height=(this.scrollHeight)+'px';" rows="3" style="width:100%; padding:8px 10px; border:1px solid var(--border); background:var(--surface2); color:var(--text); border-radius:6px; font-family:monospace; font-size:0.8rem; resize:vertical;" placeholder="SELECT * FROM table...">${sqlItem.query || ''}</textarea>
+                            </div>
+                            <div style="display:flex; flex-direction:column; gap:6px;">
+                                <div style="font-size:0.65rem; font-weight:800; color:var(--ok);">JSON de Resultados</div>
+                                <textarea oninput="sbsPairs[${index}].sqlList[${subIndex}].result = this.value; this.style.height='auto'; this.style.height=(this.scrollHeight)+'px';" rows="5" style="width:100%; padding:8px 10px; border:1px solid var(--border); background:var(--surface2); color:var(--text); border-radius:6px; font-family:monospace; font-size:0.8rem; resize:vertical;" placeholder='[{"col": "val"}]'>${sqlItem.result || ''}</textarea>
+                            </div>
+                        </div>
+                    `).join('');
+                    evGalleryHtml += `
+                        <button onclick="addSqlRow(${index})" style="width:100%; background:var(--surface2); color:var(--text); border:1px dashed var(--border); padding:8px; border-radius:8px; font-size:0.75rem; cursor:pointer; transition:0.2s;" onmouseover="this.style.borderColor='var(--accent)'">＋ Agregar nuevo bloque SQL</button>
+                    `;
+                }
+
+                htmlStr += `
+                <article style="background:var(--surface); border:1px solid var(--border); border-radius:10px; overflow:hidden; display:flex; flex-direction:column; position:relative; box-shadow: 0 2px 4px rgba(0,0,0,0.05);" class="test-card">
+                    <!-- HEADER -->
+                    <header style="padding:12px 16px; display:flex; align-items:center; gap:12px; background:rgba(255,255,255,0.02); border-bottom:1px solid rgba(255,255,255,0.03);">
+                        <div style="display:flex; flex-direction:column; gap:2px; min-width:90px;">
+                            <span style="font-size:0.55rem; color:var(--muted); font-weight:800; text-transform:uppercase; letter-spacing:0.04em;">RESULTADO</span>
+                            <select onchange="updateTestStatus(${index}, this.value)" style="padding:4px 6px; border-radius:6px; border:1px solid ${statusInfo.color}44; background:var(--surface2); color:${statusInfo.color}; font-weight:800; cursor:pointer; font-size:0.75rem; outline:none;">
+                                <option value="PENDING" ${statusStr === 'PENDING' ? 'selected' : ''}>⏳ PENDING</option>
+                                <option value="OK" ${statusStr === 'OK' ? 'selected' : ''}>✔ PASS</option>
+                                <option value="WARNING" ${statusStr === 'WARNING' ? 'selected' : ''}>⚠️ WARN</option>
+                                <option value="FAIL" ${statusStr === 'FAIL' ? 'selected' : ''}>❌ FAIL</option>
+                            </select>
+                            ${pair.is_from_parent ? `<span style="font-size:0.55rem; color:var(--accent); font-weight:800; margin-top:4px;">(RETEST) ANTERIOR</span>` : ''}
+                        </div>
+                        
+                        <div style="flex:1;">
+                            <textarea oninput="sbsPairs[${index}].title = this.value; this.style.height='auto'; this.style.height=(this.scrollHeight)+'px';" rows="1" style="width:100%; padding:4px 0; border:none; background:transparent; font-family:inherit; font-size:0.9rem; font-weight:600; color:var(--text); resize:none; overflow:hidden; min-height:0; height:auto; line-height:1.4;" placeholder="Describe el paso o validación...">${titleStr}</textarea>
+                        </div>
+
+                        <div style="display:flex; gap:6px;">
+                             <button onclick="toggleExpansion(${index})" style="background:var(--surface2); color:var(--text); border:1px solid ${hasEv ? 'var(--ok)' : 'var(--border)'}; padding:6px 12px; border-radius:8px; font-size:0.7rem; cursor:pointer; font-weight:700; display:flex; align-items:center; gap:6px; transition:0.2s;">
+                                🖼️ Evidencias
+                                ${hasEv ? `<span style="background:var(--ok); color:white; font-size:0.6rem; padding:1px 5px; border-radius:10px;">✔</span>` : ''}
+                                ${pair.expanded ? '▲' : '▼'}
+                             </button>
+                        </div>
+                    </header>
+
+                    <!-- BODY: Details/Obs -->
+                    <div style="padding:12px 16px; display:flex; flex-direction:column; gap:10px;">
+                        
+                        <!-- BUG MANAGEMENT -->
+                        ${(statusStr === 'FAIL' || (pair.defects && pair.defects.length > 0)) ? `
+                            <div style="background:rgba(239, 68, 68, 0.05); border:1px solid rgba(239, 68, 68, 0.1); border-radius:8px; padding:10px;">
+                                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                                    <span style="font-size:0.65rem; color:var(--fail); font-weight:800; text-transform:uppercase;">🐞 Bugs / Defectos</span>
+                                    <button class="btn btn-dev" style="padding:2px 8px; font-size:0.6rem; background:var(--fail); color:white; border:none;" onclick="createBug(${index})">＋ Crear Bug</button>
+                                </div>
+                                <div id="defects-${index}" style="display:flex; flex-direction:column; gap:6px;">
+                                    ${(pair.defects || []).map(bug => `
+                                        <div style="background:var(--surface2); border:1px solid var(--border); border-radius:6px; padding:8px; display:flex; justify-content:space-between; align-items:center;">
+                                            <div>
+                                                <span style="font-size:0.75rem; font-weight:700;">#${bug.id} - ${bug.title}</span>
+                                                <div style="font-size:0.65rem; color:${bug.status === 'FIXED' ? 'var(--ok)' : 'var(--warn)'}; font-weight:800;">Estado: ${bug.status}</div>
+                                            </div>
+                                            ${bug.status !== 'FIXED' ? `<button class="btn btn-ghost" style="font-size:0.6rem; padding:2px 6px;" onclick="markBugFixed(${bug.id}, ${index})">Marcar FIXED</button>` : ''}
+                                        </div>
+                                    `).join('')}
+                                    ${(!pair.defects || pair.defects.length === 0) ? '<div style="font-size:0.7rem; color:var(--muted); font-style:italic;">No hay bugs vinculados.</div>' : ''}
+                                </div>
+                            </div>
+                        ` : ''}
+                        
+                        <!-- Mini Risk Table (Only for FAIL/WARN) -->
+                        ${(statusStr === 'FAIL' || statusStr === 'WARNING') ? `
+                            <table style="width:fit-content; border-collapse:collapse; background:rgba(0,0,0,0.2); border-radius:6px; overflow:hidden; font-size:0.7rem;">
+                                <thead>
+                                    <tr style="border-bottom:1px solid var(--border);">
+                                        <th style="padding:4px 10px; color:var(--muted); text-align:left;">IMPACTO</th>
+                                        <th style="padding:4px 10px; color:var(--muted); text-align:left;">PROBABILIDAD</th>
+                                        <th style="padding:4px 10px; color:var(--muted); text-align:left;">RIESGO</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td style="padding:4px 10px;">
+                                            <select onchange="sbsPairs[${index}].impact = this.value; renderSBS();" style="background:transparent; color:var(--text); border:none; cursor:pointer; font-size: inherit; font-weight: 700;">
+                                                <option value="Baja" ${pair.impact === 'Baja' ? 'selected' : ''}>Baja</option>
+                                                <option value="Media" ${(!pair.impact || pair.impact === 'Media') ? 'selected' : ''}>Media</option>
+                                                <option value="Alta" ${pair.impact === 'Alta' ? 'selected' : ''}>Alta</option>
+                                            </select>
+                                        </td>
+                                        <td style="padding:4px 10px;">
+                                            <select onchange="sbsPairs[${index}].probability = this.value; renderSBS();" style="background:transparent; color:var(--text); border:none; cursor:pointer; font-size: inherit; font-weight: 700;">
+                                                <option value="Baja" ${pair.probability === 'Baja' ? 'selected' : ''}>Baja</option>
+                                                <option value="Media" ${(!pair.probability || pair.probability === 'Media') ? 'selected' : ''}>Media</option>
+                                                <option value="Alta" ${pair.probability === 'Alta' ? 'selected' : ''}>Alta</option>
+                                            </select>
+                                        </td>
+                                        <td style="padding:4px 10px;">
+                                            ${(() => {
+                            const pScore = { 'Baja': 1, 'Media': 2, 'Alta': 3 }[pair.probability || 'Media'];
+                            const iScore = { 'Baja': 1, 'Media': 2, 'Alta': 3 }[pair.impact || 'Media'];
+                            const score = pScore * iScore;
+                            let label = 'BAJO', color = 'var(--ok)';
+                            if (score === 9) { label = 'CRÍTICO'; color = 'var(--fail)'; }
+                            else if (score >= 6) { label = 'ALTO'; color = 'var(--fail)'; }
+                            else if (score >= 3) { label = 'MEDIO'; color = 'var(--warn)'; }
+                            return `<span style="font-weight:800; color:${color};">${label}</span>`;
+                        })()}
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+
+                            <div style="display:flex; flex-wrap:wrap; gap:6px;">
+                                ${['Funcional', 'Validación', 'Datos', 'UI', 'Texto', 'Integración'].map(type => `
+                                    <button onclick="toggleTestErrorType(${index}, '${type}')" style="background:${pair.errorTypes?.includes(type) ? 'var(--fail)' : 'var(--surface2)'}; color:${pair.errorTypes?.includes(type) ? 'white' : 'var(--muted)'}; border:1px solid ${pair.errorTypes?.includes(type) ? 'var(--fail)' : 'var(--border)'}; padding:2px 8px; border-radius:4px; font-size:0.6rem; font-weight:700; cursor:pointer; transition:0.2s;">
+                                        ${type}
+                                    </button>
+                                `).join('')}
+                            </div>
+                        ` : ''}
+
+                        <details ${(pair.showObs || statusStr === 'FAIL') ? 'open' : ''} style="margin-top:5px;">
+                            <summary onclick="event.preventDefault(); toggleTestObs(${index})" style="font-size:0.7rem; color:var(--accent); font-weight:800; cursor:pointer; list-style:none; display:flex; align-items:center; gap:5px;">
+                                <span>${pair.showObs ? '▼' : '▶'}</span>
+                                ALOTACIONES DE AUDITORÍA / OBS.
+                            </summary>
+                            <div style="margin-top:8px; border:1px solid var(--border); border-radius:8px; overflow:hidden; background:rgba(0,0,0,0.1);">
+                                <!-- Rich-text toolbar -->
+                                <div style="display:flex; flex-wrap:wrap; gap:2px; padding:4px 6px; border-bottom:1px solid var(--border); background:rgba(0,0,0,0.15);" onmousedown="event.preventDefault()">
+                                    <button title="Negrita" onclick="document.execCommand('bold')" style="background:transparent;border:none;color:var(--text);cursor:pointer;font-weight:800;font-size:0.8rem;padding:2px 6px;border-radius:4px;" onmouseover="this.style.background='var(--border)'" onmouseout="this.style.background='transparent'"><b>B</b></button>
+                                    <button title="Cursiva" onclick="document.execCommand('italic')" style="background:transparent;border:none;color:var(--text);cursor:pointer;font-style:italic;font-size:0.8rem;padding:2px 6px;border-radius:4px;" onmouseover="this.style.background='var(--border)'" onmouseout="this.style.background='transparent'"><i>I</i></button>
+                                    <button title="Subrayado" onclick="document.execCommand('underline')" style="background:transparent;border:none;color:var(--text);cursor:pointer;text-decoration:underline;font-size:0.8rem;padding:2px 6px;border-radius:4px;" onmouseover="this.style.background='var(--border)'" onmouseout="this.style.background='transparent'"><u>U</u></button>
+                                    <div style="width:1px;background:var(--border);margin:2px 3px;"></div>
+                                    ${['#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#a855f7'].map(c => `
+                                    <button title="Color ${c}" onmousedown="event.preventDefault(); document.execCommand('foreColor', false, '${c}')" style="background:${c};border:none;width:16px;height:16px;border-radius:50%;cursor:pointer;padding:0;flex-shrink:0;"></button>`).join('')}
+                                    <div style="width:1px;background:var(--border);margin:2px 3px;"></div>
+                                    <button title="Quitar formato" onclick="document.execCommand('removeFormat')" style="background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:0.7rem;padding:2px 6px;border-radius:4px;" onmouseover="this.style.background='var(--border)'" onmouseout="this.style.background='transparent'">✕</button>
+                                </div>
+                                <!-- Editable area -->
+                                <div contenteditable="true"
+                                     id="obs-editor-${index}"
+                                     oninput="sbsPairs[${index}].obs = this.innerHTML"
+                                     data-placeholder="Resultados observados, notas técnicas..."
+                                     style="min-height:80px; font-size:0.8rem; padding:10px; color:var(--text); font-family:inherit; outline:none; line-height:1.5; white-space:pre-wrap; word-break:break-word;">${pair.obs || ''}</div>
+                            </div>
+                        </details>
+
+                        <!-- Collapsable Evidence -->
+                        <div style="display:${pair.expanded ? 'block' : 'none'}; border-top:1px solid var(--border); padding-top:15px; margin-top:10px;">
+                            <div style="display:flex; justify-content:center; margin-bottom: 20px; background:rgba(0,0,0,0.2); padding:3px; border-radius:10px; width:fit-content; margin-inline:auto;">
+                                <button onclick="switchEvType(${index}, 'SBS')" style="border:none; border-radius:8px; padding:4px 15px; font-size:0.65rem; font-weight:800; cursor:pointer; background:${evType === 'SBS' ? 'var(--dev)' : 'transparent'}; color:${evType === 'SBS' ? 'white' : 'var(--muted)'};">COMPARTIVA (SBS)</button>
+                                <button onclick="switchEvType(${index}, 'SIMPLE')" style="border:none; border-radius:8px; padding:4px 15px; font-size:0.65rem; font-weight:800; cursor:pointer; background:${evType === 'SIMPLE' ? 'var(--ok)' : 'transparent'}; color:${evType === 'SIMPLE' ? 'white' : 'var(--muted)'};">GALERÍA SIMPLE</button>
+                                <button onclick="switchEvType(${index}, 'SQL')" style="border:none; border-radius:8px; padding:4px 15px; font-size:0.65rem; font-weight:800; cursor:pointer; background:${evType === 'SQL' ? 'var(--accent)' : 'transparent'}; color:${evType === 'SQL' ? 'white' : 'var(--muted)'};">EVIDENCIA SQL</button>
+                            </div>
+                            ${evGalleryHtml}
+                        </div>
+                    </div>
+
+                    <!-- FOOTER ACTIONS -->
+                    <footer style="padding:8px 16px; background:rgba(0,0,0,0.1); border-top:1px solid rgba(255,255,255,0.03); display:flex; justify-content:flex-end; gap:10px;">
+                         <button onclick="removeSBS(${index})" style="background:transparent; border:none; color:var(--muted); font-size:0.65rem; font-weight:700; cursor:pointer;" onmouseover="this.style.color='var(--fail)'">🗑 Eliminar Prueba</button>
+                    </footer>
+                </article>
+                `;
+            });
+
+            if (insideGroup) {
+                htmlStr += '</div></section>'; // close the last group
+            }
+
+            container.innerHTML = htmlStr;
+
+            setTimeout(() => {
+                document.querySelectorAll('#side-by-side-container textarea').forEach(el => {
+                    el.style.height = 'auto';
+                    el.style.height = (el.scrollHeight) + 'px';
+                });
+            }, 10);
+        }
+
+
+        function generateDropzoneHTML(evType, index, subIndex, type, data) {
+            const src = data.dataUrl || data.src;
+            if (src) {
+                const clearFn = evType.toUpperCase() === 'SBS' ? `clearSbsFile('${type}', ${index}, ${subIndex})` : `clearSimpleImage(${index}, ${subIndex})`;
+                const uri = src.startsWith('data:') ? src : '/' + src;
+                const isVid = uri.startsWith('data:video/') || uri.match(/\.(mp4|webm|ogg|mov)$/i);
+
+                let mediaHtml = '';
+                if (isVid) {
+                    mediaHtml = `
+                        <video src="${uri}" controls style="max-width:100%; max-height:100%; object-fit:cover; background:#000; cursor:pointer;"></video>
+                    `;
+                } else {
+                    mediaHtml = `
+                        <img src="${uri}" style="max-width:100%; max-height:100%; object-fit:cover; cursor:zoom-in;" onclick="openEvidLightbox(this.src)">
+                    `;
+                }
+
+                return `
+                    <div style="position:relative; width:100%; height:120px; border-radius:6px; border:1px solid var(--border); overflow:hidden; display:flex; align-items:center; justify-content:center; background:var(--input-bg);"
+                         onmouseenter="lastHoveredZone = { evType: '${evType}', type: '${type}', index: ${index}, subIndex: ${subIndex} };"
+                         onmouseleave="if(lastHoveredZone && lastHoveredZone.index === ${index} && lastHoveredZone.subIndex === ${subIndex}) lastHoveredZone = null;">
+                        ${mediaHtml}
+                        <button onclick="${clearFn}" style="position:absolute; top:4px; right:4px; background:#ef444499; border:none; border-radius:4px; color:white; cursor:pointer; padding:2px 6px; font-size:0.7rem;">Vaciar</button>
+                        ${data.file ? '<div style="position:absolute;bottom:4px;left:4px;background:var(--' + type + ');border-radius:3px;font-size:0.6rem;color:white;padding:1px 5px">nuevo</div>' : ''}
+                    </div>
+                    `;
+            } else {
+                const dropFn = evType.toUpperCase() === 'SBS' ? `dropSbsFile(event, '${type}', ${index}, ${subIndex})` : `dropSimpleFile(event, ${index}, ${subIndex})`;
+                const selectFn = evType.toUpperCase() === 'SBS' ? `selectSbsFile(event, '${type}', ${index}, ${subIndex})` : `selectSimpleFile(event, ${index}, ${subIndex})`;
+                const inputId = `file-${evType}-${index}-${subIndex}-${type}`;
+                const text = evType.toUpperCase() === 'SBS' ? (type === 'figma' ? '🎨' : '💻') : '🖼️';
+
+                return `
+                    <div style="width:100%; height:120px; border-radius:6px; border:2px dashed var(--border); background:var(--input-bg); display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:pointer; color:var(--muted); position:relative;"
+                         ondragover="event.preventDefault(); this.style.borderColor='var(--${type})';"
+                         ondragleave="this.style.borderColor='var(--border)';"
+                         ondrop="${dropFn};"
+                         onmouseenter="lastHoveredZone = { evType: '${evType}', type: '${type}', index: ${index}, subIndex: ${subIndex} };"
+                         onmouseleave="if(lastHoveredZone && lastHoveredZone.index === ${index} && lastHoveredZone.subIndex === ${subIndex}) lastHoveredZone = null;"
+                         onclick="document.getElementById('${inputId}').click();">
+                        <span style="font-size:1.5rem; margin-bottom:5px;">${text}</span>
+                        <span style="font-size:0.7rem; text-align:center;">Clic o arrastrá aquí<br>(Hover + Ctrl+V)</span>
+                        <input type="file" accept="image/*,video/*" id="${inputId}" style="display:none;" onchange="${selectFn}">
+                    </div>
+                    `;
+            }
+        }
+
+        // ─── Paste from clipboard (Ctrl+V) ───
+        function applyClipboardImage(type, blob) {
+            if (type === 'ev') {
+                const ext = blob.type.startsWith('video/') ? 'mp4' : 'png';
+                pendingEvidencias.push({ file: new File([blob], `paste_${Date.now()}.${ext}`, { type: blob.type }), dataUrl: null });
+                const idx2 = pendingEvidencias.length - 1;
+                const reader2 = new FileReader();
+                reader2.onload = ev2 => {
+                    pendingEvidencias[idx2].dataUrl = ev2.target.result;
+                    renderEvidGallery();
+                    toast('📋 Evidencia pegada', 'ok');
+                };
+                reader2.readAsDataURL(blob);
+                return;
+            }
+            return;
+        }
+
+        document.addEventListener('paste', e => {
+            // Only act if editor is visible
+            if (document.getElementById('editor-container').style.display === 'none') return;
+            const items = e.clipboardData?.items;
+            if (!items) return;
+            const imgItem = Array.from(items).find(it => it.type.startsWith('image/') || it.type.startsWith('video/'));
+            if (!imgItem) return;
+            e.preventDefault();
+            const blob = imgItem.getAsFile();
+            if (!blob) return;
+
+            if (lastHoveredZone) {
+                const ext = blob.type.startsWith('video/') ? 'mp4' : 'png';
+                const blobFile = new File([blob], `paste_${Date.now()}.${ext}`, { type: blob.type });
+                if (typeof lastHoveredZone === 'object') {
+                    // Normalize case to lowercase to match generateDropzoneHTML calls
+                    const evType = lastHoveredZone.evType.toLowerCase();
+                    if (evType === 'sbs') {
+                        applyFileToSbs(blobFile, lastHoveredZone.type, lastHoveredZone.index, lastHoveredZone.subIndex);
+                        toast(`📋 Archivo pegado en Test`, 'ok');
+                    } else if (evType === 'simple') {
+                        applyFileToSimple(blobFile, lastHoveredZone.index, lastHoveredZone.subIndex);
+                        toast(`📋 Archivo pegado en Galería`, 'ok');
+                    }
+                } else if (lastHoveredZone === 'ev') {
+                    applyClipboardImage('ev', blob);
+                }
+            } else {
+                showPastePicker(blob);
+            }
+        });
+
+        function showPastePicker(blob) {
+            // Temporary inline picker — inject if not already present
+            let picker = document.getElementById('paste-picker');
+            if (!picker) {
+                picker = document.createElement('div');
+                picker.id = 'paste-picker';
+                picker.style.cssText = `
+                    position:fixed;inset:0;background:#00000090;display:flex;
+                    align-items:center;justify-content:center;z-index:2000`;
+                picker.innerHTML = `
+                    <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;
+                                padding:24px;display:flex;flex-direction:column;gap:14px;width:360px">
+                        <div style="font-size:0.95rem;font-weight:700">📋 ¿Dónde pegar el archivo?</div>
+                        <div style="display:flex;gap:10px">
+                            <button id="pp-figma" style="flex:1;padding:10px;border-radius:8px;border:2px solid #a855f7;
+                                background:#a855f714;color:#a855f7;font-weight:700;cursor:pointer;font-size:0.82rem">
+                                🎨 Figma
+                            </button>
+                            <button id="pp-dev" style="flex:1;padding:10px;border-radius:8px;border:2px solid #06b6d4;
+                                background:#06b6d414;color:#06b6d4;font-weight:700;cursor:pointer;font-size:0.82rem">
+                                💻 Desarrollo
+                            </button>
+                            <button id="pp-ev" style="flex:1;padding:10px;border-radius:8px;border:2px solid #6366f1;
+                                background:#6366f114;color:#6366f1;font-weight:700;cursor:pointer;font-size:0.82rem">
+                                📎 Evidencia
+                            </button>
+                        </div>
+                        <button id="pp-cancel" style="background:none;border:none;color:var(--muted);
+                            cursor:pointer;font-size:0.8rem">Cancelar</button>
+                    </div>`;
+                document.body.appendChild(picker);
+            }
+            picker.style.display = 'flex';
+            const close = () => { picker.style.display = 'none'; };
+            document.getElementById('pp-figma').onclick = () => { close(); toast('⚠️ Utilizá el botón + Agregar Par en su lugar', 'error'); };
+            document.getElementById('pp-dev').onclick = () => { close(); toast('⚠️ Utilizá el botón + Agregar Par en su lugar', 'error'); };
+            document.getElementById('pp-ev').onclick = () => { close(); applyClipboardImage('ev', blob); };
+            document.getElementById('pp-cancel').onclick = close;
+            picker.onclick = e => { if (e.target === picker) close(); };
+        }
+
+        // ─── Evidence gallery state & handlers ───
+        let pendingEvidencias = [];    // { file, dataUrl }
+        let existingEvidencias = [];   // paths saved on server
+
+        function onEvidDrag(e) {
+            e.preventDefault();
+            document.getElementById('zone-ev').style.borderColor = '#6366f1';
+            document.getElementById('zone-ev').style.background = '#6366f108';
+            lastHoveredZone = 'ev';
+        }
+        function offEvidDrag() {
+            document.getElementById('zone-ev').style.borderColor = '#475569';
+            document.getElementById('zone-ev').style.background = '';
+        }
+        function onEvidDrop(e) {
+            e.preventDefault(); offEvidDrag();
+            addEvidFiles(Array.from(e.dataTransfer.files));
+        }
+        function onEvidSelect(e) {
+            addEvidFiles(Array.from(e.target.files));
+            document.getElementById('file-ev').value = '';
+        }
+
+        function addEvidFiles(files) {
+            files.filter(f => f.type.startsWith('image/') || f.type.startsWith('video/')).forEach(file => {
+                const reader = new FileReader();
+                reader.onload = ev => {
+                    pendingEvidencias.push({ file, dataUrl: ev.target.result });
+                    renderEvidGallery();
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function renderEvidGallery() {
+            const gallery = document.getElementById('ev-gallery');
+            const hint = document.getElementById('ev-hint');
+            if (!gallery) return;
+            const total = existingEvidencias.length + pendingEvidencias.length;
+            hint.textContent = total > 0
+                ? `${total} archivo${total !== 1 ? 's' : ''} — arrastrá más o hacé clic`
+                : 'Arrastrá fotos/videos acá, o hacé clic para seleccionar';
+            gallery.innerHTML = [
+                ...existingEvidencias.map((src, i) => {
+                    const isVid = src.match(/\.(mp4|webm|ogg|mov)$/i);
+                    const el = isVid ? `<video src="/${src}" style="width:90px;height:70px;object-fit:cover;border-radius:8px;border:1px solid var(--border);background:#000;cursor:pointer" onclick="openEvidLightbox('/${src}', true)" title="Clic para reproducir"></video><div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;font-size:1.5rem;text-shadow:0 2px 4px rgba(0,0,0,0.5);">▶️</div>`
+                        : `<img src="/${src}" style="width:90px;height:70px;object-fit:cover;border-radius:8px;border:1px solid var(--border);cursor:pointer" onclick="openEvidLightbox('/${src}')" title="Clic para ampliar">`;
+                    return `<div style="position:relative;display:inline-block;vertical-align:top;">
+                        ${el}
+                        <button onclick="removeExistingEvid(${i})"
+                            style="position:absolute;top:3px;right:3px;background:#ef444499;border:none;border-radius:4px;color:white;cursor:pointer;font-size:0.65rem;padding:1px 5px;z-index:2;">✕</button>
+                    </div>`;
+                }),
+                ...pendingEvidencias.map((ev, i) => {
+                    if (!ev.dataUrl) return '';
+                    const isVid = ev.dataUrl.startsWith('data:video/') || ev.file?.type.startsWith('video/');
+                    const el = isVid ? `<video src="${ev.dataUrl}" style="width:90px;height:70px;object-fit:cover;border-radius:8px;border:2px solid #6366f1;background:#000;cursor:pointer" onclick="openEvidLightbox('${ev.dataUrl}', true)" title="Clic para reproducir"></video><div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;font-size:1.5rem;text-shadow:0 2px 4px rgba(0,0,0,0.5);">▶️</div>`
+                        : `<img src="${ev.dataUrl}" style="width:90px;height:70px;object-fit:cover;border-radius:8px;border:2px solid #6366f1;cursor:pointer" onclick="openEvidLightbox('${ev.dataUrl}')" title="Clic para ampliar">`;
+                    return `<div style="position:relative;display:inline-block;vertical-align:top;">
+                        ${el}
+                        <button onclick="removePendingEvid(${i})"
+                            style="position:absolute;top:3px;right:3px;background:#ef444499;border:none;border-radius:4px;color:white;cursor:pointer;font-size:0.65rem;padding:1px 5px;z-index:2;">✕</button>
+                        <div style="position:absolute;bottom:3px;left:3px;background:#6366f1cc;border-radius:3px;font-size:0.55rem;color:white;padding:1px 4px;z-index:2;">nuevo</div>
+                    </div>`;
+                })
+            ].join('');
+        }
+
+        function removeExistingEvid(i) { existingEvidencias.splice(i, 1); renderEvidGallery(); }
+        function removePendingEvid(i) { pendingEvidencias.splice(i, 1); renderEvidGallery(); }
+
+        function openEvidLightbox(src, isVideo = false) {
+            let lb = document.getElementById('ev-lightbox');
+            if (!lb) {
+                lb = document.createElement('div');
+                lb.id = 'ev-lightbox';
+                lb.style.cssText = 'position:fixed;inset:0;background:#000000cc;display:flex;align-items:center;justify-content:center;z-index:3000;cursor:zoom-out';
+                lb.addEventListener('click', (e) => {
+                    if (e.target === lb) {
+                        lb.style.display = 'none';
+                        lb.innerHTML = '';
+                    }
+                });
+                document.body.appendChild(lb);
+            }
+            if (isVideo) {
+                lb.innerHTML = `<video src="${src}" controls autoplay style="max-width:94vw;max-height:94vh;border-radius:10px;box-shadow:0 12px 60px rgba(0,0,0,.7);background:#000;"></video>`;
+            } else {
+                lb.innerHTML = `<img src="${src}" style="max-width:94vw;max-height:94vh;border-radius:10px;box-shadow:0 12px 60px rgba(0,0,0,.7)">`;
+            }
+            lb.style.display = 'flex';
+        }
+
+        function clearEvidGallery() { pendingEvidencias = []; existingEvidencias = []; renderEvidGallery(); }
+
+        // (Legacy removeImg removed in favor of removeExistingImg / removePendingImg)
+
+        // ─── Delete issue ───
+        function deleteIssue(e, idx) {
+            e.stopPropagation();
+            e.preventDefault();
+            showConfirm(
+                'Eliminar Issue',
+                `Eliminar "${data.pruebas[idx]?.feature || 'este issue'}"?`,
+                async () => {
+                    await fetch('/api/issue/delete', { method: 'POST', body: JSON.stringify({ idx }), headers: { 'Content-Type': 'application/json' } });
+                    data.pruebas.splice(idx, 1);
+                    if (currentIdx === idx) {
+                        currentIdx = -1;
+                        document.getElementById('empty-state').style.display = '';
+                        document.getElementById('editor-container').style.display = 'none';
+                    } else if (currentIdx > idx) {
+                        currentIdx--;
+                    }
+                    renderList();
+                }
+            );
+        }
+
+        // ─── Save ───
+        async function saveIssue() {
+            const form = new FormData();
+            form.append('feature', document.getElementById('feature').value);
+            form.append('modulo', document.getElementById('modulo').value);
+            const status = document.getElementById('status').value;
+            form.append('status', status);
+
+            if (status === 'FAIL' || status === 'WARNING') {
+                const tipos = Array.from(document.querySelectorAll('#tipo_error input:checked')).map(el => el.value);
+                form.append('tipo_error', JSON.stringify(tipos));
+                form.append('severidad', document.getElementById('severidad').value);
+                form.append('ambiente_error', document.getElementById('ambiente_error').value);
+                form.append('pasos_reproducir', document.getElementById('pasos_reproducir').value);
+            }
+
+            form.append('idx', currentIdx);
+
+            let structuredTestList = [];
+
+            sbsPairs.forEach((pair, idx) => {
+                let testItem = {
+                    title: pair.title || '',
+                    status: pair.status || 'PENDING',
+                    isSection: pair.isSection || false,
+                    evType: pair.evType || 'SBS',
+                    errorTypes: pair.errorTypes || [],
+                    severity: pair.severity || 'Media',
+                    impact: pair.impact || 'Media',
+                    probability: pair.probability || 'Media',
+                    obs: pair.obs || '',
+                    sbs: [],
+                    simple: [],
+                    sqlList: pair.sqlList || []
+                };
+
+                if (!pair.isSection) {
+                    if (pair.evType === 'SBS' && pair.sbs) {
+                        pair.sbs.forEach((row, subIdx) => {
+                            let sbsItem = { figma: null, dev: null };
+
+                            if (row.figma?.file) {
+                                let fKey = `file_figma_${idx}_${subIdx}`;
+                                form.append(fKey, row.figma.file);
+                                sbsItem.figma = { pending: fKey };
+                            } else if (row.figma?.src) {
+                                sbsItem.figma = row.figma.src;
+                            }
+
+                            if (row.dev?.file) {
+                                let fKey = `file_dev_${idx}_${subIdx}`;
+                                form.append(fKey, row.dev.file);
+                                sbsItem.dev = { pending: fKey };
+                            } else if (row.dev?.src) {
+                                sbsItem.dev = row.dev.src;
+                            }
+
+                            testItem.sbs.push(sbsItem);
+                        });
+                    } else if (pair.evType === 'SIMPLE' && pair.simple) {
+                        pair.simple.forEach((img, subIdx) => {
+                            if (img.file) {
+                                let fKey = `file_simple_${idx}_${subIdx}`;
+                                form.append(fKey, img.file);
+                                testItem.simple.push({ pending: fKey });
+                            } else if (img.src) {
+                                testItem.simple.push(img.src);
+                            }
+                        });
+                    }
+                }
+                structuredTestList.push(testItem);
+            });
+
+            form.append('test_list_v2', JSON.stringify(structuredTestList));
+
+            // Evidence: send existing paths (to keep) + new files
+            form.append('evidencias_existing', JSON.stringify(existingEvidencias));
+            for (const ev of pendingEvidencias) {
+                form.append('evidencia', ev.file);
+            }
+
+            const res = await fetch('/api/issue', { method: 'POST', body: form });
+            const json = await res.json();
+
+            if (json.ok && json.issue) {
+                if (currentIdx === -1) {
+                    data.pruebas.push(json.issue);
+                    currentIdx = data.pruebas.length - 1;
+                } else {
+                    data.pruebas[currentIdx] = json.issue;
+                }
+
+                // Solo reemplazamos sbsPairs si el servidor nos devolvió una lista válida
+                const savedList = json.issue.test_list || json.issue.test_list_v2 || [];
+                if (savedList && Array.isArray(savedList) && savedList.length > 0) {
+                    sbsPairs.splice(0, sbsPairs.length);
+
+                    for (let i = 0; i < savedList.length; i++) {
+                        const tObj = savedList[i];
+                        let sbsArr = [];
+                        if (tObj.sbs && Array.isArray(tObj.sbs)) {
+                            sbsArr = tObj.sbs.map(row => ({
+                                figma: { src: row.figma || null, file: null, dataUrl: null },
+                                dev: { src: row.dev || null, file: null, dataUrl: null }
+                            }));
+                        }
+                        if (sbsArr.length === 0 && !tObj.isSection) {
+                            sbsArr.push({ figma: { src: null, file: null, dataUrl: null }, dev: { src: null, file: null, dataUrl: null } });
+                        }
+
+                        let simpleArr = [];
+                        if (tObj.simple && Array.isArray(tObj.simple)) {
+                            simpleArr = tObj.simple.map(src => ({ src: src || null, file: null, dataUrl: null }));
+                        }
+
+                        sbsPairs.push({
+                            title: tObj.title || '',
+                            status: tObj.status || 'PENDING',
+                            isSection: !!tObj.isSection,
+                            evType: tObj.evType || 'SBS',
+                            expanded: !!tObj.expanded,
+                            sbs: sbsArr,
+                            simple: simpleArr,
+                            sqlList: tObj.sqlList || (tObj.sqlQuery || tObj.sqlResult ? [{ query: tObj.sqlQuery || '', result: tObj.sqlResult || '' }] : []),
+                            errorTypes: tObj.errorTypes || [],
+                            severity: tObj.severity || 'Media',
+                            impact: tObj.impact || 'Media',
+                            probability: tObj.probability || 'Media',
+                            obs: tObj.obs || '',
+                            showObs: !!tObj.obs
+                        });
+                    }
+                    renderSBS();
+                }
+                // Sync evidence gallery state
+                existingEvidencias = Array.isArray(json.issue.evidencias) ? [...json.issue.evidencias] : [];
+                pendingEvidencias = [];
+                renderEvidGallery();
+                renderList();
+                showSaveMsg();
+            }
+        }
+
+        function showSaveMsg() {
+            const msg = document.getElementById('save-msg');
+            msg.classList.add('visible');
+            setTimeout(() => msg.classList.remove('visible'), 2000);
+        }
+
+        async function saveAndContinue() { await saveIssue(); }
+        async function saveAndReport() { await saveIssue(); await generateReport(); }
+
+        // ─── Meta save ───
+        function scheduleMetaSave() {
+            clearTimeout(metaSaveTimer);
+            metaSaveTimer = setTimeout(async () => {
+                await fetch('/api/meta', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        tester: document.getElementById('tester').value,
+                        caso_de_uso: document.getElementById('caso_de_uso').value,
+                        url_ambiente: document.getElementById('url_ambiente').value,
+                        url_figma: document.getElementById('url_figma').value,
+                        conclusion_qa: document.getElementById('conclusion_qa').value,
+                        navegadores: Array.from(document.querySelectorAll('#nav-group input:checked')).map(cb => cb.value),
+                        sistemas_operativos: Array.from(document.querySelectorAll('#so-group input:checked')).map(cb => cb.value)
+                    }),
+                    headers: { 'Content-Type': 'application/json' }
+                });
+            }, 800);
+        }
+
+        async function forceSaveMeta(fromConclusionModal = false) {
+            if (!activeCU) return;
+            toast('Guardando config...', '');
+            await fetch('/api/meta', {
+                method: 'POST',
+                body: JSON.stringify({
+                    tester: document.getElementById('tester').value,
+                    caso_de_uso: document.getElementById('caso_de_uso').value,
+                    url_ambiente: document.getElementById('url_ambiente').value,
+                    url_figma: document.getElementById('url_figma').value,
+                    conclusion_qa: document.getElementById('conclusion_qa').value,
+                    navegadores: Array.from(document.querySelectorAll('#nav-group input:checked')).map(cb => cb.value),
+                    sistemas_operativos: Array.from(document.querySelectorAll('#so-group input:checked')).map(cb => cb.value)
+                }),
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            if (fromConclusionModal) {
+                closeModal('modal-conclusion');
+                toast('💾 Conclusión QA Guardada Exitosamente', 'ok');
+            } else {
+                toast('💾 Conclusión / Config Guardada', 'ok');
+            }
+        }
+
+        // ─── Estadisticas ───
+        function showStats() {
+            if (!activeCU) return toast('No hay CU activo', 'error');
+            if (!data || !data.pruebas) return;
+
+            document.getElementById('stats-title').textContent = '📊 Estadísticas del Caso de Uso';
+            renderStatsUI(data.pruebas);
+        }
+
+        async function showGlobalStats() {
+            toast('⏳ Cargando estadísticas globales...', '');
+            const res = await fetch('/api/data/global');
+            const json = await res.json();
+            if (!json.pruebas) return toast('❌ Error al cargar datos', 'error');
+
+            document.getElementById('editor-container').style.display = 'none';
+            document.getElementById('empty-state').style.display = 'none';
+            document.getElementById('stats-title').textContent = '🌍 Estadísticas Globales de QA';
+            renderStatsUI(json.pruebas);
+            document.getElementById('stats-container').style.display = 'flex';
+            toast('✅ Estadísticas Globales Listas', 'ok');
+        }
+
+        function renderStatsUI(pruebasArr, updateView = true) {
+            if (updateView) {
+                document.getElementById('editor-container').style.display = 'none';
+                document.getElementById('empty-state').style.display = 'none';
+                document.getElementById('stats-container').style.display = 'flex';
+            }
+
+            let total = 0, ok = 0, fail = 0, warn = 0, pending = 0;
+            let riskCounts = { 'Crítico': 0, 'Alto': 0, 'Medio': 0, 'Baja': 0 };
+
+            // Status Helper
+            const getStatusIcon = (st) => {
+                const s = (st || 'PENDING').toUpperCase();
+                if (s === 'OK' || s === 'PASS') return { icon: '✔', color: 'var(--ok)', label: 'PASS' };
+                if (s === 'FAIL') return { icon: '❌', color: 'var(--fail)', label: 'FAIL' };
+                if (s === 'WARNING' || s === 'WARN') return { icon: '⚠️', color: 'var(--warn)', label: 'WARN' };
+                return { icon: '⏳', color: 'var(--muted)', label: 'PEND' };
+            };
+
+            const calculateBranchStatus = (items) => {
+                if (!items || items.length === 0) return 'PENDING';
+                const statuses = items.map(t => (t.status || 'PENDING').toUpperCase());
+                if (statuses.includes('FAIL')) return 'FAIL';
+                if (statuses.includes('WARNING')) return 'WARNING';
+                if (statuses.every(s => s === 'OK' || s === 'PASS')) return 'OK';
+                return 'PENDING';
+            };
+
+            // Hierarchy Tree Generation
+            const treeContainer = document.getElementById('stats-tree-container');
+            let treeHtml = '';
+
+            // Level 1: CU (Root)
+            const cuStatus = calculateBranchStatus(pruebasArr);
+            const cuIcon = getStatusIcon(cuStatus);
+
+            treeHtml += `
+            <details open style="border:1px solid var(--border); border-radius:8px; background:rgba(255,255,255,0.02); overflow:hidden;">
+                <summary style="padding:12px 15px; cursor:pointer; list-style:none; display:flex; align-items:center; gap:10px; background:rgba(0,0,0,0.1); font-weight:800; font-size:0.95rem; color:var(--accent);">
+                    <span style="font-size:1.2rem;">📁</span>
+                    <span style="flex:1;">CU: ${data.caso_de_uso || activeCU || 'Sin Nombre'}</span>
+                    <span style="color:${cuIcon.color}; background:${cuIcon.color}15; padding:2px 8px; border-radius:12px; font-size:0.7rem;">${cuIcon.icon} ${cuIcon.label}</span>
+                </summary>
+                <div style="padding:10px 0 10px 25px; display:flex; flex-direction:column; gap:8px; border-left:2px dashed var(--border); margin-left:20px; margin-top:5px; margin-bottom:10px;">
+            `;
+
+            pruebasArr.forEach((p, pIdx) => {
+                const tList = p.test_list || p.test_list_v2 || [];
+                const huStatus = calculateBranchStatus(tList.length > 0 ? tList : [p]);
+                const huIcon = getStatusIcon(huStatus);
+
+                // Level 2: HU
+                treeHtml += `
+                <details style="border-radius:6px; margin-right:15px;">
+                    <summary style="padding:8px 12px; cursor:pointer; list-style:none; display:flex; align-items:center; gap:10px; background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:6px; font-size:0.85rem; font-weight:600;">
+                        <span>📜</span>
+                        <span style="flex:1;">HU: ${p.feature || 'Prueba sin título'}</span>
+                        <button class="btn btn-primary" style="padding: 2px 8px; font-size: 0.7rem; border-radius: 4px; width: auto; background: var(--dev); border: none;" onclick="ejecutarElemento(event, 'HU', '${(p.feature || 'Prueba').replace(/'/g, "\\'")}')">▶ Ejecutar</button>
+                        <span style="color:${huIcon.color}; font-size:0.75rem;">${huIcon.icon} ${huIcon.label}</span>
+                    </summary>
+                    <div style="padding:8px 0 8px 15px; display:flex; flex-direction:column; gap:4px; border-left:1px solid var(--border); margin-left:15px; margin-top:4px;">
+                `;
+
+                // Level 3: Tests
+                if (tList.length > 0) {
+                    tList.forEach(t => {
+                        if (t.isSection) {
+                            treeHtml += `<div style="font-size:0.6rem; color:var(--muted); font-weight:800; text-transform:uppercase; margin-top:8px; margin-bottom:4px; letter-spacing:0.05em;">-- SECCIÓN: ${t.title} --</div>`;
+                            return;
+                        }
+                        const tIcon = getStatusIcon(t.status);
+                        total++;
+                        if (tIcon.label === 'PASS') ok++;
+                        else if (tIcon.label === 'FAIL') fail++;
+                        else if (tIcon.label === 'WARN') warn++;
+                        else pending++;
+
+                        treeHtml += `
+                        <div style="display:flex; align-items:center; gap:8px; padding:4px 8px; font-size:0.8rem; color:var(--text); opacity:0.9;">
+                            <span style="color:${tIcon.color}; font-size:0.9rem;">${tIcon.icon}</span>
+                            <span style="flex:1;">${t.title || 'Paso de verificación'}</span>
+                            <button class="btn btn-primary" style="padding: 2px 8px; font-size: 0.65rem; border-radius: 4px; width: auto; background: var(--accent2); border: none;" onclick="ejecutarElemento(event, 'TEST', '${(t.title || 'Test').replace(/'/g, "\\'")}')">▶ Ejecutar</button>
+                            <span style="font-size:0.65rem; font-weight:800; color:var(--muted); opacity:0.6;">TEST</span>
+                        </div>
+                        `;
+                    });
+                } else {
+                    // Fallback for legacy items without individual tests
+                    total++;
+                    if (huIcon.label === 'PASS') ok++;
+                    else if (huIcon.label === 'FAIL') fail++;
+                    else if (huIcon.label === 'WARN') warn++;
+                    else pending++;
+
+                    treeHtml += `
+                    <div style="display:flex; align-items:center; gap:8px; padding:4px 8px; font-size:0.8rem; color:var(--muted);">
+                        <span>ℹ️</span>
+                        <span>Esta HU no tiene tests individuales definidos.</span>
+                    </div>
+                    `;
+                }
+
+                treeHtml += `</div></details>`;
+            });
+
+            treeHtml += `</div></details>`;
+            treeContainer.innerHTML = treeHtml;
+
+            // Updated flat stats calculation (matches the logic in the tree loop)
+            document.getElementById('st-total').textContent = total;
+            document.getElementById('st-ok').textContent = ok;
+            document.getElementById('st-fail').textContent = fail;
+            document.getElementById('st-warn').textContent = warn;
+            if (document.getElementById('st-pending')) {
+                document.getElementById('st-pending').textContent = pending;
+            }
+
+            let okPerc = total ? (ok / total) * 100 : 0;
+            let failPerc = total ? (fail / total) * 100 : 0;
+            let warnPerc = total ? (warn / total) * 100 : 0;
+            let pendingPerc = total ? (pending / total) * 100 : 0;
+
+            document.getElementById('st-bar-ok').style.width = okPerc + '%';
+            document.getElementById('st-bar-warn').style.width = warnPerc + '%';
+            document.getElementById('st-bar-fail').style.width = failPerc + '%';
+            const percEl = document.getElementById('st-perc');
+            percEl.textContent = 'Score de Calidad: ' + okPerc.toFixed(1) + '%';
+            percEl.style.color = okPerc > 90 ? 'var(--ok)' : (okPerc > 60 ? 'var(--warn)' : 'var(--fail)');
+            percEl.style.color = okPerc > 90 ? 'var(--ok)' : (okPerc > 60 ? 'var(--warn)' : 'var(--fail)');
+
+            // Actualizar resumen en sidebar
+            const sideSumm = document.getElementById('side-stats-summary');
+            if (sideSumm) {
+                const maxRisk = riskCounts['Crítico'] > 0 ? 'CRÍTICO 🛑' : (riskCounts['Alto'] > 0 ? 'ALTO 🛑' : (riskCounts['Medio'] > 0 ? 'MEDIO ⚠️' : 'BAJO ✅'));
+                sideSumm.innerHTML = `<span style="color:${percEl.style.color}">${okPerc.toFixed(0)}% OK</span> | Riesgo: ${maxRisk}`;
+            }
+
+            currentStatsData = pruebasArr;
+
+            // Reset select UI if needed, but here we can just render the list unconditionally
+            renderFilteredStats();
+        }
+
+        function renderFilteredStats() {
+            const listContainer = document.getElementById('st-issues-list');
+            const filterSt = document.getElementById('st-filter-status') ? document.getElementById('st-filter-status').value : 'ALL';
+            const filterSev = document.getElementById('st-filter-sev') ? document.getElementById('st-filter-sev').value : 'ALL';
+
+            listContainer.innerHTML = '';
+
+            let filtered = currentStatsData;
+
+            if (filterSt !== 'ALL') {
+                filtered = filtered.filter(p => (p.status ? p.status.toUpperCase() : 'FAIL') === filterSt);
+            }
+
+            if (filterSev !== 'ALL') {
+                filtered = filtered.filter(p => (p.severidad ? p.severidad.toUpperCase() : 'MEDIA') === filterSev);
+            }
+
+            if (filtered.length === 0) {
+                listContainer.innerHTML = '<div style="color:var(--muted); font-size:0.85rem; padding:20px; text-align:center; border:1px dashed var(--border); border-radius:8px;">No hay issues registrados que coincidan con los filtros.</div>';
+                return;
+            }
+
+            filtered.forEach((p, idx) => {
+                const st = p.status ? p.status.toUpperCase() : 'FAIL';
+                const bgc = st === 'OK' ? 'var(--ok)' : (st === 'WARNING' ? 'var(--warn)' : 'var(--fail)');
+                const sev = (p.severidad || 'Media').toUpperCase();
+                let sevColor = '#64748b';
+                if (sev === 'ALTA' || sev === 'CRÍTICA') sevColor = 'var(--fail)';
+                else if (sev === 'MEDIA') sevColor = 'var(--warn)';
+                else if (sev === 'BAJA') sevColor = 'var(--ok)';
+
+                let obsHTML = "";
+                const tList = p.test_list_v2 || p.test_list || [];
+                if (tList.length > 0) {
+                    obsHTML += `<div style="margin-top:10px; color:var(--text); font-size:0.8rem; background:var(--input-bg); padding:10px; border-radius:6px; border-left:3px solid ${bgc};"><b style="color:var(--muted);">Tests Evaluados:</b><ul style="margin:5px 0 0 15px; padding:0; list-style-type:disc;">`;
+                    tList.forEach(t => {
+                        const st_icon = { 'OK': '✅', 'FAIL': '❌', 'WARNING': '⚠️', 'PENDING': '⏳' }[t.status] || '⏳';
+                        obsHTML += `<li>${st_icon} ${t.title || 'Prueba técnica'}</li>`;
+                    });
+                    obsHTML += `</ul></div>`;
+                } else if (p.observaciones) {
+                    obsHTML = `<div style="margin-top:10px; color:var(--text); font-size:0.8rem; background:var(--input-bg); padding:10px; border-radius:6px; border-left:3px solid ${bgc};"><b style="color:var(--muted);">Observaciones:</b><br>${p.observaciones.replace(/\n/g, '<br>')}</div>`;
+                }
+
+                const errHTML = p.tipo_error && p.tipo_error.length ? `<div style="margin-top:10px; color:var(--text); font-size:0.8rem;"><b style="color:var(--muted);">Tipos de Error:</b> <span style="font-weight:600; color:${bgc};">${p.tipo_error.join(', ')}</span></div>` : '';
+
+                listContainer.innerHTML += `
+                <div style="background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:15px; margin-bottom:10px;">
+                            <div style="display:flex; justify-content:space-between; align-items:center;">
+                                <div style="display:flex; align-items:center; gap:10px;">
+                                    <span style="background:${bgc}; color:white; font-size:0.6rem; padding:3px 8px; border-radius:12px; font-weight:800; letter-spacing:0.05em;">${st}</span>
+                                    <span style="font-size:0.95rem; font-weight:600;">${p.feature || 'Issue sin titulo'} 
+                                        <span style="background:var(--input-bg); color:${sevColor}; border:1px solid var(--border); font-size:0.65rem; padding:2px 6px; margin-left:6px; border-radius:4px; font-weight:700;">${sev}</span>
+                                        <span style="font-size:0.75rem; color:var(--dev); margin-left:8px;">[${p.modulo || 'General'}]</span>
+                                    </span>
+                                </div>
+                                <button class="btn-ghost" style="padding:6px 12px; font-size:0.75rem; border-radius:6px; background:var(--surface2); color:var(--text); border:1px solid var(--border); cursor:pointer;" onclick="const detail = document.getElementById('st-detail-${idx}'); detail.style.display = detail.style.display === 'none' ? 'block' : 'none'">Ver detalles</button>
+                            </div>
+                            <div id="st-detail-${idx}" style="display:none; padding-top:10px; margin-top:12px; border-top:1px dashed var(--border);">
+                                ${errHTML}
+                                ${obsHTML}
+                                ${!errHTML && !obsHTML ? '<div style="color:var(--muted); font-size:0.8rem; font-style:italic;">Sin detalles adicionales.</div>' : ''}
+                            </div>
+                        </div>
+                `;
+            });
+        }
+
+        // ─── Report ───
+        async function generateReport() {
+            if (!activeCU) return toast('No hay CU activo para generar el reporte', 'error');
+            toast('⏳ Generando reporte CU...', '');
+            const res = await fetch('/api/report', { method: 'POST' });
+            const json = await res.json();
+            if (json.ok) toast('✅ Reporte generado correctamente', 'ok');
+            else toast('❌ Error: ' + json.error, 'error');
+        }
+
+        let globalCUsList = [];
+        async function openGlobalReportModal() {
+            toast('⏳ Cargando CUs...', '');
+            try {
+                const res = await fetch('/api/casos');
+                const json = await res.json();
+                if (!json.casos) throw new Error('No se pudieron cargar los Casos de Uso');
+                
+                globalCUsList = json.casos;
+                const container = document.getElementById('cu-list-container');
+                container.innerHTML = '';
+                
+                globalCUsList.forEach(cu => {
+                    container.innerHTML += `
+                        <label style="display:flex; align-items:center; gap:8px; font-size:0.85rem; cursor:pointer; padding:4px; border-radius:4px;" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background='transparent'">
+                            <input type="checkbox" value="${cu}" class="cu-checkbox" checked>
+                            <span style="color:var(--text);">${cu}</span>
+                        </label>
+                    `;
+                });
+                
+                document.getElementById('modal-global-report').style.display = 'flex';
+                toast('✅ CUs Listos', 'ok');
+            } catch(e) {
+                toast('❌ Error: ' + e.message, 'error');
+            }
+        }
+
+        function toggleAllCUs(check) {
+            document.querySelectorAll('.cu-checkbox').forEach(cb => cb.checked = check);
+        }
+
+        async function submitGlobalReport() {
+            const selected = Array.from(document.querySelectorAll('.cu-checkbox:checked')).map(cb => cb.value);
+            if (selected.length === 0) return toast('⚠️ Debés seleccionar al menos un CU', 'error');
+
+            document.getElementById('modal-global-report').style.display = 'none';
+            toast(`⏳ Generando reporte para ${selected.length} CUs...`, '');
+
+            try {
+                const res = await fetch('/api/report_selected', { 
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ casos: selected })
+                });
+                const json = await res.json();
+                if (json.ok) toast('✅ Reporte Generado', 'ok');
+                else toast('❌ Error: ' + json.error, 'error');
+            } catch(e) {
+                toast('❌ Error de conexión', 'error');
+            }
+        }
+
+        // ─── Toast ───
+        function toast(msg, type) {
+            const el = document.getElementById('toast');
+            el.textContent = msg;
+            el.className = `toast show ${type}`;
+            clearTimeout(el._t);
+            el._t = setTimeout(() => el.classList.remove('show'), 3500);
+        }
+
+        // ─── Modals: close on overlay click ───
+        window.ejecutarElemento = async function(event, tipo, nombre) {
+            event.stopPropagation();
+            event.preventDefault();
+            
+            // Simular iniciación de ejecución en la UI
+            toast('🚀 Iniciando ejecución de ' + tipo + ': ' + nombre, 'ok');
+            
+            // Aquí en un flujo real podrías hacer un fetch a /api/test-suites/:id/start-execution
+            // Por ahora, recargamos el scroll top como feedback visual o abrimos el editor si fuera necesario
+        };
+
+        function registerModalListeners() {
+            ['modal-new-cu', 'modal-confirm', 'modal-ai-wizard', 'modal-gemini-gen'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.addEventListener('click', e => {
+                        if (e.target === e.currentTarget) closeModal(id);
+                    });
+                }
+            });
+        }
+
+        // ─── Modal: Enter to create ───
+        document.getElementById('new-cu-name').addEventListener('keydown', e => {
+            if (e.key === 'Enter') createCU();
+        });
+
+        registerModalListeners();
+        init();
+    </script>
+    <!-- Modal Gemini Generador de Tests (llamada directa a API) -->
+    <div class="modal-overlay" id="modal-gemini-gen">
+        <div class="modal-content" style="max-width:860px; width:95vw; max-height:92vh; padding:0; overflow:hidden; display:flex; flex-direction:column; border:1px solid rgba(99,102,241,0.3); background:rgba(10,12,28,0.98); backdrop-filter:blur(30px); border-radius:24px; box-shadow:0 30px 60px -12px rgba(0,0,0,0.7);">
+            <!-- Header -->
+            <div style="background:linear-gradient(135deg,#4f46e5,#7c3aed,#a21caf); padding:18px 28px; color:white; display:flex; justify-content:space-between; align-items:center; flex-shrink:0;">
+                <div>
+                    <h2 style="margin:0; font-size:1.3rem; font-weight:800; display:flex; align-items:center; gap:10px;">
+                        <span style="font-size:1.5rem;">✨</span> Generar Tests con Gemini IA
+                    </h2>
+                    <p style="margin:4px 0 0; font-size:0.8rem; opacity:0.75;">Describe la Historia de Usuario y/o pegá imágenes. La IA generará los escenarios de prueba.</p>
+                </div>
+                <button onclick="closeModal('modal-gemini-gen')" style="background:rgba(0,0,0,0.25); border:none; color:white; width:34px; height:34px; border-radius:50%; cursor:pointer; font-size:1.2rem; display:flex; align-items:center; justify-content:center;">&times;</button>
+            </div>
+
+            <!-- API Key row -->
+            <div style="padding:12px 28px; background:rgba(0,0,0,0.3); border-bottom:1px solid rgba(255,255,255,0.06); display:flex; align-items:center; gap:12px; flex-shrink:0;">
+                <label style="font-size:0.72rem; font-weight:800; color:#818cf8; white-space:nowrap; text-transform:uppercase; letter-spacing:0.05em;">🔑 API Key Gemini</label>
+                <input id="gemini-api-key" type="password" placeholder="AIza..." oninput="localStorage.setItem('gemini_api_key', this.value)"
+                    style="flex:1; padding:7px 12px; border-radius:8px; border:1px solid rgba(99,102,241,0.4); background:rgba(255,255,255,0.05); color:white; font-family:monospace; font-size:0.8rem; outline:none;"/>
+                <a href="https://aistudio.google.com/app/apikey" target="_blank" style="font-size:0.7rem; color:#818cf8; white-space:nowrap; text-decoration:none;">Obtener key →</a>
+            </div>
+
+            <!-- Body -->
+            <div style="flex:1; overflow-y:auto; padding:24px 28px; display:flex; flex-direction:column; gap:18px;">
+
+                <!-- Textarea HU -->
+                <div>
+                    <div style="font-size:0.72rem; font-weight:800; color:#818cf8; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:8px;">📋 Historia de Usuario / Contexto</div>
+                    <textarea id="gemini-hu-input"
+                        placeholder="Pegá aquí el texto de la HU, criterios de aceptación, reglas de negocio...
+También podés pegar imágenes con Ctrl+V en la zona de abajo."
+                        style="width:100%; min-height:140px; padding:16px; border-radius:12px; border:1px solid rgba(99,102,241,0.3); background:rgba(255,255,255,0.04); color:white; font-family:inherit; font-size:0.9rem; line-height:1.6; resize:vertical; outline:none; box-sizing:border-box;"></textarea>
+                </div>
+
+                <!-- Zona de imágenes -->
+                <div>
+                    <div style="font-size:0.72rem; font-weight:800; color:#818cf8; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:8px;">🖼️ Imágenes de Referencia <span style="font-weight:400; color:var(--muted);">(opcional — Ctrl+V o seleccioná archivos)</span></div>
+                    <div id="gemini-img-drop"
+                        tabindex="0"
+                        style="min-height:90px; border:2px dashed rgba(99,102,241,0.4); border-radius:12px; background:rgba(99,102,241,0.04); display:flex; flex-wrap:wrap; gap:10px; align-items:center; padding:12px; cursor:pointer; transition:border-color 0.2s; position:relative;"
+                        onclick="document.getElementById('gemini-img-file').click()"
+                        ondragover="event.preventDefault(); this.style.borderColor='#6366f1';"
+                        ondragleave="this.style.borderColor='rgba(99,102,241,0.4)';"
+                        ondrop="handleGeminiImgDrop(event)">
+                        <div id="gemini-img-placeholder" style="color:var(--muted); font-size:0.8rem; text-align:center; width:100%;">📎 Arrastrá imágenes aquí, hacé click o presioná Ctrl+V</div>
+                        <div id="gemini-img-previews" style="display:flex; flex-wrap:wrap; gap:8px;"></div>
+                    </div>
+                    <input type="file" id="gemini-img-file" accept="image/*" multiple style="display:none;" onchange="handleGeminiImgFiles(this.files)"/>
+                </div>
+
+                <!-- Estado / Error -->
+                <div id="gemini-status" style="display:none; font-size:0.8rem; padding:10px 14px; border-radius:8px; font-weight:600;"></div>
+            </div>
+
+            <!-- Footer -->
+            <div style="padding:16px 28px; background:rgba(0,0,0,0.25); border-top:1px solid rgba(255,255,255,0.06); display:flex; justify-content:flex-end; gap:12px; flex-shrink:0;">
+                <button onclick="closeModal('modal-gemini-gen')" style="padding:10px 20px; border-radius:10px; border:1px solid rgba(255,255,255,0.1); background:transparent; color:var(--muted); font-weight:600; cursor:pointer; font-size:0.85rem;">Cancelar</button>
+                <button id="gemini-gen-btn" onclick="callGeminiAPI()"
+                    style="padding:10px 28px; border-radius:10px; border:none; background:linear-gradient(to right,#6366f1,#a855f7); color:white; font-weight:800; cursor:pointer; font-size:0.95rem; display:flex; align-items:center; gap:8px; box-shadow:0 8px 20px -4px rgba(99,102,241,0.5); transition:opacity 0.2s;">
+                    <span id="gemini-btn-icon">✨</span> <span id="gemini-btn-label">Generar Tests</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Conservar modal-ai-wizard original (legacy) -->
+    <div class="modal-overlay" id="modal-ai-wizard">
+        <div class="modal-content"
+            style="max-width:1100px; width:95vw; height:90vh; padding:0; overflow:hidden; display:flex; flex-direction:column; border:1px solid rgba(255,255,255,0.1); background:rgba(15,23,42,0.98); backdrop-filter:blur(30px); border-radius:30px; box-shadow:0 25px 50px -12px rgba(0,0,0,0.5);">
+            <div style="background:linear-gradient(135deg, #6366f1, #a855f7); padding:20px 30px; color:white; display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                    <h2 style="margin:0; font-size:1.4rem; font-weight:800; letter-spacing:-0.02em; display:flex; align-items:center; gap:12px;"><span style="background:rgba(255,255,255,0.2); width:32px; height:32px; display:flex; align-items:center; justify-content:center; border-radius:8px;">📋</span> AI Wizard (Manual)</h2>
+                    <p style="margin:5px 0 0 0; font-size:0.85rem; opacity:0.8;">Copiá el prompt y pegá la respuesta JSON de Gemini.</p>
+                </div>
+                <button onclick="closeModal('modal-ai-wizard')" style="background:rgba(0,0,0,0.2); border:none; color:white; width:36px; height:36px; border-radius:50%; cursor:pointer; font-size:1.2rem; display:flex; align-items:center; justify-content:center;">&times;</button>
+            </div>
+            <div style="flex:1; display:flex; overflow:hidden;">
+                <div style="flex:1; padding:30px; border-right:1px solid rgba(255,255,255,0.06); display:flex; flex-direction:column; gap:20px; background:rgba(255,255,255,0.02);">
+                    <h4 style="margin:0; font-size:0.9rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--muted);">1. Historia de Usuario</h4>
+                    <textarea id="ai-hu-input" placeholder="Pegá el texto de la HU..." style="flex:1; width:100%; padding:20px; border-radius:16px; border:1px solid rgba(255,255,255,0.1); background:rgba(0,0,0,0.2); color:white; font-family:inherit; font-size:1rem; line-height:1.6; resize:none; outline:none;"></textarea>
+                    <button onclick="copyAIPrompt()" style="width:100%; padding:14px; border-radius:12px; border:none; background:linear-gradient(to right, #6366f1, #4f46e5); color:white; font-weight:700; cursor:pointer; font-size:0.95rem;">Copiar Prompt → Abrir Gemini</button>
+                </div>
+                <div style="flex:1; padding:30px; display:flex; flex-direction:column; gap:20px;">
+                    <h4 style="margin:0; font-size:0.9rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--muted);">2. Respuesta JSON de Gemini</h4>
+                    <textarea id="ai-json-output" placeholder='[ { "title": "...", "isSection": true }, ... ]' style="flex:1; width:100%; padding:20px; border-radius:16px; border:1px solid rgba(255,255,255,0.1); background:rgba(0,0,0,0.3); color:#818cf8; font-family:monospace; font-size:0.85rem; line-height:1.5; resize:none; outline:none;"></textarea>
+                    <button onclick="applyAIStructure()" style="padding:14px; border-radius:12px; border:none; background:linear-gradient(to right, #a855f7, #9333ea); color:white; font-weight:700; cursor:pointer; font-size:0.95rem;">🚀 Inyectar al Editor</button>
+                </div>
+            </div>
+            <div style="padding:15px 30px; background:rgba(0,0,0,0.2); border-top:1px solid rgba(255,255,255,0.06); display:flex; justify-content:flex-end;">
+                <button onclick="closeModal('modal-ai-wizard')" style="color:var(--muted); background:transparent; border:none; font-weight:600; cursor:pointer; font-size:0.85rem;">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function openAIWizard() {
+            document.getElementById('ai-hu-input').value = '';
+            document.getElementById('ai-json-output').value = '';
+            openModal('modal-ai-wizard');
+        }
+
+        function copyAIPrompt() {
+            const hu = document.getElementById('ai-hu-input').value.trim();
+            if (!hu) return toast('⚠️ Escribí o pegá una HU primero', 'error');
+
+            const prompt = `Rol: QA Automation Engineer Senior (ISTQB Certified).
+Instrucción Primordial: Genera títulos de pruebas basados exclusivamente en las reglas de negocio, precondiciones y validaciones descritas en el texto de la HU.
+
+Reglas de Derivación de Pruebas:
+1. Pruebas de Permisos: Si la HU menciona un permiso (ej. tes_depositos_transferencias_listar), genera una prueba de control de acceso.
+2. Pruebas de Estado (Máquina de Estados): Si la funcionalidad depende de un estado externo (ej. "Ejercicio en ejecución"), genera pruebas para cada variante de ese estado.
+3. Pruebas de Datos y Tipado: Si un campo tiene un tipo (ej. "Número") o valor por defecto ("S/D"), genera pruebas de integridad para esos atributos.
+4. Pruebas de Comportamiento: Mapea cada acción (Enter, Click, Tab) a un escenario visual o funcional.
+5. Pruebas de Regla de Negocio (Back): Traduce las condiciones del backend (ej. TipoDeposito = 'TB') en escenarios de verificación de datos en la grilla.
+
+Salida: Devuelve únicamente un bloque de código JSON (sin explicaciones ni markdown):
+
+\`\`\`json
+[
+  { "title": "NOMBRE SECCIÓN", "isSection": true },
+  { "title": "Nombre de la prueba", "isSection": false, "impact": "Media", "probability": "Media" }
+]
+\`\`\`
+
+Reglas de Riesgo (ISTQB):
+- Asigna Impacto 'Alta' si afecta el flujo principal o datos contables.
+- Asigna Probabilidad 'Alta' si es una zona de cambios frecuentes o lógica compleja.
+
+HU A ANALIZAR:
+${hu}`;
+
+            navigator.clipboard.writeText(prompt).then(() => {
+                toast('📋 Prompt minimalista copiado', 'ok');
+                window.open('https://gemini.google.com/app', '_blank');
+            }).catch(err => {
+                console.error('Error copying:', err);
+                toast('❌ Error al copiar al portapapeles', 'error');
+            });
+        }
+
+        function applyAIStructure() {
+            const rawJson = document.getElementById('ai-json-output').value.trim();
+            if (!rawJson) return toast('⚠️ Pegá el JSON de Gemini primero', 'error');
+
+            try {
+                const cleanJson = rawJson.replace(/```json/g, '').replace(/```/g, '').trim();
+                const parsed = JSON.parse(cleanJson);
+
+                if (!Array.isArray(parsed)) throw new Error();
+
+                parsed.forEach(item => {
+                    sbsPairs.push({
+                        title: item.title || 'Nueva Prueba',
+                        status: 'PENDING',
+                        isSection: !!item.isSection,
+                        evType: 'SBS',
+                        expanded: false,
+                        sbs: item.isSection ? [] : [{ figma: { src: null, file: null, dataUrl: null }, dev: { src: null, file: null, dataUrl: null } }],
+                        simple: [],
+                        errorTypes: [],
+                        severity: 'Media',
+                        impact: item.impact || 'Media',
+                        probability: item.probability || 'Media',
+                        obs: '',
+                        showObs: false
+                    });
+                });
+
+                renderSBS();
+                closeModal('modal-ai-wizard');
+                toast(`🚀 Se importaron ${parsed.length} items. ¡Cerrando asistente!`, 'ok');
+            } catch (e) {
+                toast('❌ JSON inválido. Verificá que sea un arreglo [{}, {}]', 'error');
+            }
+        }
+
+        async function exportFullMatrixToExcel() {
+            const useCaseId = document.getElementById('cu-select').value;
+            if (!useCaseId) return toast('Seleccioná un Caso de Uso primero', 'error');
+            
+            toast('Generando Matriz Completa en Excel...', 'ok');
+            window.location.href = `/api/use-cases/${useCaseId}/export-excel`;
+        }
+    </script>
+
+    <!-- Modal Reporte Global -->
+    <div id="modal-global-report" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:4000; align-items:center; justify-content:center;">
+        <div style="background:var(--surface); border:1px solid var(--border); border-radius:12px; width:450px; max-width:90%; padding:20px; box-shadow:0 10px 30px rgba(0,0,0,0.5); display:flex; flex-direction:column; max-height:80vh;">
+            <h3 style="margin:0 0 15px 0; color:var(--text); display:flex; align-items:center; gap:8px;">🌍 Generar Reporte Selectivo</h3>
+            <p style="margin:0 0 15px 0; font-size:0.85rem; color:var(--muted);">Seleccioná los Casos de Uso / Módulos que querés incluir en el reporte:</p>
+            
+            <div style="display:flex; gap:10px; margin-bottom:10px;">
+                <button onclick="toggleAllCUs(true)" style="background:var(--surface2); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:4px 10px; font-size:0.75rem; cursor:pointer;">Marcar Todos</button>
+                <button onclick="toggleAllCUs(false)" style="background:var(--surface2); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:4px 10px; font-size:0.75rem; cursor:pointer;">Desmarcar Todos</button>
+            </div>
+
+            <div id="cu-list-container" style="flex:1; overflow-y:auto; border:1px solid var(--border); border-radius:8px; background:var(--bg); padding:10px; display:flex; flex-direction:column; gap:8px; margin-bottom:15px;">
+                <!-- Checkboxes dinámicos -->
+            </div>
+
+            <div style="display:flex; gap:10px; justify-content:flex-end;">
+                <button onclick="document.getElementById('modal-global-report').style.display='none'" class="btn" style="background:var(--surface2); color:var(--text);">Cancelar</button>
+                <button onclick="submitGlobalReport()" class="btn btn-dev" style="background:#60a5fa; color:white; border:none; border-radius:8px; font-weight:700; cursor:pointer; padding:8px 15px;">Generar Reporte</button>
+            </div>
+        </div>
+    </div>
+    <!-- Modal Historial -->
+    <div class="modal-overlay" id="modal-history">
+        <div class="modal" style="width: 800px; max-width: 95vw; height: 80vh; display: flex; flex-direction: column; padding: 0; overflow: hidden;">
+            <div style="padding: 20px 24px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.02);">
+                <h3 style="margin:0;">📜 Historial de Ejecuciones</h3>
+                <button onclick="closeModal('modal-history')" style="background:transparent; border:none; color:var(--muted); font-size:1.5rem; cursor:pointer;">&times;</button>
+            </div>
+            <div id="history-content" style="flex: 1; overflow-y: auto; padding: 20px;">
+                <div style="text-align:center; padding: 40px; color:var(--muted);">Cargando historial...</div>
+            </div>
+        </div>
+    </div>
+    <script>
+        // ─── Gemini Gen Modal ───────────────────────────────────────────────
+        let geminiImages = []; // [{ mimeType, base64 }]
+
+        const GEMINI_SYSTEM_PROMPT = `Eres un asistente experto en QA y Testing de software.
+Tu función es analizar historias de usuario o documentos funcionales (y sus imágenes asociadas) para generar escenarios de prueba exhaustivos y estructurados.
+Debes devolver únicamente un JSON válido, sin texto adicional, explicaciones ni formato Markdown.
+Tu respuesta debe ser un array JSON donde cada objeto tenga exactamente:
+- title: string (título claro y conciso)
+- gherkin: string (escenario Gherkin en español: Dado, Cuando, Entonces, Y, Pero)
+- preconditions: array de strings
+- testData: array de strings
+- acceptanceCriteria: array de strings
+- expectedResult: string
+- assumption: string
+Nunca devuelvas texto fuera del JSON. No uses markdown. Responde SOLO con el array JSON.`;
+
+        function openGeminiGenModal() {
+            geminiImages = [];
+            document.getElementById('gemini-hu-input').value = '';
+            document.getElementById('gemini-img-previews').innerHTML = '';
+            document.getElementById('gemini-img-placeholder').style.display = 'block';
+            const status = document.getElementById('gemini-status');
+            status.style.display = 'none'; status.textContent = '';
+            const savedKey = localStorage.getItem('gemini_api_key') || '';
+            document.getElementById('gemini-api-key').value = savedKey;
+            const btn = document.getElementById('gemini-gen-btn');
+            btn.disabled = false;
+            document.getElementById('gemini-btn-icon').textContent = '\u2728';
+            document.getElementById('gemini-btn-label').textContent = 'Generar Tests';
+            openModal('modal-gemini-gen');
+        }
+
+        function addGeminiImage(file) {
+            if (!file || !file.type.startsWith('image/')) return;
+            const reader = new FileReader();
+            reader.onload = ev => {
+                const base64 = ev.target.result.split(',')[1];
+                geminiImages.push({ mimeType: file.type, base64, name: file.name || 'imagen' });
+                renderGeminiPreviews();
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function renderGeminiPreviews() {
+            const container = document.getElementById('gemini-img-previews');
+            const placeholder = document.getElementById('gemini-img-placeholder');
+            placeholder.style.display = geminiImages.length ? 'none' : 'block';
+            container.innerHTML = geminiImages.map((img, i) => `
+                <div style="position:relative; width:72px; height:72px;">
+                    <img src="data:${img.mimeType};base64,${img.base64}" style="width:72px; height:72px; object-fit:cover; border-radius:8px; border:1px solid rgba(99,102,241,0.4);" />
+                    <button onclick="removeGeminiImage(${i})" style="position:absolute; top:-5px; right:-5px; background:#ef4444; border:none; color:white; border-radius:50%; width:18px; height:18px; cursor:pointer; font-size:0.65rem; display:flex; align-items:center; justify-content:center; padding:0;">×</button>
+                </div>`).join('');
+        }
+
+        function removeGeminiImage(i) {
+            geminiImages.splice(i, 1);
+            renderGeminiPreviews();
+        }
+
+        function handleGeminiImgFiles(files) {
+            Array.from(files).forEach(addGeminiImage);
+        }
+
+        function handleGeminiImgDrop(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            document.getElementById('gemini-img-drop').style.borderColor = 'rgba(99,102,241,0.4)';
+            Array.from(e.dataTransfer.files).forEach(addGeminiImage);
+        }
+
+        // Ctrl+V global para pegar imágenes cuando el modal está abierto
+        document.addEventListener('paste', function(e) {
+            const modal = document.getElementById('modal-gemini-gen');
+            if (!modal || !modal.classList.contains('open')) return;
+            const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+            let found = false;
+            for (const item of items) {
+                if (item.type.startsWith('image/')) {
+                    addGeminiImage(item.getAsFile());
+                    found = true;
+                }
+            }
+            if (found) e.preventDefault();
+        });
+
+        function setGeminiStatus(msg, type) {
+            const el = document.getElementById('gemini-status');
+            el.textContent = msg;
+            el.style.display = msg ? 'block' : 'none';
+            const colors = { info: ['rgba(99,102,241,0.15)', '#818cf8'], error: ['rgba(239,68,68,0.15)', '#ef4444'], ok: ['rgba(34,197,94,0.15)', '#22c55e'] };
+            const [bg, color] = colors[type] || colors.info;
+            el.style.background = bg;
+            el.style.color = color;
+            el.style.border = `1px solid ${color}33`;
+        }
+
+        async function callGeminiAPI() {
+            const apiKey = (document.getElementById('gemini-api-key').value || '').trim();
+            if (!apiKey) return setGeminiStatus('⚠️ Ingresá tu API Key de Gemini para continuar.', 'error');
+
+            const hu = (document.getElementById('gemini-hu-input').value || '').trim();
+            if (!hu && geminiImages.length === 0) return setGeminiStatus('⚠️ Escribí una HU o pegá al menos una imagen.', 'error');
+
+            const btn = document.getElementById('gemini-gen-btn');
+            btn.disabled = true;
+            document.getElementById('gemini-btn-icon').textContent = '⏳';
+            document.getElementById('gemini-btn-label').textContent = 'Generando...';
+            setGeminiStatus('🔄 Consultando a Gemini... esto puede tardar unos segundos.', 'info');
+
+            // Armar partes del mensaje
+            const parts = [];
+            if (hu) parts.push({ text: hu });
+            geminiImages.forEach(img => {
+                parts.push({ inlineData: { mimeType: img.mimeType, data: img.base64 } });
+            });
+
+            const body = {
+                system_instruction: { parts: [{ text: GEMINI_SYSTEM_PROMPT }] },
+                contents: [{ role: 'user', parts }],
+                generationConfig: { temperature: 0.3, responseMimeType: 'application/json' }
+            };
+
+            try {
+                const res = await fetch(
+                    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+                    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+                );
+
+                if (!res.ok) {
+                    const errData = await res.json().catch(() => ({}));
+                    const msg = errData?.error?.message || `HTTP ${res.status}`;
+                    throw new Error(msg);
+                }
+
+                const data = await res.json();
+                const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+                const cleanJson = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+                const parsed = JSON.parse(cleanJson);
+
+                if (!Array.isArray(parsed)) throw new Error('La respuesta no es un array JSON.');
+
+                applyGeminiTests(parsed);
+                setGeminiStatus(`✅ Se generaron ${parsed.length} tests. ¡Cerrando modal!`, 'ok');
+                setTimeout(() => closeModal('modal-gemini-gen'), 1200);
+
+            } catch (err) {
+                console.error('[Gemini]', err);
+                setGeminiStatus(`❌ Error: ${err.message}`, 'error');
+                btn.disabled = false;
+                document.getElementById('gemini-btn-icon').textContent = '\u2728';
+                document.getElementById('gemini-btn-label').textContent = 'Reintentar';
+            }
+        }
+
+        function applyGeminiTests(parsed) {
+            parsed.forEach(item => {
+                if (!item.title) return;
+
+                // Construir obs en HTML con todos los campos ricos
+                const ac = Array.isArray(item.acceptanceCriteria) ? item.acceptanceCriteria : [];
+                const pre = Array.isArray(item.preconditions) ? item.preconditions : [];
+                const td = Array.isArray(item.testData) ? item.testData : [];
+
+                let obsHtml = '';
+                if (item.gherkin) obsHtml += `<b>📝 Gherkin:</b><br><pre style="white-space:pre-wrap;font-size:0.8rem;margin:4px 0;">${item.gherkin.replace(/</g,'&lt;')}</pre>`;
+                if (pre.length) obsHtml += `<b>⚙️ Precondiciones:</b><ul style="margin:4px 0 8px;padding-left:18px;">${pre.map(p=>`<li>${p.replace(/</g,'&lt;')}</li>`).join('')}</ul>`;
+                if (td.length) obsHtml += `<b>🗂️ Datos de Prueba:</b><ul style="margin:4px 0 8px;padding-left:18px;">${td.map(d=>`<li>${d.replace(/</g,'&lt;')}</li>`).join('')}</ul>`;
+                if (ac.length) obsHtml += `<b>✅ Criterios de Aceptación:</b><ul style="margin:4px 0 8px;padding-left:18px;">${ac.map(c=>`<li>${c.replace(/</g,'&lt;')}</li>`).join('')}</ul>`;
+                if (item.expectedResult) obsHtml += `<b>🎯 Resultado Esperado:</b><br><span style="font-size:0.85rem;">${item.expectedResult.replace(/</g,'&lt;')}</span>`;
+                if (item.assumption) obsHtml += `<br><br><b style="color:#f97316;">⚠️ Supuesto:</b><br><span style="font-size:0.82rem;color:#f97316;">${item.assumption.replace(/</g,'&lt;')}</span>`;
+
+                sbsPairs.push({
+                    title: item.title,
+                    status: 'PENDING',
+                    isSection: false,
+                    evType: 'SBS',
+                    expanded: false,
+                    sbs: [{ figma: { src: null, file: null, dataUrl: null }, dev: { src: null, file: null, dataUrl: null } }],
+                    simple: [],
+                    sqlList: [],
+                    errorTypes: [],
+                    severity: 'Media',
+                    impact: 'Media',
+                    probability: 'Media',
+                    obs: obsHtml,
+                    showObs: true
+                });
+            });
+            renderSBS();
+            toast(`🚀 ${parsed.length} tests generados con IA e inyectados al editor.`, 'ok');
+        }
+    </script>
+</body>
+
+</html>

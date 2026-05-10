@@ -1,0 +1,137 @@
+# ============================================================
+# NODE
+# ============================================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+.npm/
+
+# ============================================================
+# PYTHON
+# ============================================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+ENV/
+build/
+dist/
+*.egg-info/
+*.egg
+.eggs/
+wheels/
+pip-wheel-metadata/
+.installed.cfg
+
+# ============================================================
+# SECRETS Y CONFIGURACIÓN LOCAL
+# ============================================================
+.env
+.env.*
+!.env.example
+INSTRUCCIONES_PRIVADAS.md
+
+# ============================================================
+# BASE DE DATOS LOCAL (SQLite)
+# ============================================================
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+
+# ============================================================
+# ARCHIVOS GENERADOS EN RUNTIME
+# ============================================================
+# Capturas de evidencia subidas por usuarios
+capturas/
+
+# Reportes HTML generados dinámicamente
+reports/
+
+# Estado de sesión activa (runtime, no versionable)
+active_caso.json
+casos/active_caso.json
+
+# Archivos de importación de datos (datos sensibles/grandes)
+*.csv
+sheets_info.json
+qa_prompt_*
+
+# ============================================================
+# ARCHIVOS FUENTE DE DATOS (XLSX - datos sensibles/propietarios)
+# ============================================================
+*.xlsx
+*.xls
+*.xlsm
+
+# ============================================================
+# SCRIPTS DE MIGRACIÓN/UTILIDAD TEMPORAL (scratch)
+# ============================================================
+scratch/
+
+# Archivos de migración one-shot (ya ejecutados, no necesarios en prod)
+migrate_audit.js
+migrate_data.js
+migrate_defects.js
+migrate_projects.js
+import_excel.py
+read_excel.py
+qa_report_builder.py
+
+# ============================================================
+# AGENTES IA Y HERRAMIENTAS DE DESARROLLO
+# ============================================================
+.agents/
+.gemini/
+.antigravityrules
+.cursorrules
+.windsurfrules
+
+# ============================================================
+# IDEs Y EDITORES
+# ============================================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*.swn
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ============================================================
+# LOGS
+# ============================================================
+*.log
+logs/
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# ============================================================
+# UPLOADS / ARCHIVOS TEMPORALES DEL SERVIDOR
+# ============================================================
+uploads/
+tmp/
+temp/
+
+# ============================================================
+# COVERAGE Y TESTING
+# ============================================================
+coverage/
+.nyc_output/
+.cache/
+
+# ============================================================
+# SHARP (binarios nativos compilados)
+# ============================================================
+build/Release/
