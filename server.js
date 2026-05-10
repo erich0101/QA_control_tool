@@ -77,7 +77,29 @@ const ExcelJS = require('exceljs');
         await query(`ALTER TABLE qa_user_permissions ADD COLUMN IF NOT EXISTS can_manage_users INTEGER DEFAULT 0`);
         await query(`ALTER TABLE qa_user_permissions ADD COLUMN IF NOT EXISTS can_configure_jira INTEGER DEFAULT 0`);
 
-        
+        // ── Índices de Performance (PostgreSQL estándar — seguros con IF NOT EXISTS) ──
+        await query(`CREATE INDEX IF NOT EXISTS idx_tc_suite_id       ON qa_test_cases (suite_id)`);
+        await query(`CREATE INDEX IF NOT EXISTS idx_tc_us_id          ON qa_test_cases (us_id)`);
+        await query(`CREATE INDEX IF NOT EXISTS idx_tc_scenario_id    ON qa_test_cases (scenario_id)`);
+        await query(`CREATE INDEX IF NOT EXISTS idx_exec_tc_id        ON qa_executions (tc_id, id DESC)`);
+        await query(`CREATE INDEX IF NOT EXISTS idx_exec_run_id       ON qa_executions (run_id)`);
+        await query(`CREATE INDEX IF NOT EXISTS idx_exec_run_status   ON qa_executions (run_id, status)`);
+        await query(`CREATE INDEX IF NOT EXISTS idx_defects_exec_id   ON qa_defects (execution_id)`);
+        await query(`CREATE INDEX IF NOT EXISTS idx_defects_jira_key  ON qa_defects (jira_key) WHERE jira_key IS NOT NULL`);
+        await query(`CREATE INDEX IF NOT EXISTS idx_suites_uc_id      ON qa_test_suites (use_case_id)`);
+        await query(`CREATE INDEX IF NOT EXISTS idx_suites_active_run ON qa_test_suites (active_run_id) WHERE active_run_id IS NOT NULL`);
+        await query(`CREATE INDEX IF NOT EXISTS idx_uc_project_id     ON qa_use_cases (project_id)`);
+        await query(`CREATE INDEX IF NOT EXISTS idx_us_uc_id          ON qa_user_stories (use_case_id)`);
+        await query(`CREATE INDEX IF NOT EXISTS idx_scenarios_us_id       ON qa_scenarios (us_id)`);
+        await query(`CREATE INDEX IF NOT EXISTS idx_inconsistencias_us_id ON qa_inconsistencias (us_id)`);
+        await query(`CREATE INDEX IF NOT EXISTS idx_perms_user_id     ON qa_user_permissions (user_id)`);
+        await query(`CREATE INDEX IF NOT EXISTS idx_proj_users_uid    ON qa_project_users (user_id)`);
+        await query(`CREATE INDEX IF NOT EXISTS idx_proj_users_pid    ON qa_project_users (project_id)`);
+        await query(`CREATE INDEX IF NOT EXISTS idx_runs_suite_id     ON qa_test_runs (suite_id)`);
+        await query(`CREATE INDEX IF NOT EXISTS idx_runs_status       ON qa_test_runs (id, status)`);
+        await query(`CREATE INDEX IF NOT EXISTS idx_tc_prec_tc_id     ON qa_tc_preconditions (tc_id)`);
+        await query(`CREATE INDEX IF NOT EXISTS idx_tc_prec_prc_id    ON qa_tc_preconditions (prc_id)`);
+
         console.log("✅ Esquema de base de datos verificado y actualizado.");
     } catch (e) {
         console.error("⚠️ Error en verificación de esquema:", e.message);

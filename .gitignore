@@ -36,6 +36,7 @@ pip-wheel-metadata/
 .env.*
 !.env.example
 INSTRUCCIONES_PRIVADAS.md
+REPO_DESCRIPTION.txt
 
 # ============================================================
 # BASE DE DATOS LOCAL (SQLite)
