@@ -7,6 +7,7 @@ export const JiraTrackingTab = {
     expandedEpics: new Set(),
 
     async render(container) {
+        const scrollPos = container.scrollTop;
         const { activeProjectId } = Store.state;
         if (!activeProjectId) {
             container.innerHTML = '<div class="empty-state"><h3>Seguimiento Jira</h3><p>Selecciona un proyecto para ver el seguimiento.</p></div>';
@@ -44,6 +45,7 @@ export const JiraTrackingTab = {
         `;
 
         this.bindEvents(container);
+        container.scrollTop = scrollPos;
     },
 
     renderTreeTable() {

@@ -140,10 +140,14 @@ export const Modals = {
             <p style="color: var(--text-muted); font-size: 0.875rem; margin-bottom: 24px;">Agrega una HU al Caso de Uso seleccionado.</p>
             <div style="display: flex; flex-direction: column; gap: 16px;">
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-                    <div class="field-group">
-                        <label class="field-label">Key ID</label>
-                        <input type="text" id="modal-us-key" placeholder="Ej: US-101 (auto si vacío)">
-                    </div>
+<div class="field-group">
+                    <label class="field-label">Key ID</label>
+                    <input type="text" id="modal-us-key" placeholder="Ej: US-101 (auto si vacío)">
+                </div>
+                <div class="field-group">
+                    <label class="field-label">Epic</label>
+                    <input type="text" id="modal-us-epic" placeholder="Ej: Autenticación">
+                </div>
                 <div class="field-group">
                     <label class="field-label">Título</label>
                     <input type="text" id="modal-us-title" placeholder="Ej: Login con Google SSO">
@@ -693,7 +697,7 @@ export const Modals = {
 
         if (type === 'prompt') {
             const input = overlay.querySelector('#modal-prompt-input');
-            input?.focus();
+            // No auto-focus to avoid unwanted scroll - user can click input if needed
             input?.addEventListener('keypress', (e) => {
                 if (e.key === 'Enter') overlay.querySelector('#modal-prompt-save').click();
             });

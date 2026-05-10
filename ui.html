@@ -1096,6 +1096,7 @@
 
     <div class="toast" id="toast"></div>
 
+    <script src="public/js/utils/modal-manager.js"></script>
     <script>
         let data = { tester: '', caso_de_uso: '', url_ambiente: '', pruebas: [] };
         let activeCU = null;
@@ -1157,10 +1158,10 @@
                 return;
             }
             
-            const title = prompt('Resumen del Bug:', `Bug en: ${pair.title}`);
+            const title = await modalManager.prompt('Resumen del Bug:', `Bug en: ${pair.title}`);
             if (!title) return;
             
-            const desc = prompt('Descripción / Pasos:', '1. Ir a...\n2. Observar que...');
+            const desc = await modalManager.prompt('Descripción / Pasos:', '1. Ir a...\n2. Observar que...');
             
             try {
                 const res = await fetch('/api/defects', {
@@ -1188,7 +1189,7 @@
         }
 
         async function markBugFixed(bugId, index) {
-            if (!confirm('¿Marcar este bug como FIXED?')) return;
+            if (!await modalManager.confirm('¿Marcar este bug como FIXED?')) return;
             
             try {
                 const res = await fetch(`/api/defects/${bugId}/status`, {
@@ -1211,7 +1212,7 @@
         }
 
         async function createRetest(runId) {
-            if (!confirm(`¿Estás seguro de que querés iniciar un Retest basado en el Run #${runId}?\n\nSolo se incluirán los tests que fallaron y cuyos bugs asociados estén marcados como FIXED.`)) return;
+            if (!await modalManager.confirm(`¿Estás seguro de que querés iniciar un Retest basado en el Run #${runId}?\n\nSolo se incluirán los tests que fallaron y cuyos bugs asociados estén marcados como FIXED.`)) return;
             
             toast('⏳ Creando Retest...', '');
             try {

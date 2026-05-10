@@ -10,6 +10,7 @@ export const DashboardTab = {
     activeSubTab: 'overview', // 'overview', 'performance', 'team'
 
     async render(container) {
+        const scrollPos = container.scrollTop;
         const { activeProjectId } = Store.state;
 
         if (!activeProjectId) {
@@ -49,6 +50,7 @@ export const DashboardTab = {
         }
 
         this.bindEvents(container);
+        container.scrollTop = scrollPos;
     },
 
     async renderSubTabContent(projectId) {

@@ -18,19 +18,26 @@ El proyecto es una herramienta de QA manual y visual diseñada para gestionar ca
 - [server.js](file:///c:/Users/Erich_Petrocelli/test-opencode/server.js): API central, gestión de rutas, lógica de ejecución de tests y evidencias.
 - [db.js](file:///c:/Users/Erich_Petrocelli/test-opencode/db.js): Adaptador de base de datos. Traduce sintaxis de SQLite a Postgres y maneja el pool de conexiones.
 - [report-generator.js](file:///c:/Users/Erich_Petrocelli/test-opencode/report-generator.js): Lógica para generar reportes HTML independientes.
+- [jira-service.js](file:///c:/Users/Erich_Petrocelli/test-opencode/jira-service.js): Integración con Jira.
 
 ### 🎨 Frontend
 - [ui.html](file:///c:/Users/Erich_Petrocelli/test-opencode/ui.html): Vista principal. Contiene la estructura de la app, modales y lógica JS del cliente.
-- [public/css/main.css](file:///c:/Users/Erich_Petrocelli/test-opencode/public/css/main.css): Estilos globales, sistema de diseño y utilidades para eliminar estilos inline.
+- [public/css/main.css](file:///c:/Users/Erich_Petrocelli/test-opencode/public/css/main.css): Estilos globales, sistema de diseño y utilidades.
 
 ### 📊 Datos y Configuración
-- [schema.sql](file:///c:/Users/Erich_Petrocelli/test-opencode/schema.sql): Definición de tablas (proyectos, casos, ejecuciones, evidencias).
-- [.env](file:///c:/Users/Erich_Petrocelli/test-opencode/.env): Variables de entorno (DATABASE_URL).
-- [RULES.md](file:///c:/Users/Erich_Petrocelli/test-opencode/RULES.md): Reglas de codificación (Safari compatibility, Accessibility, No Inline Styles).
+- [schema.sql](file:///c:/Users/Erich_Petrocelli/test-opencode/schema.sql): Definición de tablas.
+- [.env](file:///c:/Users/Erich_Petrocelli/test-opencode/.env): Variables de entorno.
+- [RULES.md](file:///c:/Users/Erich_Petrocelli/test-opencode/RULES.md): Reglas de codificación.
+- [KNOWLEDGE.md](file:///c:/Users/Erich_Petrocelli/test-opencode/KNOWLEDGE.md): Documentación de conocimiento.
 
 ### 🐍 Python Scripts
 - [qa_report_builder.py](file:///c:/Users/Erich_Petrocelli/test-opencode/qa_report_builder.py): Generador de reportes visuales complejos.
 - [import_excel.py](file:///c:/Users/Erich_Petrocelli/test-opencode/import_excel.py): Importación masiva de casos desde Excel.
+
+### ⚙️ Utilities & Scripts
+- [scripts/](file:///c:/Users/Erich_Petrocelli/test-opencode/scripts/): Scripts utilitarios.
+- [utils/](file:///c:/Users/Erich_Petrocelli/test-opencode/utils/): Utilidades de ayuda.
+- [migrate_*.js](file:///c:/Users/Erich_Petrocelli/test-opencode/): Scripts de migración de datos.
 
 ---
 
@@ -55,7 +62,7 @@ El proyecto es una herramienta de QA manual y visual diseñada para gestionar ca
 ---
 
 ## ⚠️ Notas para el Agente
-- **Base de Datos:** Ya no se usa `app_qa.db`. Todo debe ir a la URL de Supabase en `.env`.
+- **Base de Datos:** Todo debe ir a la URL de Supabase en `.env`.
 - **CSS:** NO usar estilos inline. Usar las utilidades al final de `main.css`.
 - **Compatibilidad:** Siempre incluir `-webkit-user-select: none` si usas `user-select`.
-- **Seguridad (XSS):** Es MANDATORIO usar `UI.escapeHTML()` para cualquier dato dinámico insertado en `innerHTML`. Consulta la skill `frontend-security`.
+- **Seguridad (XSS):** Es MANDATORIO usar `UI.escapeHTML()` para cualquier dato dinámico insertado en `innerHTML`.

@@ -101,6 +101,9 @@ async function init() {
 }
 
 function renderActiveTab(container, state) {
+    const containerScroll = container.scrollTop;
+    const windowScrollY = window.scrollY;
+
     switch (state.activeTab) {
         case 'use-cases':
             UserStories.render(container);
@@ -126,6 +129,9 @@ function renderActiveTab(container, state) {
         default:
             UserStories.render(container);
     }
+
+    container.scrollTop = containerScroll;
+    window.scrollTo(0, windowScrollY);
 }
 
 // Escuchar cambios de pestaña externos (ej: desde Retest)

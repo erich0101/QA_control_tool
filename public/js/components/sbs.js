@@ -1,5 +1,6 @@
 import { Store } from '../store/state.js';
 import { UI } from '../utils/ui-utils.js';
+import { modalManager } from '../utils/modal-manager.js';
 
 export const SBS = {
     render(container, issue) {
@@ -136,9 +137,9 @@ export const SBS = {
         });
 
         container.querySelectorAll('.delete-test').forEach(btn => {
-            btn.addEventListener('click', () => {
+            btn.addEventListener('click', async () => {
                 const idx = parseInt(btn.dataset.idx);
-                if (confirm("¿Eliminar esta prueba?")) {
+                if (await modalManager.confirm("¿Eliminar esta prueba?")) {
                     this.currentTests.splice(idx, 1);
                     this.render(container.parentElement, { test_list_v2: this.currentTests });
                 }

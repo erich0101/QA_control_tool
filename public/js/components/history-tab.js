@@ -3,6 +3,7 @@ import { ApiService } from '../services/api.js';
 import { UI } from '../utils/ui-utils.js';
 import { ExecutionTab } from './execution-tab.js';
 import { Modals } from './modals.js';
+import { modalManager } from '../utils/modal-manager.js';
 
 export const HistoryTab = {
     runs: [],
@@ -10,6 +11,7 @@ export const HistoryTab = {
     currentTab: 'runs', // 'runs' | 'bugs'
 
     async render(container) {
+        const scrollPos = container.scrollTop;
         const { activeProjectId } = Store.state;
         if (!activeProjectId) {
             container.innerHTML = '<div class="empty-state"><h3>Historial de Ejecución</h3><p>Selecciona un proyecto para ver el historial.</p></div>';
@@ -58,6 +60,7 @@ export const HistoryTab = {
         `;
 
         this.bindEvents(container);
+        container.scrollTop = scrollPos;
     },
 
     renderRunsView() {
@@ -217,7 +220,7 @@ export const HistoryTab = {
             container.querySelectorAll('.btn-retest').forEach(btn => {
                 btn.addEventListener('click', async () => {
                     const id = btn.dataset.id;
-                    if (!confirm('¿Deseas iniciar un nuevo ciclo de retesting para esta suite? Se activará en la pestaña de Ejecución.')) return;
+                    if (!await modalManager.confirm('¿Deseas iniciar un nuevo ciclo de retesting para esta suite? Se activará en la pestaña de Ejecución.')) return;
                     
                     UI.showLoading();
                     try {

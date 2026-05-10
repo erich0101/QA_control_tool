@@ -2,6 +2,7 @@ import { Store } from '../store/state.js';
 import { ApiService } from '../services/api.js';
 import { UI } from '../utils/ui-utils.js';
 import { Modals } from './modals.js';
+import { modalManager } from '../utils/modal-manager.js';
 
 export const ExecutionTab = {
     selectedSuiteId: null,
@@ -12,6 +13,7 @@ export const ExecutionTab = {
     timerInterval: null, // Intervalo del cronómetro
 
     async render(container) {
+        const scrollPos = container.scrollTop;
         const { activeProjectId, user } = Store.state;
 
         if (!activeProjectId) {
@@ -78,6 +80,7 @@ export const ExecutionTab = {
         `;
 
         this.bindEvents(container);
+        container.scrollTop = scrollPos;
         this.startTimers();
     },
 
@@ -416,7 +419,7 @@ export const ExecutionTab = {
 
                         if (status === 'FAIL' || status === 'BLOCK') {
                             const panel = status === 'FAIL' ? bugPanel : blockPanel;
-                            setTimeout(() => panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 100);
+                            // Auto-scroll removed - user should scroll manually if needed
                         }
                     });
                 });
@@ -624,7 +627,7 @@ export const ExecutionTab = {
             btn.addEventListener('click', async (e) => {
                 e.stopPropagation();
                 const attId = btn.dataset.attId;
-                if (!confirm('¿Eliminar esta evidencia?')) return;
+                if (!await modalManager.confirm('¿Eliminar esta evidencia?')) return;
 
                 UI.showLoading();
                 const res = await fetch(`/api/evidence/${attId}`, { 
@@ -695,7 +698,7 @@ export const ExecutionTab = {
             btn.addEventListener('click', async (e) => {
                 e.stopPropagation();
                 const bugId = btn.dataset.bugId;
-                if (!confirm('¿Marcar este bug como FIXED?')) return;
+                if (!await modalManager.confirm('¿Marcar este bug como FIXED?')) return;
 
                 UI.showLoading();
                 try {

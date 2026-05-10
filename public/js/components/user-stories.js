@@ -2,6 +2,7 @@ import { Store } from '../store/state.js';
 import { ApiService } from '../services/api.js';
 import { Modals } from './modals.js';
 import { UI } from '../utils/ui-utils.js';
+import { modalManager } from '../utils/modal-manager.js';
 
 /**
  * USER-STORIES.JS - Tab "Casos de Uso"
@@ -161,6 +162,7 @@ export const UserStories = {
                 </div>
                 <div style="display: flex; gap: 12px;">
                     <button class="btn btn-ghost btn-sm goto-suites" data-us-id="${us.id}">🧪 Ver Test Suites</button>
+                    <button class="btn btn-ghost btn-sm delete-us" data-id="${us.id}">🗑️ Eliminar</button>
                     <button class="btn btn-ghost btn-sm cancel-edit">✕ Cancelar</button>
                     <button class="btn btn-primary btn-sm save-us" data-id="${us.id}">💾 Guardar Cambios</button>
                 </div>
@@ -434,7 +436,7 @@ export const UserStories = {
         container.querySelectorAll('.delete-scenario').forEach(btn => {
             btn.addEventListener('click', async (e) => {
                 const id = parseInt(btn.dataset.id);
-                if (!confirm('¿Eliminar este escenario?')) return;
+                if (!await modalManager.confirm('¿Eliminar este escenario?')) return;
                 UI.showLoading();
                 try {
                     await ApiService.deleteScenario(id);
@@ -471,7 +473,7 @@ export const UserStories = {
         container.querySelectorAll('.delete-inconsistency').forEach(btn => {
             btn.addEventListener('click', async (e) => {
                 const id = parseInt(btn.dataset.id);
-                if (!confirm('¿Eliminar este análisis?')) return;
+                if (!await modalManager.confirm('¿Eliminar este análisis?')) return;
                 UI.showLoading();
                 try {
                     await ApiService.deleteInconsistency(id);
@@ -492,6 +494,22 @@ export const UserStories = {
             Store.setTestSuites(testSuites || []);
             UI.hideLoading();
             Store.setActiveTab('test-suites');
+        });
+        // Delete User Story
+        container.querySelector('.delete-us')?.addEventListener('click', async (e) => {
+            const id = parseInt(e.target.dataset.id);
+            if (!await modalManager.confirm('¿Eliminar esta Historia de Usuario y todos sus elementos relacionados?')) return;
+            UI.showLoading();
+            try {
+                await ApiService.deleteUserStory(id);
+                this.expandedId = null;
+                await this.reloadUS();
+                this.render(container);
+                UI.toast('Historia de Usuario eliminada');
+            } catch (err) {
+                UI.toast(err.message, 'error');
+            }
+            UI.hideLoading();
         });
     },
 

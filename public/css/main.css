@@ -1304,4 +1304,27 @@ input:checked + .slider:before {
     padding: 32px; flex: 1; overflow-y: auto; scrollbar-width: thin;
 }
 .side-panel-body::-webkit-scrollbar { width: 6px; }
-.side-panel-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+/* ─── MODAL SYSTEM ─── */
+.modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0, 0, 0, 0.75);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 9999; opacity: 0; pointer-events: none;
+    transition: opacity 0.2s;
+}
+.modal-overlay.is-open { opacity: 1; pointer-events: auto; }
+
+.modal-panel {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    width: 400px; padding: 24px;
+    box-shadow: var(--shadow-md);
+}
+
+.modal-title { font-size: 16px; font-weight: 600; margin-bottom: 12px; color: var(--text-main); }
+.modal-message { color: var(--text-secondary); margin-bottom: 24px; font-size: 14px; }
+.modal-input { width: 100%; margin-bottom: 20px; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
+

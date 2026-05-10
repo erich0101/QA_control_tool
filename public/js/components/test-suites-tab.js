@@ -4,6 +4,7 @@ import { SBS } from './sbs.js';
 import { Modals } from './modals.js';
 import { UI } from '../utils/ui-utils.js';
 import { ExecutionTab } from './execution-tab.js';
+import { modalManager } from '../utils/modal-manager.js';
 
 /**
  * TEST-SUITES-TAB.JS - Tab "Test Suites"
@@ -14,11 +15,22 @@ export const TestSuitesTab = {
     expandedTCId: null,
     editingTCId: null,
     _lastJiraProjectId: null,
+    _lastMainScroll: 0,
+    _lastSidebarScroll: 0,
+    _lastWindowScrollY: 0,
 
     render(container) {
-        // Guardar la posición de scroll actual del sidebar
+        // Preservar scroll actual antes de regenerar contenido
         const sidebarList = container.querySelector('.ts-sidebar-list');
+        const mainContent = container.querySelector('.ts-main-content');
         const sidebarScroll = sidebarList ? sidebarList.scrollTop : 0;
+        const mainScroll = mainContent ? mainContent.scrollTop : 0;
+        const windowScrollY = window.scrollY;
+
+        // Usar valores guardados si están disponibles (ej: después de reloadSuites)
+        const useMainScroll = this._lastMainScroll > 0 ? this._lastMainScroll : mainScroll;
+        const useSidebarScroll = this._lastSidebarScroll > 0 ? this._lastSidebarScroll : sidebarScroll;
+        const useWindowScrollY = this._lastWindowScrollY > 0 ? this._lastWindowScrollY : windowScrollY;
 
         const { testSuites, activeProjectId, selectedUseCaseId, jiraEpics } = Store.state;
         const totalTests = testSuites.reduce((acc, s) => acc + (s.test_cases || []).length, 0);
@@ -90,10 +102,19 @@ export const TestSuitesTab = {
 
         this.bindEvents(container);
 
-        // Restaurar scroll position del sidebar si existía
+        // Restaurar scroll position del sidebar y área principal
         const newSidebarList = container.querySelector('.ts-sidebar-list');
-        if (newSidebarList && sidebarScroll > 0) {
-            newSidebarList.scrollTop = sidebarScroll;
+        const newMainContent = container.querySelector('.ts-main-content');
+        if (newSidebarList && useSidebarScroll > 0) {
+            newSidebarList.scrollTop = useSidebarScroll;
+            this._lastSidebarScroll = useSidebarScroll;
+        }
+        if (newMainContent && useMainScroll > 0) {
+            newMainContent.scrollTop = useMainScroll;
+            this._lastMainScroll = useMainScroll;
+        }
+        if (useWindowScrollY > 0) {
+            window.scrollTo(0, useWindowScrollY);
         }
     },
 
@@ -295,7 +316,7 @@ export const TestSuitesTab = {
         container.querySelector(`.inc-add-btn[data-suite-id="${suiteId}"]`)?.addEventListener('click', () => {
             const form = document.getElementById(`inc-add-form-${suiteId}`);
             if (form) { form.style.display = form.style.display === 'none' ? 'block' : 'none'; }
-            document.getElementById(`inc-new-input-${suiteId}`)?.focus();
+            // No auto-focus to avoid unwanted scroll
         });
 
         container.querySelector(`.inc-cancel-btn[data-suite-id="${suiteId}"]`)?.addEventListener('click', () => {
@@ -532,7 +553,15 @@ export const TestSuitesTab = {
         // Edit mode toggle
         container.querySelectorAll('.edit-tc-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
+                e.preventDefault();
                 e.stopPropagation();
+                // Guardar scroll actual en propiedades de instancia
+                const mainContent = container.querySelector('.ts-main-content');
+                const sidebarList = container.querySelector('.ts-sidebar-list');
+                this._lastMainScroll = mainContent ? mainContent.scrollTop : 0;
+                this._lastSidebarScroll = sidebarList ? sidebarList.scrollTop : 0;
+                this._lastWindowScrollY = window.scrollY;
+
                 this.editingTCId = parseInt(btn.dataset.tcId);
                 this.render(container);
             });
@@ -541,6 +570,7 @@ export const TestSuitesTab = {
         // Cancel edit
         container.querySelectorAll('.cancel-edit-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
+                e.preventDefault();
                 e.stopPropagation();
                 this.editingTCId = null;
                 this.render(container);
@@ -638,7 +668,7 @@ export const TestSuitesTab = {
             btn.addEventListener('click', async (e) => {
                 e.stopPropagation();
                 const id = parseInt(btn.dataset.id);
-                if (!confirm('¿Eliminar esta Suite y todos sus Test Cases?')) return;
+                if (!await modalManager.confirm('¿Eliminar esta Suite y todos sus Test Cases?')) return;
                 UI.showLoading();
                 await ApiService.deleteTestSuite(id);
                 this.selectedSuiteId = null; // Reset selection
@@ -786,8 +816,14 @@ export const TestSuitesTab = {
         // Save test case manually
         container.querySelectorAll('.save-tc-btn').forEach(btn => {
             btn.addEventListener('click', async (e) => {
+                e.preventDefault();
                 e.stopPropagation();
                 if (btn.disabled) return;
+
+                // Preservar scroll antes de operaciones
+                const mainContent = container.querySelector('.ts-main-content');
+                const mainScroll = mainContent ? mainContent.scrollTop : 0;
+                const windowScrollY = window.scrollY;
 
                 const tcId = parseInt(btn.dataset.tcId);
                 const title = container.querySelector(`.tc-title-input[data-tc-id="${tcId}"]`).value;
@@ -824,7 +860,12 @@ export const TestSuitesTab = {
                 UI.showLoading();
                 const res = await ApiService.updateTestCase(tcId, payload);
                 console.log('DEBUG: API Response:', res);
-                this.editingTCId = null; // Salir de modo edición
+                this.editingTCId = null;
+                // Guardar scroll antes de reload
+                const mainBeforeReload = container.querySelector('.ts-main-content');
+                this._lastMainScroll = mainBeforeReload ? mainBeforeReload.scrollTop : 0;
+                this._lastWindowScrollY = window.scrollY;
+
                 await this.reloadSuites();
                 UI.hideLoading();
                 UI.toast('Test Case guardado exitosamente');
@@ -848,7 +889,7 @@ export const TestSuitesTab = {
             btn.addEventListener('click', async (e) => {
                 e.stopPropagation();
                 const tcId = parseInt(btn.dataset.tcId);
-                if (!confirm('¿Eliminar este Test Case?')) return;
+                if (!await modalManager.confirm('¿Eliminar este Test Case?')) return;
                 UI.showLoading();
                 await ApiService.deleteTestCase(tcId);
                 await this.reloadSuites();
