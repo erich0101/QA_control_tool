@@ -48,9 +48,7 @@ REPO_DESCRIPTION.txt
 *.sqlite
 *.sqlite3
 
-# ============================================================
-# ARCHIVOS GENERADOS EN RUNTIME
-# ============================================================
+historias_de_usuario/
 # Capturas de evidencia subidas por usuarios
 capturas/
 
@@ -77,6 +75,10 @@ qa_prompt_*
 # SCRIPTS DE MIGRACIÓN/UTILIDAD TEMPORAL (scratch)
 # ============================================================
 scratch/
+
+# Scripts de generación de TC desde HUs (datos sensibles/uno-shot)
+scripts/
+HU_testCase_prompt.txt
 
 # Archivos de migración one-shot (ya ejecutados, no necesarios en prod)
 migrate_audit.js

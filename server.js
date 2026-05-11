@@ -902,10 +902,10 @@ app.get('/api/test-suites', requireAuth, async (req, res) => {
         } else if (project_id) {
             suitesRes = await query(`
                 SELECT s.* FROM qa_test_suites s
-                JOIN qa_use_cases uc ON s.use_case_id = uc.id
-                WHERE uc.project_id = ?
+                LEFT JOIN qa_use_cases uc ON s.use_case_id = uc.id
+                WHERE s.project_id = ? OR uc.project_id = ?
                 ORDER BY s.id
-            `, [project_id]);
+            `, [project_id, project_id]);
         } else {
             return res.status(400).json({ error: 'use_case_id o project_id REQUERIDO' });
         }
