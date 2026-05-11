@@ -6,7 +6,8 @@ const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: { 
         rejectUnauthorized: false // Requerido para Supabase en la mayoría de los casos
-    }
+    },
+    family: 4 // Forzar IPv4 para evitar ENETUNREACH en redes sin soporte IPv6
 });
 
 pool.on('connect', () => {
