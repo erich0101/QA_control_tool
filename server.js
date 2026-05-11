@@ -648,10 +648,13 @@ app.get('/api/user-stories', requireAuth, async (req, res) => {
                     WHERE s.us_id = us.id
                 ), '[]') as scenarios,
                 COALESCE((
-                    SELECT json_agg(i ORDER BY i.order_index)
+                    SELECT json_agg(json_build_object(
+                        'id', i.id, 'title', i.title, 'description', i.description, 'severity', COALESCE(i.severity, 'Alta')
+                    ) ORDER BY i.order_index)
                     FROM qa_inconsistencias i
                     WHERE i.us_id = us.id
-                ), '[]') as inconsistencies
+                ), '[]') as inconsistencies,
+                us.recommendations
             FROM qa_user_stories us
             WHERE us.use_case_id = ?
             ORDER BY us.id DESC
@@ -717,14 +720,14 @@ app.delete('/api/scenarios/:id', requireAuth, async (req, res) => {
 // ── INCONSISTENCIAS ──
 app.post('/api/inconsistencies', requireAuth, async (req, res) => {
     try {
-        const { us_id, title, description, order_index } = req.body;
+        const { us_id, title, description, severity, order_index } = req.body;
         if (!us_id || !title) return res.status(400).json({ error: 'us_id y title requeridos' });
-        
+
         const result = await query(`
-            INSERT INTO qa_inconsistencias (us_id, title, description, order_index)
-            VALUES (?, ?, ?, ?)
-        `, [us_id, title, description || '', order_index || 0]);
-        
+            INSERT INTO qa_inconsistencias (us_id, title, description, severity, order_index)
+            VALUES (?, ?, ?, ?, ?)
+        `, [us_id, title, description || '', severity || 'Alta', order_index || 0]);
+
         res.json({ ok: true, id: result.lastID });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -733,14 +736,15 @@ app.post('/api/inconsistencies', requireAuth, async (req, res) => {
 
 app.put('/api/inconsistencies/:id', requireAuth, async (req, res) => {
     try {
-        const { title, description, order_index } = req.body;
+        const { title, description, severity, order_index } = req.body;
         await query(`
-            UPDATE qa_inconsistencias 
-            SET title = COALESCE(?, title), 
-                description = COALESCE(?, description), 
+            UPDATE qa_inconsistencias
+            SET title = COALESCE(?, title),
+                description = COALESCE(?, description),
+                severity = COALESCE(?, severity),
                 order_index = COALESCE(?, order_index)
             WHERE id = ?
-        `, [title, description, order_index, req.params.id]);
+        `, [title, description, severity, order_index, req.params.id]);
         res.json({ ok: true });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -789,9 +793,9 @@ app.put('/api/user-stories/:id', requireAuth, async (req, res) => {
     try {
         const usId = req.params.id;
         const allowedFields = [
-            'title', 'status', 'priority', 'key_id', 
-            'hu_detallada', 'escenarios_prueba', 'reglas_negocio', 
-            'precondiciones', 'link_documentacion'
+            'title', 'status', 'priority', 'key_id',
+            'hu_detallada', 'escenarios_prueba', 'reglas_negocio',
+            'precondiciones', 'link_documentacion', 'recommendations'
         ];
 
         const fields = [];
@@ -813,6 +817,18 @@ app.put('/api/user-stories/:id', requireAuth, async (req, res) => {
         params.push(usId);
 
         await query(`UPDATE qa_user_stories SET ${fields.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, params);
+        res.json({ ok: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.put('/api/user-stories/:id/recommendations', requireAuth, async (req, res) => {
+    try {
+        const { recommendations } = req.body;
+        if (!Array.isArray(recommendations)) return res.status(400).json({ error: 'recommendations debe ser un array' });
+        await query(`UPDATE qa_user_stories SET recommendations = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+            [JSON.stringify(recommendations), req.params.id]);
         res.json({ ok: true });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -1431,23 +1447,23 @@ app.post('/api/test-suites/:id/start-execution', requireAuth, async (req, res) =
         const { execution_type, filters } = req.body; // execution_type: 'SMOKE', 'REGRESSION', 'CUSTOM'
 
         // 1. Construir query de filtrado de tests
-        let filterSql = `SELECT id FROM qa_test_cases WHERE suite_id = ?`;
+        let filterSql = `SELECT id, assigned_to FROM qa_test_cases WHERE suite_id = ?`;
         let params = [suiteId];
 
         if (execution_type === 'SMOKE') {
-            filterSql += ` AND is_smoke = 1`;
+            filterSql += ` AND is_smoke = true`;
         } else if (execution_type === 'REGRESSION') {
-            filterSql += ` AND is_regression = 1`;
+            filterSql += ` AND is_regression = true`;
         } else if (execution_type === 'INTEGRATION') {
-            filterSql += ` AND is_integration = 1`;
+            filterSql += ` AND is_integration = true`;
         } else if (execution_type === 'EXPLORATORY') {
-            filterSql += ` AND is_exploratory = 1`;
+            filterSql += ` AND is_exploratory = true`;
         } else if (execution_type === 'CUSTOM' && filters) {
             if (filters.priority) { filterSql += ` AND priority = ?`; params.push(filters.priority); }
-            if (filters.is_smoke !== undefined) { filterSql += ` AND is_smoke = ?`; params.push(filters.is_smoke ? 1 : 0); }
-            if (filters.is_regression !== undefined) { filterSql += ` AND is_regression = ?`; params.push(filters.is_regression ? 1 : 0); }
-            if (filters.is_integration !== undefined) { filterSql += ` AND is_integration = ?`; params.push(filters.is_integration ? 1 : 0); }
-            if (filters.is_exploratory !== undefined) { filterSql += ` AND is_exploratory = ?`; params.push(filters.is_exploratory ? 1 : 0); }
+            if (filters.is_smoke !== undefined) { filterSql += ` AND is_smoke = ?`; params.push(filters.is_smoke); }
+            if (filters.is_regression !== undefined) { filterSql += ` AND is_regression = ?`; params.push(filters.is_regression); }
+            if (filters.is_integration !== undefined) { filterSql += ` AND is_integration = ?`; params.push(filters.is_integration); }
+            if (filters.is_exploratory !== undefined) { filterSql += ` AND is_exploratory = ?`; params.push(filters.is_exploratory); }
         }
 
         const eligibleTests = await query(filterSql, params);
@@ -1455,8 +1471,7 @@ app.post('/api/test-suites/:id/start-execution', requireAuth, async (req, res) =
         // Filtro adicional: Solo asignados al usuario si se solicita
         let finalEligible = eligibleTests.rows;
         if (req.body.only_assigned) {
-            const allTcs = await query(`SELECT id, assigned_to FROM qa_test_cases WHERE suite_id = ?`, [suiteId]);
-            finalEligible = allTcs.rows.filter(tc => tc.assigned_to === req.user.id);
+            finalEligible = finalEligible.filter(tc => tc.assigned_to === req.user.id);
         }
 
         if (finalEligible.length === 0) {
@@ -1513,6 +1528,90 @@ app.post('/api/test-cases/:id/start-execution', requireAuth, async (req, res) =>
         `, [tcId, runId, req.user.name]);
 
         res.json({ ok: true, runId });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/use-cases/:id/start-all', requireAuth, async (req, res) => {
+    try {
+        const ucId = parseInt(req.params.id);
+        const onlyAssigned = req.body.only_assigned !== false;
+        const executionType = req.body.execution_type || 'REGRESSION';
+
+        const suitesRes = await query(`
+            SELECT s.id, s.title, s.key_id
+            FROM qa_test_suites s
+            WHERE s.use_case_id = ? AND s.active_run_id IS NULL
+            ORDER BY s.id
+        `, [ucId]);
+
+        if (suitesRes.rows.length === 0) {
+            return res.status(400).json({ error: 'No hay suites disponibles para ejecutar en este Caso de Uso' });
+        }
+
+        const results = [];
+        let totalTests = 0;
+
+        for (const suite of suitesRes.rows) {
+            try {
+let filterSql = `SELECT id, assigned_to FROM qa_test_cases WHERE suite_id = ?`;
+                let params = [suite.id];
+
+                if (executionType === 'SMOKE') {
+                    filterSql += ` AND is_smoke = true`;
+                } else if (executionType === 'REGRESSION') {
+                    filterSql += ` AND is_regression = true`;
+                } else if (executionType === 'INTEGRATION') {
+                    filterSql += ` AND is_integration = true`;
+                } else if (executionType === 'EXPLORATORY') {
+                    filterSql += ` AND is_exploratory = true`;
+                }
+
+                const eligibleTests = await query(filterSql, params);
+
+                let finalEligible = eligibleTests.rows;
+                if (onlyAssigned) {
+                    finalEligible = finalEligible.filter(tc => tc.assigned_to === req.user.id);
+                }
+
+                if (finalEligible.length === 0) {
+                    results.push({ suiteId: suite.id, title: suite.title, error: 'Sin tests asignados o que coincidan con el filtro', status: 'skip' });
+                    continue;
+                }
+
+                const runRes = await query(`
+                    INSERT INTO qa_test_runs (suite_id, status, created_by, run_type, last_resume_at, accumulated_seconds)
+                    VALUES (?, 'RUNNING', ?, ?, CURRENT_TIMESTAMP, 0)
+                `, [suite.id, req.user.id, executionType]);
+                const runId = runRes.lastID;
+
+                await query(`UPDATE qa_test_suites SET active_run_id = ? WHERE id = ?`, [runId, suite.id]);
+
+                for (const tc of finalEligible) {
+                    await query(`INSERT INTO qa_executions (tc_id, run_id, tester, status) VALUES (?, ?, ?, 'PENDING')`, [tc.id, runId, req.user.name]);
+                }
+
+                results.push({ suiteId: suite.id, title: suite.title, runId, testCount: finalEligible.length, status: 'ok' });
+                totalTests += finalEligible.length;
+            } catch (err) {
+                results.push({ suiteId: suite.id, title: suite.title, error: err.message, status: 'error' });
+            }
+        }
+
+        const executed = results.filter(r => r.status === 'ok').length;
+        const skipped = results.filter(r => r.status === 'skip').length;
+        const failed = results.filter(r => r.status === 'error').length;
+
+        res.json({
+            ok: true,
+            totalSuites: suitesRes.rows.length,
+            executedSuites: executed,
+            skippedSuites: skipped,
+            failedSuites: failed,
+            totalTests,
+            results
+        });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

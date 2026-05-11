@@ -11,7 +11,7 @@ export const Store = {
         activeProjectId: localStorage.getItem('activeProjectId') || null,
 
         // Tabs
-        activeTab: localStorage.getItem('activeTab') || 'use-cases', 
+        activeTab: localStorage.getItem('activeTab') || 'use-cases',
 
         // Casos de Uso
         useCases: [],
@@ -22,6 +22,12 @@ export const Store = {
         selectedUSId: localStorage.getItem('selectedUSId') || null,
         testSuites: [],
         preconditions: [],
+
+        // Tracking de frescura por CU
+        loadedForUC: {
+            userStories: null,
+            testSuites: null
+        },
 
         // Legacy (compatibilidad guardado/reporte)
         data: { pruebas: [] },
@@ -65,9 +71,11 @@ export const Store = {
         this.state.useCases = [];
         this.state.selectedUseCaseId = null;
         this.state.userStories = [];
-        this.state.testSuites = [];
         this.state.selectedUSId = null;
+        this.state.testSuites = [];
         this.state.jiraEpics = [];
+        this.state.loadedForUC.userStories = null;
+        this.state.loadedForUC.testSuites = null;
         this.save();
         this.notify();
     },
@@ -82,6 +90,9 @@ export const Store = {
         this.state.selectedUseCaseId = id;
         this.state.userStories = [];
         this.state.selectedUSId = null;
+        this.state.testSuites = [];
+        this.state.loadedForUC.userStories = null;
+        this.state.loadedForUC.testSuites = null;
         this.save();
         this.notify();
     },
@@ -96,6 +107,7 @@ export const Store = {
     // User Stories
     setUserStories(stories) {
         this.state.userStories = stories;
+        this.state.loadedForUC.userStories = this.state.selectedUseCaseId;
         this.notify();
     },
 
@@ -105,9 +117,14 @@ export const Store = {
         this.notify();
     },
 
+    isStale(dataKey) {
+        return this.state.loadedForUC[dataKey] !== this.state.selectedUseCaseId;
+    },
+
     // Test Suites
     setTestSuites(suites) {
         this.state.testSuites = suites;
+        this.state.loadedForUC.testSuites = this.state.selectedUseCaseId;
         this.notify();
     },
 

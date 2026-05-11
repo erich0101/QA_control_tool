@@ -32,8 +32,20 @@ export const TestSuitesTab = {
         const useSidebarScroll = this._lastSidebarScroll > 0 ? this._lastSidebarScroll : sidebarScroll;
         const useWindowScrollY = this._lastWindowScrollY > 0 ? this._lastWindowScrollY : windowScrollY;
 
-        const { testSuites, activeProjectId, selectedUseCaseId, jiraEpics } = Store.state;
+        const { testSuites, activeProjectId, selectedUseCaseId, jiraEpics, loadedForUC } = Store.state;
         const totalTests = testSuites.reduce((acc, s) => acc + (s.test_cases || []).length, 0);
+
+        // Fetch guard: si cambió el CU y las suites se cargaron para otro CU, recargar
+        if (selectedUseCaseId && loadedForUC.testSuites !== selectedUseCaseId) {
+            this.loadSuitesForUC(selectedUseCaseId);
+            return;
+        }
+
+        // Si se deseleccionó el CU y había suites cargadas, limpiarlas
+        if (!selectedUseCaseId && loadedForUC.testSuites) {
+            Store.setTestSuites([]);
+            return;
+        }
 
         // Cargar épicas si no existen o cambió el proyecto para evitar bucles
         if (activeProjectId && this._lastJiraProjectId !== activeProjectId) {
@@ -617,15 +629,8 @@ export const TestSuitesTab = {
         // UC Filter
         container.querySelector('#uc-filter')?.addEventListener('change', async (e) => {
             const ucId = parseInt(e.target.value) || null;
-            Store.state.selectedUseCaseId = ucId;
-            if (ucId) {
-                UI.showLoading();
-                const { testSuites } = await ApiService.getTestSuites(ucId);
-                Store.setTestSuites(testSuites || []);
-                UI.hideLoading();
-            } else {
-                Store.setTestSuites([]);
-            }
+            Store.setSelectedUseCase(ucId);
+            await this.loadSuitesForUC(ucId);
         });
 
         // New Suite
@@ -1174,10 +1179,22 @@ Devuelve ÚNICAMENTE un array JSON válido. Cada elemento representa UN test cas
     },
 
     async reloadSuites() {
-        const ucId = Store.state.selectedUseCaseId;
-        if (ucId) {
+        await this.loadSuitesForUC(Store.state.selectedUseCaseId);
+    },
+
+    async loadSuitesForUC(ucId) {
+        if (!ucId) {
+            Store.setTestSuites([]);
+            return;
+        }
+        UI.showLoading();
+        try {
             const { testSuites } = await ApiService.getTestSuites(ucId);
             Store.setTestSuites(testSuites || []);
+            this.selectedSuiteId = testSuites?.[0]?.id || null;
+        } catch(err) {
+            UI.toast(err.message, 'error');
         }
+        UI.hideLoading();
     }
 };

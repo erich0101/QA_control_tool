@@ -82,7 +82,8 @@ export const Modals = {
         } else if (type === 'import-dual') {
             this.bindImportDualEvents(dialog, options);
         } else {
-            this.bindEvents(dialog, type, options);
+            const content = dialog.querySelector('.modal-content');
+            this.bindEvents(content, type, options);
         }
     },
 
@@ -211,12 +212,17 @@ export const Modals = {
         `;
     },
 
-    getStartRunWizardContent({ suite }) {
+getStartRunWizardContent({ suite, suites, cuTitle }) {
+        const isBulk = Array.isArray(suites) && suites.length > 0;
+        const suiteList = isBulk ? suites : [suite];
+        const titleText = isBulk ? cuTitle : suite?.title || '';
+
         return `
-            <h3 style="margin-bottom: 8px;">🚀 Configurar Ejecución Inteligente</h3>
-            <p style="color: var(--text-muted); font-size: 0.875rem; margin-bottom: 24px;">Suite: <strong>${UI.escapeHTML(suite.title)}</strong></p>
-            
+            <h3 style="margin-bottom: 8px;">🚀 ${isBulk ? 'Ejecución Masiva' : 'Configurar Ejecución Inteligente'}</h3>
+            <p style="color: var(--text-muted); font-size: 0.875rem; margin-bottom: 24px;">${isBulk ? `Caso de Uso: <strong>${UI.escapeHTML(titleText)}</strong>` : `Suite: <strong>${UI.escapeHTML(titleText)}</strong>`}</p>
+
             <div style="display: flex; flex-direction: column; gap: 20px;">
+                ${!isBulk ? `
                 <div class="field-group">
                     <label class="field-label">Tipo de Ejecución</label>
                     <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 8px;">
@@ -262,7 +268,7 @@ export const Modals = {
                             <input type="text" id="filter-module" placeholder="Ej: Login">
                         </div>
                     </div>
-                    
+
                     <div style="margin-top: 16px; display: flex; gap: 12px; flex-wrap: wrap;">
                         <label style="display: flex; align-items: center; gap: 6px; font-size: 0.7rem; cursor: pointer;">
                             <div class="switch" style="width: 24px; height: 14px;">
@@ -274,8 +280,9 @@ export const Modals = {
                         </label>
                         <label style="display: flex; align-items: center; gap: 6px; font-size: 0.7rem; cursor: pointer;">
                             <div class="switch" style="width: 24px; height: 14px;">
-                                <input type="checkbox" id="filter-regression">
+                                <input type="checkbox" id="filter-regression" checked>
                                 <span class="slider" style="border-radius: 10px;"></span>
+                                <style>#custom-filters-area .slider:before { height: 10px; width: 10px; left: 1px; bottom: 1px; } #custom-filters-area input:checked + .slider:before { transform: translateX(11px); }</style>
                             </div>
                             Regresión
                         </label>
@@ -283,6 +290,7 @@ export const Modals = {
                             <div class="switch" style="width: 24px; height: 14px;">
                                 <input type="checkbox" id="filter-integration">
                                 <span class="slider" style="border-radius: 10px;"></span>
+                                <style>#custom-filters-area .slider:before { height: 10px; width: 10px; left: 1px; bottom: 1px; } #custom-filters-area input:checked + .slider:before { transform: translateX(11px); }</style>
                             </div>
                             Integración
                         </label>
@@ -290,22 +298,36 @@ export const Modals = {
                             <div class="switch" style="width: 24px; height: 14px;">
                                 <input type="checkbox" id="filter-exploratory">
                                 <span class="slider" style="border-radius: 10px;"></span>
+                                <style>#custom-filters-area .slider:before { height: 10px; width: 10px; left: 1px; bottom: 1px; } #custom-filters-area input:checked + .slider:before { transform: translateX(11px); }</style>
                             </div>
                             Exploratoria
                         </label>
                     </div>
                 </div>
-
-                <div id="run-preview-box" style="background: var(--bg-surface-elevated); border-radius: 12px; padding: 16px; border: 1px dashed var(--border); text-align: center;">
-                    <div style="font-size: 0.75rem; color: var(--text-muted);">Estimación de carga:</div>
-                    <div id="preview-count" style="font-size: 1.5rem; font-weight: 800; color: var(--accent);">--</div>
-                    <div style="font-size: 0.75rem; color: var(--text-muted);">test cases serán incluidos</div>
+                ` : `
+                <div style="background: rgba(99,102,241,0.08); border: 1px solid rgba(99,102,241,0.3); border-radius: 12px; padding: 16px; margin-bottom: 8px;">
+                    <div style="font-size: 0.75rem; font-weight: 700; color: var(--brand); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px;">📁 Suites a ejecutar (${suiteList.length})</div>
+                    <div style="display: flex; flex-direction: column; gap: 6px;">
+                        ${suiteList.map(s => `
+                            <div style="display: flex; align-items: center; gap: 8px; font-size: 0.8rem; color: var(--text-main);">
+                                <span style="color: var(--brand); font-weight: 700;">→</span>
+                                <span style="flex: 1;">${UI.escapeHTML(s.title)}</span>
+                                <span style="font-size: 0.7rem; color: var(--text-muted);">${(s.test_cases || []).filter(t => t.is_regression).length} tests</span>
+                            </div>
+                        `).join('')}
+                    </div>
                 </div>
-            </div>
+                `}
 
-            <div style="display: flex; gap: 12px; margin-top: 32px; justify-content: flex-end;">
-                <button class="btn btn-ghost btn-sm" id="modal-cancel">Cancelar</button>
-                <button class="btn btn-primary btn-sm" id="modal-run-start" style="padding-left: 24px; padding-right: 24px;">🚀 Iniciar Run</button>
+                <div class="field-group" style="background: rgba(34,197,94,0.08); border: 1px solid rgba(34,197,94,0.3); border-radius: 12px; padding: 14px; text-align: center;">
+                    <span style="font-size: 0.75rem; font-weight: 700; color: var(--ok); text-transform: uppercase; letter-spacing: 0.05em;">Tests a ejecutar</span>
+                    <div style="font-size: 2rem; font-weight: 900; color: var(--ok); margin-top: 4px;"><span id="preview-count">${isBulk ? suiteList.reduce((acc, s) => acc + (s.test_cases || []).filter(t => t.is_regression).length, 0) : (suite?.test_cases || []).filter(t => t.is_regression).length}</span></div>
+                </div>
+
+                <div style="display: flex; gap: 12px; margin-top: 8px;">
+                    <button class="btn btn-primary" style="flex: 1;" id="modal-run-start">▶ Iniciar Ejecución</button>
+                    <button class="btn btn-ghost" id="modal-run-cancel">Cancelar</button>
+                </div>
             </div>
         `;
     },
@@ -566,8 +588,9 @@ export const Modals = {
 
     bindEvents(overlay, type, options) {
         const close = () => {
-            overlay.close();
-            overlay.remove();
+            const dialog = overlay.closest('dialog');
+            dialog?.close();
+            dialog?.remove();
         };
 
         overlay.querySelector('#modal-cancel')?.addEventListener('click', close);
@@ -710,13 +733,14 @@ export const Modals = {
         }
 
         if (type === 'start-run-wizard') {
+            const isBulk = Array.isArray(options.suites) && options.suites.length > 0;
             let currentType = 'REGRESSION';
             const suite = options.suite;
-            const tcs = suite.test_cases || [];
+            const suites = options.suites || [];
+            const tcs = (suite?.test_cases || []);
 
             const updatePreview = () => {
                 let filtered = [];
-
                 if (currentType === 'SMOKE') {
                     filtered = tcs.filter(t => t.is_smoke);
                 } else if (currentType === 'REGRESSION') {
@@ -726,14 +750,12 @@ export const Modals = {
                 } else if (currentType === 'EXPLORATORY') {
                     filtered = tcs.filter(t => t.is_exploratory);
                 } else {
-                    // Custom
                     const prio = overlay.querySelector('#filter-priority').value;
                     const mod = overlay.querySelector('#filter-module').value.toLowerCase();
                     const smoke = overlay.querySelector('#filter-smoke').checked;
                     const regr = overlay.querySelector('#filter-regression').checked;
                     const integ = overlay.querySelector('#filter-integration').checked;
                     const explo = overlay.querySelector('#filter-exploratory').checked;
-
                     filtered = tcs.filter(t => {
                         let ok = true;
                         if (prio && t.priority !== prio) ok = false;
@@ -764,33 +786,64 @@ export const Modals = {
                 el.addEventListener('keyup', updatePreview);
             });
 
-            updatePreview();
+            if (!isBulk) updatePreview();
 
             overlay.querySelector('#modal-run-start')?.addEventListener('click', async () => {
                 UI.showLoading();
                 try {
-                    const filters = currentType === 'CUSTOM' ? {
-                        priority: overlay.querySelector('#filter-priority').value || undefined,
-                        module_name: overlay.querySelector('#filter-module').value || undefined,
-                        is_smoke: overlay.querySelector('#filter-smoke').checked || undefined,
-                        is_regression: overlay.querySelector('#filter-regression').checked || undefined,
-                        is_integration: overlay.querySelector('#filter-integration').checked || undefined,
-                        is_exploratory: overlay.querySelector('#filter-exploratory').checked || undefined
-                    } : null;
-
-                    const res = await ApiService.startRun(suite.id, currentType, filters);
-                    if (res && res.ok) {
-                        UI.toast(`🚀 Ciclo iniciado con ${res.testCount} tests`);
-                        if (options.onSuccess) options.onSuccess();
+                    if (isBulk) {
+                        const results = [];
+                        let totalTests = 0;
+                        for (const s of suites) {
+                            try {
+                                const filtered = (s.test_cases || []).filter(t => t.is_regression);
+                                if (filtered.length === 0) continue;
+                                const res = await ApiService.startRun(s.id, 'REGRESSION', null);
+                                if (res?.ok) {
+                                    results.push({ id: s.id, title: s.title, ok: true, count: res.testCount });
+                                    totalTests += res.testCount;
+                                } else {
+                                    results.push({ id: s.id, title: s.title, ok: false, error: res?.error || 'Error desconocido' });
+                                }
+                            } catch (err) {
+                                results.push({ id: s.id, title: s.title, ok: false, error: err.message });
+                            }
+                        }
+                        const okCount = results.filter(r => r.ok).length;
+                        const failCount = results.filter(r => !r.ok).length;
+                        if (failCount > 0) {
+                            UI.toast(`⚠️ ${okCount}/${suites.length} suites iniciadas. ${failCount} fallidas.`, 'warn');
+                        } else {
+                            UI.toast(`🚀 ${okCount}/${suites.length} suites iniciadas (${totalTests} tests)`, 'ok');
+                        }
                         close();
+                        if (options.onSuccess) options.onSuccess();
                     } else {
-                        UI.toast(res?.error || 'No se pudo iniciar el ciclo', 'error');
+                        const filters = currentType === 'CUSTOM' ? {
+                            priority: overlay.querySelector('#filter-priority').value || undefined,
+                            module_name: overlay.querySelector('#filter-module').value || undefined,
+                            is_smoke: overlay.querySelector('#filter-smoke').checked || undefined,
+                            is_regression: overlay.querySelector('#filter-regression').checked || undefined,
+                            is_integration: overlay.querySelector('#filter-integration').checked || undefined,
+                            is_exploratory: overlay.querySelector('#filter-exploratory').checked || undefined
+                        } : null;
+
+                        const res = await ApiService.startRun(suite.id, currentType, filters);
+                        if (res && res.ok) {
+                            UI.toast(`🚀 Ciclo iniciado con ${res.testCount} tests`);
+                            close();
+                            if (options.onSuccess) options.onSuccess();
+                        } else {
+                            UI.toast(res?.error || 'No se pudo iniciar el ciclo', 'error');
+                        }
                     }
                 } catch (err) {
                     UI.toast(err.message, 'error');
                 }
                 UI.hideLoading();
             });
+
+            overlay.querySelector('#modal-run-cancel')?.addEventListener('click', close);
         }
 
         if (type === 'confirm') {

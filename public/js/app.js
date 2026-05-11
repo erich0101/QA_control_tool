@@ -66,13 +66,14 @@ async function init() {
 
             // Seleccionar primer Caso de Uso por defecto si no hay uno seleccionado
             if (Store.state.useCases.length > 0 && !Store.state.selectedUseCaseId) {
-                Store.state.selectedUseCaseId = Store.state.useCases[0].id;
+                Store.setSelectedUseCase(Store.state.useCases[0].id);
             }
- 
+
             // Si hay un Caso de Uso activo, cargar sus historias
             if (Store.state.selectedUseCaseId) {
                 const { stories } = await ApiService.getUserStories(Store.state.selectedUseCaseId);
                 Store.state.userStories = stories || [];
+                Store.state.loadedForUC.userStories = Store.state.selectedUseCaseId;
 
                 // Seleccionar primera US por defecto si no hay una seleccionada
                 if (Store.state.userStories.length > 0 && !Store.state.selectedUSId) {

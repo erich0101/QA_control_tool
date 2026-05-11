@@ -252,5 +252,13 @@ export const ApiService = {
     },
     async exportUseCaseMatrix(useCaseId) {
         window.location.href = `/api/use-cases/${useCaseId}/export-excel`;
+    },
+
+    async startAllCU(cuId) {
+        return fetch(`/api/use-cases/${cuId}/start-all`, {
+            method: 'POST',
+            body: JSON.stringify({ execution_type: 'REGRESSION', only_assigned: true }),
+            headers
+        }).then(json);
     }
 };

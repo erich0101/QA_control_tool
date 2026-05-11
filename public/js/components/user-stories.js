@@ -14,18 +14,42 @@ const PRIORITY_OPTIONS = ['Alta', 'Media', 'Baja'];
 
 const SECTIONS = [
     { key: 'hu_detallada', icon: '🔍', label: 'Análisis de Inconsistencias', type: 'textarea' },
+    { key: 'recomendaciones', icon: '📋', label: 'Recomendaciones de Prueba', type: 'textarea' },
     { key: 'escenarios_prueba', icon: '🎯', label: 'Escenarios de Prueba', type: 'textarea' },
     { key: 'reglas_negocio', icon: '📜', label: 'Reglas de Negocio', type: 'textarea' },
     { key: 'precondiciones', icon: '⚙️', label: 'Precondiciones', type: 'textarea' },
     { key: 'link_documentacion', icon: '🔗', label: 'Link Documentación Base', type: 'input' }
 ];
 
+const SEVERITY_COLORS = {
+    Alta: '#ef4444',
+    Media: '#f59e0b',
+    Baja: '#22c55e'
+};
+const SEVERITY_ICONS = {
+    Alta: '🔴',
+    Media: '🟡',
+    Baja: '🟢'
+};
+
 export const UserStories = {
     expandedId: null,
-    openSections: new Set(['hu_detallada', 'escenarios_prueba']),
+    openSections: new Set(['hu_detallada', 'recomendaciones', 'escenarios_prueba']),
 
     render(container) {
-        const { useCases, selectedUseCaseId, userStories, activeProjectId } = Store.state;
+        const { useCases, selectedUseCaseId, userStories, activeProjectId, loadedForUC } = Store.state;
+
+        // Fetch guard: si cambió el CU y las stories se cargaron para otro CU, recargar
+        if (selectedUseCaseId && loadedForUC.userStories !== selectedUseCaseId) {
+            this.loadStoriesForUC(selectedUseCaseId);
+            return;
+        }
+
+        // Si se deseleccionó el CU y había stories cargadas, limpiarlas
+        if (!selectedUseCaseId && loadedForUC.userStories) {
+            Store.setUserStories([]);
+            return;
+        }
 
         if (!activeProjectId) {
             container.innerHTML = `
@@ -200,6 +224,7 @@ export const UserStories = {
     renderSection(us, sec) {
         if (sec.key === 'escenarios_prueba') return this.renderScenariosSection(us);
         if (sec.key === 'hu_detallada') return this.renderInconsistenciesSection(us);
+        if (sec.key === 'recomendaciones') return this.renderRecommendationsSection(us);
 
         const isOpen = this.openSections.has(sec.key);
         const val = us[sec.key] || '';
@@ -230,7 +255,7 @@ export const UserStories = {
     renderInconsistenciesSection(us) {
         const isOpen = this.openSections.has('hu_detallada');
         const items = us.inconsistencies || [];
-        
+
         return `
             <div class="us-detail-section ${isOpen ? 'open' : ''}" data-section="hu_detallada">
                 <div class="us-detail-section-header" data-section="hu_detallada">
@@ -243,18 +268,58 @@ export const UserStories = {
                         <span style="transition: transform 0.3s; transform: rotate(${isOpen ? '90deg' : '0deg'})">▶</span>
                     </div>
                 </div>
+                <div class="us-detail-section-content" style="padding: 0;">
+                    <div id="us-inc-panel-${us.id}" style="margin: 16px; padding: 12px 16px; background: ${items.length > 0 ? 'rgba(245,158,11,0.07)' : 'rgba(34,197,94,0.06)'}; border: 1px solid ${items.length > 0 ? '#f59e0b33' : '#22c55e33'}; border-radius: 12px; border-left: 4px solid ${items.length > 0 ? '#f59e0b' : '#22c55e'};">
+                        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: ${items.length > 0 ? '10px' : '0'};">
+                            <span>${items.length > 0 ? '⚠️' : '✅'}</span>
+                            <span style="font-size: 0.7rem; font-weight: 800; color: ${items.length > 0 ? '#f59e0b' : '#22c55e'}; text-transform: uppercase; letter-spacing: 0.07em;">${items.length > 0 ? `Inconsistencias detectadas (${items.length})` : 'Sin inconsistencias — HU consistente'}</span>
+                        </div>
+                        ${items.length > 0 ? `<div style="display: flex; flex-direction: column; gap: 5px;">${items.map((item, i) => {
+                            const severity = item.severity || 'Alta';
+                            const color = SEVERITY_COLORS[severity] || '#ef4444';
+                            const icon = SEVERITY_ICONS[severity] || '🔴';
+                            return `
+                            <div style="display: flex; align-items: flex-start; gap: 10px; padding: 8px 10px; background: rgba(0,0,0,0.15); border-radius: 8px;">
+                                <span style="font-size: 0.65rem; font-weight: 800; color: ${color}; white-space: nowrap; margin-top: 2px; min-width: 28px; text-align: center;">${icon} A${i+1}</span>
+                                <span style="font-size: 0.82rem; color: var(--text-main); font-weight: 500; flex: 1; word-break: break-word; line-height: 1.4;">${UI.escapeHTML(item.title)}</span>
+                            </div>`;
+                        }).join('')}</div>` : ''}
+                    </div>
+                </div>
+            </div>
+        `;
+    },
+
+    renderRecommendationsSection(us) {
+        const isOpen = this.openSections.has('recomendaciones');
+        let recommendations = us.recommendations || [];
+        if (typeof recommendations === 'string') {
+            try { recommendations = JSON.parse(recommendations); } catch { recommendations = []; }
+        }
+        const items = Array.isArray(recommendations) ? recommendations : [];
+
+        return `
+            <div class="us-detail-section ${isOpen ? 'open' : ''}" data-section="recomendaciones">
+                <div class="us-detail-section-header" data-section="recomendaciones">
+                    <div class="us-detail-section-title">
+                        <span>📋</span>
+                        <span>Recomendaciones de Prueba</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span class="tab-badge">${items.length}</span>
+                        <span style="transition: transform 0.3s; transform: rotate(${isOpen ? '90deg' : '0deg'})">▶</span>
+                    </div>
+                </div>
                 <div class="us-detail-section-content" style="padding: 20px;">
-                    <div style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 20px;">
+                    <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px;">
                         ${items.map((item, i) => `
-                            <div class="scenario-item" data-id="${item.id}" style="display: flex; align-items: center; gap: 12px; padding: 8px 16px;">
-                                <span class="scenario-badge" style="margin-bottom: 0; min-width: 32px; text-align: center; background: var(--bg-muted); color: var(--text-muted);">A${i+1}</span>
-                                <input type="text" class="inconsistency-edit-field us-edit-field" data-id="${us.id}" data-inconsistency-id="${item.id}" data-field="title" value="${UI.escapeHTML(item.title)}" placeholder="Describir inconsistencia o hallazgo..." style="font-weight: 700; color: var(--text-main); flex: 1; border: none; background: transparent; outline: none; padding: 4px 0;">
-                                <button class="btn-icon danger delete-inconsistency" data-id="${item.id}" title="Eliminar Inconsistencia">🗑</button>
+                            <div style="display: flex; align-items: flex-start; gap: 12px; padding: 10px 16px; background: rgba(99,102,241,0.07); border-radius: 8px; border-left: 3px solid rgba(99,102,241,0.5);">
+                                <span style="font-size: 0.75rem; font-weight: 800; color: #6366f1; white-space: nowrap; margin-top: 2px;">💡</span>
+                                <span style="font-size: 0.82rem; color: var(--text-main); flex: 1; line-height: 1.5;">${UI.escapeHTML(item.title || item.description || item)}</span>
                             </div>
                         `).join('')}
-                        ${items.length === 0 ? '<div style="text-align: center; opacity: 0.5; padding: 20px; font-size: 0.8rem;">No hay inconsistencias detectadas</div>' : ''}
+                        ${items.length === 0 ? '<div style="text-align: center; opacity: 0.5; padding: 20px; font-size: 0.8rem;">Sin recomendaciones generadas</div>' : ''}
                     </div>
-                    <button class="btn btn-ghost btn-sm" id="btn-add-inconsistency" data-us-id="${us.id}" style="width: 100%; border: 1px dashed var(--border);">+ Añadir Inconsistencia</button>
                 </div>
             </div>
         `;
@@ -304,12 +369,7 @@ export const UserStories = {
         container.querySelector('#cu-select')?.addEventListener('change', async (e) => {
             const id = parseInt(e.target.value) || null;
             Store.setSelectedUseCase(id);
-            if (id) {
-                UI.showLoading();
-                const { userStories } = await ApiService.getUserStories(id);
-                Store.setUserStories(userStories || []);
-                UI.hideLoading();
-            }
+            await this.loadStoriesForUC(id);
         });
 
         // New CU
@@ -368,9 +428,8 @@ export const UserStories = {
             const id = parseInt(e.target.dataset.id);
             const fields = container.querySelectorAll('.us-edit-field');
             
-            const huData = {};
+const huData = {};
             const scenarioUpdates = {};
-            const inconsistencyUpdates = {};
 
             fields.forEach(f => {
                 if (f.dataset.id == id) {
@@ -378,10 +437,6 @@ export const UserStories = {
                         const sId = f.dataset.scenarioId;
                         if (!scenarioUpdates[sId]) scenarioUpdates[sId] = {};
                         scenarioUpdates[sId][f.dataset.field] = f.value;
-                    } else if (f.dataset.inconsistencyId) {
-                        const iId = f.dataset.inconsistencyId;
-                        if (!inconsistencyUpdates[iId]) inconsistencyUpdates[iId] = {};
-                        inconsistencyUpdates[iId][f.dataset.field] = f.value;
                     } else {
                         huData[f.dataset.field] = f.value;
                     }
@@ -392,15 +447,10 @@ export const UserStories = {
             try {
                 await ApiService.updateUserStory(id, huData);
                 
-                // Actualizar escenarios
                 const promises = Object.entries(scenarioUpdates).map(([sId, data]) => 
                     ApiService.updateScenario(sId, data)
                 );
-                // Actualizar inconsistencias
-                const iPromises = Object.entries(inconsistencyUpdates).map(([iId, data]) => 
-                    ApiService.updateInconsistency(iId, data)
-                );
-                await Promise.all([...promises, ...iPromises]);
+                await Promise.all(promises);
 
                 await this.reloadUS();
                 UI.toast('Cambios guardados correctamente', 'success');
@@ -522,5 +572,20 @@ export const UserStories = {
         // Also reload CU counts
         const { useCases } = await ApiService.getUseCases(Store.state.activeProjectId);
         Store.state.useCases = useCases || [];
+    },
+
+    async loadStoriesForUC(cuId) {
+        if (!cuId) {
+            Store.setUserStories([]);
+            return;
+        }
+        UI.showLoading();
+        try {
+            const { userStories } = await ApiService.getUserStories(cuId);
+            Store.setUserStories(userStories || []);
+        } catch(err) {
+            UI.toast(err.message, 'error');
+        }
+        UI.hideLoading();
     }
 };

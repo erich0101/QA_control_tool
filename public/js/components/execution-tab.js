@@ -6,11 +6,12 @@ import { modalManager } from '../utils/modal-manager.js';
 
 export const ExecutionTab = {
     selectedSuiteId: null,
-    expandedSuiteId: null, // Control de expansión de suites activas
+    expandedSuiteId: null,
     expandedTCId: null,
     lastRefresh: null,
-    projectSuites: [], // Caché local de suites del proyecto
-    timerInterval: null, // Intervalo del cronómetro
+    projectSuites: [],
+    timerInterval: null,
+    selectedCUId: localStorage.getItem('execSelectedCU') ? parseInt(localStorage.getItem('execSelectedCU')) : null,
 
     async render(container) {
         const scrollPos = container.scrollTop;
@@ -37,7 +38,6 @@ export const ExecutionTab = {
         }
 
         const activeSuites = this.projectSuites.filter(s => s.activeRun);
-        const availableSuites = this.projectSuites.filter(s => !s.activeRun);
         const totalActiveTests = activeSuites.reduce((acc, s) => acc + (s.test_cases || []).length, 0);
 
         container.innerHTML = `
@@ -50,6 +50,15 @@ export const ExecutionTab = {
                     </div>
                 </div>
                 <div style="display: flex; gap: 12px; align-items: center;">
+                    <select id="cu-exec-filter" style="height: 32px; font-size: 0.78rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-main); color: var(--text-main); padding: 0 8px;">
+                        <option value="">— Seleccionar Caso de Uso —</option>
+                        ${Store.state.useCases.map(cu => `<option value="${cu.id}" ${cu.id === this.selectedCUId ? 'selected' : ''}>${UI.escapeHTML(cu.title)}</option>`).join('')}
+                    </select>
+                    ${this.selectedCUId ? `
+                        <button class="btn btn-success btn-sm" id="btn-run-all-cu">
+                            ▶ Ejecutar Todo
+                        </button>
+                    ` : ''}
                     <button class="btn btn-ghost btn-sm" id="btn-refresh-exec" title="Sincronizar cambios">
                         🔄 ${this.lastRefresh ? `Sinc: ${this.lastRefresh}` : 'Sincronizar'}
                     </button>
@@ -57,14 +66,14 @@ export const ExecutionTab = {
             </div>
 
             <div class="exec-layout" style="display: flex; flex-direction: column; gap: 32px; padding-bottom: 40px;">
-                
+
                 <!-- SECCION: CICLOS ACTIVOS -->
-                <section>
+                <section id="active-section">
                     <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 16px;">
                         <div style="width: 8px; height: 8px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 10px var(--ok);"></div>
                         <h2 style="font-size: 0.9rem; font-weight: 800; color: var(--text-main); text-transform: uppercase; letter-spacing: 0.1em; margin: 0;">Ciclos en Ejecución</h2>
                     </div>
-                    
+
                     ${activeSuites.length === 0 ? `
                         <div class="empty-state" style="padding: 40px; background: rgba(255,255,255,0.02); border: 1px dashed var(--border);">
                             <p style="color: var(--text-muted); font-size: 0.85rem;">No hay ciclos de prueba activos en este momento.</p>
@@ -603,10 +612,41 @@ export const ExecutionTab = {
             });
         });
 
+        container.querySelector('#cu-exec-filter')?.addEventListener('change', (e) => {
+            this.selectedCUId = parseInt(e.target.value) || null;
+            localStorage.setItem('execSelectedCU', this.selectedCUId || '');
+            this.render(container);
+        });
+
+        container.querySelector('#btn-run-all-cu')?.addEventListener('click', async () => {
+            if (!this.selectedCUId) return;
+            const cu = Store.state.useCases.find(c => c.id === this.selectedCUId);
+            const suites = this.projectSuites.filter(s => s.use_case_id === this.selectedCUId && !s.activeRun);
+            if (suites.length === 0) {
+                UI.toast('No hay suites disponibles en este Caso de Uso', 'warn');
+                return;
+            }
+Modals.render('start-run-wizard', {
+                suites,
+                cuTitle: cu?.title || '',
+                onSuccess: async () => {
+                    UI.showLoading();
+                    const res = await ApiService.getTestSuites(null, Store.state.activeProjectId);
+                    this.projectSuites = res.testSuites || [];
+                    UI.hideLoading();
+                    await this.render(container);
+                    this._scrollToActiveSection();
+                }
+            });
+        });
+
         container.querySelector('#btn-refresh-exec')?.addEventListener('click', async () => {
             UI.showLoading();
             const res = await ApiService.getTestSuites(null, Store.state.activeProjectId);
             this.projectSuites = res.testSuites || [];
+            this.availableSuitesByCU = this.selectedCUId
+                ? this.projectSuites.filter(s => s.use_case_id === this.selectedCUId && !s.activeRun)
+                : [];
             this.lastRefresh = new Date().toLocaleTimeString();
             this.render(container);
             UI.hideLoading();
@@ -716,5 +756,12 @@ export const ExecutionTab = {
                 UI.hideLoading();
             });
         });
+    },
+
+    _scrollToActiveSection() {
+        const section = document.querySelector('section');
+        if (section) {
+            section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
     }
 };
