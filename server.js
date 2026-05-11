@@ -1,3 +1,4 @@
+require('dns').setDefaultResultOrder('ipv4first'); // Fix: forzar IPv4 en redes sin soporte IPv6
 require('dotenv').config();
 const express = require('express');
 const path = require('path');
