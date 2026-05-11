@@ -2,16 +2,36 @@ const { Pool } = require('pg');
 const dns = require('dns');
 require('dotenv').config();
 
-// Forzar resolución IPv4 para evitar ENETUNREACH en redes sin soporte IPv6
 dns.setDefaultResultOrder('ipv4first');
 
-// Configuración de la conexión a Supabase
-const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: { 
-        rejectUnauthorized: false // Requerido para Supabase en la mayoría de los casos
+let dbConfig = { ssl: { rejectUnauthorized: false } };
+
+if (process.env.DATABASE_URL) {
+    const parsed = new URL(process.env.DATABASE_URL);
+    if (parsed.hostname && !parsed.hostname.match(/^\d+\.\d+\.\d+\.\d+$/) && !parsed.hostname.startsWith('localhost')) {
+        try {
+            const address = dns.lookupSync(parsed.hostname, 4);
+            if (address) {
+                parsed.hostname = address;
+                dbConfig.connectionString = parsed.toString();
+            } else {
+                dbConfig.connectionString = process.env.DATABASE_URL;
+            }
+        } catch {
+            dbConfig.connectionString = process.env.DATABASE_URL;
+        }
+    } else {
+        dbConfig.connectionString = process.env.DATABASE_URL;
     }
-});
+} else if (process.env.DB_HOST) {
+    dbConfig.host = process.env.DB_HOST;
+    dbConfig.port = parseInt(process.env.DB_PORT) || 5432;
+    dbConfig.user = process.env.DB_USER;
+    dbConfig.password = process.env.DB_PASSWORD;
+    dbConfig.database = process.env.DB_NAME;
+}
+
+const pool = new Pool(dbConfig);
 
 pool.on('connect', () => {
     console.log('Conexión establecida con la base de datos Supabase (PostgreSQL).');
