@@ -1,13 +1,16 @@
 const { Pool } = require('pg');
+const dns = require('dns');
 require('dotenv').config();
+
+// Forzar resolución IPv4 para evitar ENETUNREACH en redes sin soporte IPv6
+dns.setDefaultResultOrder('ipv4first');
 
 // Configuración de la conexión a Supabase
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: { 
         rejectUnauthorized: false // Requerido para Supabase en la mayoría de los casos
-    },
-    family: 4 // Forzar IPv4 para evitar ENETUNREACH en redes sin soporte IPv6
+    }
 });
 
 pool.on('connect', () => {
