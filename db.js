@@ -2,26 +2,36 @@ const { Pool } = require('pg');
 const dns = require('dns');
 require('dotenv').config();
 
-dns.setDefaultResultOrder('ipv4first');
-
 let dbConfig = { ssl: { rejectUnauthorized: false } };
 
-if (process.env.DATABASE_URL) {
-    const parsed = new URL(process.env.DATABASE_URL);
-    if (parsed.hostname && !parsed.hostname.match(/^\d+\.\d+\.\d+\.\d+$/) && !parsed.hostname.startsWith('localhost')) {
+const rawUrl = process.env.DATABASE_URL;
+if (rawUrl) {
+    const parsed = new URL(rawUrl);
+    const hostname = parsed.hostname;
+    const isIp = /^\d+\.\d+\.\d+\.\d+$/.test(hostname);
+    const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
+
+    if (!isIp && !isLocalhost) {
         try {
-            const address = dns.lookupSync(parsed.hostname, 4);
-            if (address) {
-                parsed.hostname = address;
-                dbConfig.connectionString = parsed.toString();
+            const addresses = dns.resolve4Sync(hostname);
+            const ipv4 = addresses && addresses[0];
+            if (ipv4) {
+                dbConfig.host = ipv4;
+                dbConfig.port = parseInt(parsed.port) || 5432;
+                const user = parsed.username ? decodeURIComponent(parsed.username) : '';
+                const pass = parsed.password ? decodeURIComponent(parsed.password) : '';
+                if (user) dbConfig.user = user;
+                if (pass) dbConfig.password = pass;
+                const dbName = parsed.pathname ? parsed.pathname.replace(/^\//, '') : '';
+                if (dbName) dbConfig.database = dbName;
             } else {
-                dbConfig.connectionString = process.env.DATABASE_URL;
+                dbConfig.connectionString = rawUrl;
             }
         } catch {
-            dbConfig.connectionString = process.env.DATABASE_URL;
+            dbConfig.connectionString = rawUrl;
         }
     } else {
-        dbConfig.connectionString = process.env.DATABASE_URL;
+        dbConfig.connectionString = rawUrl;
     }
 } else if (process.env.DB_HOST) {
     dbConfig.host = process.env.DB_HOST;
