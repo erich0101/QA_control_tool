@@ -51,9 +51,14 @@ export const TestSuitesTab = {
         if (activeProjectId && this._lastJiraProjectId !== activeProjectId) {
             this._lastJiraProjectId = activeProjectId;
             ApiService.getJiraContext(activeProjectId).then(ctx => {
+                if (ctx?.error) {
+                    if (ctx.error.includes('token')) {
+                        UI.toast('🔑 Configura tu token de Jira para ver las épicas', 'warn');
+                    }
+                    return;
+                }
                 if (ctx && ctx.epics) {
                     Store.setJiraEpics(ctx.epics);
-                    // El store notificará y provocará un re-render automático
                 }
             });
         }

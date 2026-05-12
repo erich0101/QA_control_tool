@@ -250,6 +250,22 @@ export const ApiService = {
             headers 
         }).then(json);
     },
+    async getJiraUserConfig(projectId) {
+        return fetch(`/api/projects/${projectId}/jira-user-config`).then(json);
+    },
+    async saveJiraUserConfig(projectId, data) {
+        return fetch(`/api/projects/${projectId}/jira-user-config`, {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers
+        }).then(json);
+    },
+    async deleteJiraUserConfig(projectId) {
+        return fetch(`/api/projects/${projectId}/jira-user-config`, {
+            method: 'DELETE',
+            headers
+        }).then(json);
+    },
     async exportUseCaseMatrix(useCaseId) {
         window.location.href = `/api/use-cases/${useCaseId}/export-excel`;
     },

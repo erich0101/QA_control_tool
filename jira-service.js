@@ -136,13 +136,12 @@ ${bug.actual_result || '—'}
     /**
      * Obtiene las épicas disponibles en el proyecto de Jira.
      */
-    async getEpics(config) {
-        const auth = Buffer.from(`${config.jira_user_email}:${decrypt(config.encrypted_token)}`).toString('base64');
-        const domain = config.jira_domain.replace(/\/$/, '');
+    async getEpics(userCredentials, projectKey, domain) {
+        const auth = Buffer.from(`${userCredentials.jira_user_email}:${decrypt(userCredentials.encrypted_token)}`).toString('base64');
+        const baseUrl = domain.replace(/\/$/, '');
         
-        // JQL para buscar épicas en el proyecto específico
-        const jql = `project = "${config.jira_project_key}" AND issuetype = Epic AND status != Done`;
-        const url = `${domain}/rest/api/3/search/jql`;
+        const jql = `project = "${projectKey}" AND issuetype = Epic AND status != Done`;
+        const url = `${baseUrl}/rest/api/3/search/jql`;
 
         const res = await fetch(url, {
             method: 'POST',
@@ -168,17 +167,14 @@ ${bug.actual_result || '—'}
             id: issue.id,
             key: issue.key,
             summary: issue.fields.summary,
-            name: issue.fields.summary // Para compatibilidad con el frontend
+            name: issue.fields.summary
         }));
     },
 
-    /**
-     * Obtiene usuarios que pueden ser asignados en el proyecto.
-     */
-    async getAssignableUsers(config) {
-        const auth = Buffer.from(`${config.jira_user_email}:${decrypt(config.encrypted_token)}`).toString('base64');
-        const domain = config.jira_domain.replace(/\/$/, '');
-        const url = `${domain}/rest/api/3/user/assignable/search?project=${config.jira_project_key}`;
+    async getAssignableUsers(userCredentials, projectKey, domain) {
+        const auth = Buffer.from(`${userCredentials.jira_user_email}:${decrypt(userCredentials.encrypted_token)}`).toString('base64');
+        const baseUrl = domain.replace(/\/$/, '');
+        const url = `${baseUrl}/rest/api/3/user/assignable/search?project=${projectKey}`;
 
         const res = await fetch(url, {
             headers: { 'Authorization': `Basic ${auth}`, 'Accept': 'application/json' }
@@ -188,13 +184,10 @@ ${bug.actual_result || '—'}
         return data.map(u => ({ accountId: u.accountId, displayName: u.displayName }));
     },
 
-    /**
-     * Obtiene las prioridades configuradas en Jira.
-     */
-    async getPriorities(config) {
-        const auth = Buffer.from(`${config.jira_user_email}:${decrypt(config.encrypted_token)}`).toString('base64');
-        const domain = config.jira_domain.replace(/\/$/, '');
-        const url = `${domain}/rest/api/3/priority`;
+    async getPriorities(userCredentials, domain) {
+        const auth = Buffer.from(`${userCredentials.jira_user_email}:${decrypt(userCredentials.encrypted_token)}`).toString('base64');
+        const baseUrl = domain.replace(/\/$/, '');
+        const url = `${baseUrl}/rest/api/3/priority`;
 
         const res = await fetch(url, {
             headers: { 'Authorization': `Basic ${auth}`, 'Accept': 'application/json' }
@@ -203,19 +196,16 @@ ${bug.actual_result || '—'}
         return await res.json();
     },
 
-    /**
-     * Crea el issue en Jira.
-     */
-    async createIssue(config, bugData, epicId = null, assigneeId = null, priorityId = null) {
-        const auth = Buffer.from(`${config.jira_user_email}:${decrypt(config.encrypted_token)}`).toString('base64');
-        const domain = config.jira_domain.replace(/\/$/, '');
+    async createIssue(userCredentials, projectKey, domain, bugData, epicId = null, assigneeId = null, priorityId = null) {
+        const auth = Buffer.from(`${userCredentials.jira_user_email}:${decrypt(userCredentials.encrypted_token)}`).toString('base64');
+        const baseUrl = domain.replace(/\/$/, '');
         
         const markdown = this.generateBugMarkdown(bugData);
         const adfDescription = this.convertMarkdownToADF(markdown);
 
         const payload = {
             fields: {
-                project: { key: config.jira_project_key },
+                project: { key: projectKey },
                 summary: `🐞 BUG: ${bugData.title}`,
                 issuetype: { name: 'Bug' },
                 description: adfDescription
@@ -226,7 +216,7 @@ ${bug.actual_result || '—'}
         if (assigneeId) payload.fields.assignee = { accountId: assigneeId };
         if (priorityId) payload.fields.priority = { id: priorityId };
 
-        const url = `${domain}/rest/api/3/issue`;
+        const url = `${baseUrl}/rest/api/3/issue`;
         const res = await fetch(url, {
             method: 'POST',
             headers: {
@@ -245,21 +235,15 @@ ${bug.actual_result || '—'}
         return await res.json();
     },
 
-    /**
-     * Consulta detalles de múltiples tickets por sus claves (JQL).
-     */
-    async getTicketsDetails(config, keys) {
+    async getTicketsDetails(userCredentials, domain, keys) {
         const jql = `key in (${keys.map(k => `"${k}"`).join(',')})`;
-        return this.searchIssues(config, jql);
+        return this.searchIssues(userCredentials, domain, jql);
     },
 
-    /**
-     * Realiza una búsqueda JQL genérica en Jira.
-     */
-    async searchIssues(config, jql, expand = null) {
-        const auth = Buffer.from(`${config.jira_user_email}:${decrypt(config.encrypted_token)}`).toString('base64');
-        const domain = config.jira_domain.replace(/\/$/, '');
-        const url = `${domain}/rest/api/3/search/jql`;
+    async searchIssues(userCredentials, domain, jql, expand = null) {
+        const auth = Buffer.from(`${userCredentials.jira_user_email}:${decrypt(userCredentials.encrypted_token)}`).toString('base64');
+        const baseUrl = domain.replace(/\/$/, '');
+        const url = `${baseUrl}/rest/api/3/search/jql`;
 
         const body = {
             jql: jql,
@@ -268,7 +252,7 @@ ${bug.actual_result || '—'}
             fieldsByKeys: false
         };
 
-        if (expand) body.expand = expand; // En /search/jql expand es un string delimitado por comas
+        if (expand) body.expand = expand;
 
         const res = await fetch(url, {
             method: 'POST',
@@ -289,13 +273,10 @@ ${bug.actual_result || '—'}
         return data.issues || [];
     },
 
-    /**
-     * Obtiene los comentarios de un ticket específico.
-     */
-    async getIssueComments(config, issueKey) {
-        const auth = Buffer.from(`${config.jira_user_email}:${decrypt(config.encrypted_token)}`).toString('base64');
-        const domain = config.jira_domain.replace(/\/$/, '');
-        const url = `${domain}/rest/api/3/issue/${issueKey}/comment`;
+    async getIssueComments(userCredentials, domain, issueKey) {
+        const auth = Buffer.from(`${userCredentials.jira_user_email}:${decrypt(userCredentials.encrypted_token)}`).toString('base64');
+        const baseUrl = domain.replace(/\/$/, '');
+        const url = `${baseUrl}/rest/api/3/issue/${issueKey}/comment`;
 
         const res = await fetch(url, {
             headers: { 'Authorization': `Basic ${auth}`, 'Accept': 'application/json' }
@@ -306,26 +287,21 @@ ${bug.actual_result || '—'}
         return data.comments || [];
     },
 
-    /**
-     * Añade un comentario a un ticket. Soporta menciones.
-     */
-    async addIssueComment(config, issueKey, text, mentionId = null) {
-        const auth = Buffer.from(`${config.jira_user_email}:${decrypt(config.encrypted_token)}`).toString('base64');
-        const domain = config.jira_domain.replace(/\/$/, '');
-        const url = `${domain}/rest/api/3/issue/${issueKey}/comment`;
+    async addIssueComment(userCredentials, domain, issueKey, text, mentionId = null) {
+        const auth = Buffer.from(`${userCredentials.jira_user_email}:${decrypt(userCredentials.encrypted_token)}`).toString('base64');
+        const baseUrl = domain.replace(/\/$/, '');
+        const url = `${baseUrl}/rest/api/3/issue/${issueKey}/comment`;
 
-        // Construir contenido ADF
         const content = [];
         let cleanText = text;
 
         if (mentionId) {
-            // Si hay mención, extraemos el prefijo @[Nombre] si existe
             cleanText = text.replace(/^@\[.*?\]\s*/, '');
             content.push({
                 type: "mention",
                 attrs: { id: mentionId }
             });
-            content.push({ type: "text", text: " " }); // Espacio tras mención
+            content.push({ type: "text", text: " " });
         }
 
         content.push({
@@ -360,6 +336,24 @@ ${bug.actual_result || '—'}
         }
 
         return await res.json();
+    },
+
+    async testConnection(userCredentials, domain) {
+        const auth = Buffer.from(`${userCredentials.jira_user_email}:${decrypt(userCredentials.encrypted_token)}`).toString('base64');
+        const baseUrl = domain.replace(/\/$/, '');
+        const url = `${baseUrl}/rest/api/3/myself`;
+
+        const res = await fetch(url, {
+            headers: { 'Authorization': `Basic ${auth}`, 'Accept': 'application/json' }
+        });
+
+        if (!res.ok) {
+            const errorText = await res.text();
+            throw new Error(`Token inválido o credenciales incorrectas: ${errorText}`);
+        }
+
+        const data = await res.json();
+        return { ok: true, user: { accountId: data.accountId, displayName: data.displayName, email: data.email } };
     }
 };
 

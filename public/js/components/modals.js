@@ -31,6 +31,7 @@ export const Modals = {
             case 'new-bug': content = this.getNewBugContent(options); width = '500px'; break;
             case 'view-bugs': content = this.getViewBugsContent(options); width = '900px'; break;
             case 'jira-config': content = this.getJiraConfigContent(options); width = '500px'; break;
+            case 'jira-user-config': content = this.getJiraUserConfigContent(options); width = '500px'; break;
             case 'gemini': content = this.getGeminiContent(); width = '600px'; break;
             case 'user-admin': content = this.getNewUserContent(options); width = '600px'; break;
             case 'bug-details-pro': content = this.getBugDetailsProContent(options); width = '800px'; break;
@@ -72,7 +73,9 @@ export const Modals = {
         } else if (type === 'view-bugs') {
             this.bindViewBugsEvents(dialog, options);
         } else if (type === 'jira-config') {
-            this.bindJiraConfigEvents(dialog, options);
+            this.bindJiraConfigEvents(dialog.querySelector('.modal-content'), options);
+        } else if (type === 'jira-user-config') {
+            this.bindJiraUserConfigEvents(dialog.querySelector('.modal-content'), options);
         } else if (type === 'user-admin') {
             this.bindUserAdminEvents(dialog, options);
         } else if (type === 'edit-suite') {
@@ -498,7 +501,14 @@ getStartRunWizardContent({ suite, suites, cuTitle }) {
         (async () => {
             try {
                 const ctx = await ApiService.getJiraContext(Store.state.activeProjectId);
-                if (ctx && ctx.epics) {
+                if (ctx?.error) {
+                    if (ctx.error.includes('token')) {
+                        UI.toast('🔑 Configura tu token de Jira para ver las épicas', 'warn');
+                        epicSelect.innerHTML = '<option value="">— Configura tu token —</option>';
+                    } else {
+                        epicSelect.innerHTML = '<option value="">' + ctx.error + '</option>';
+                    }
+                } else if (ctx && ctx.epics) {
                     epicSelect.innerHTML = '<option value="">— Sin Épica —</option>' + 
                         ctx.epics.map(e => `<option value="${e.key}" ${e.key === suite.jira_epic_key ? 'selected' : ''}>${e.key} - ${e.name}</option>`).join('');
                 }
@@ -676,7 +686,13 @@ getStartRunWizardContent({ suite, suites, cuTitle }) {
             (async () => {
                 try {
                     const ctx = await ApiService.getJiraContext(Store.state.activeProjectId);
-                    if (ctx && ctx.epics) {
+                    if (ctx?.error) {
+                        if (ctx.error.includes('token')) {
+                            epicSelect.innerHTML = '<option value="">— Configura tu token —</option>';
+                        } else {
+                            epicSelect.innerHTML = '<option value="">' + ctx.error + '</option>';
+                        }
+                    } else if (ctx && ctx.epics) {
                         epicSelect.innerHTML = '<option value="">— Sin Épica —</option>' + 
                             ctx.epics.map(e => `<option value="${e.key}">${e.key} - ${e.name}</option>`).join('');
                     } else {
@@ -864,12 +880,12 @@ getStartRunWizardContent({ suite, suites, cuTitle }) {
     },
 
     getJiraConfigContent(options) {
-        const { config } = options;
+        const { config, userHasToken } = options;
         return `
             <div style="text-align: center; margin-bottom: 24px;">
                 <div style="font-size: 2.5rem; margin-bottom: 12px;">🏢</div>
                 <h2 style="font-size: 1.5rem; font-weight: 800; color: var(--text-main);">Configuración de Jira</h2>
-                <p style="color: var(--text-muted); font-size: 0.9rem;">Configura la conexión para el proyecto actual.</p>
+                <p style="color: var(--text-muted); font-size: 0.9rem;">Dominio y proyecto — la configuración de tokens es por usuario.</p>
             </div>
             <div style="display: flex; flex-direction: column; gap: 20px;">
                 <div class="field-group">
@@ -880,41 +896,47 @@ getStartRunWizardContent({ suite, suites, cuTitle }) {
                     <label class="field-label">Key del Proyecto Jira</label>
                     <input type="text" id="jira-project-key" placeholder="Ej: PROJ" value="${UI.escapeHTML(config?.jira_project_key || '')}">
                 </div>
-                <div class="field-group">
-                    <label class="field-label">Email de Usuario Jira</label>
-                    <input type="email" id="jira-user-email" placeholder="usuario@empresa.com" value="${UI.escapeHTML(config?.jira_user_email || '')}" style="width: 100%; padding: 12px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 12px; color: var(--text-main);">
-                </div>
-                <div class="field-group">
-                    <label class="field-label">Jira API Token</label>
-                    <input type="password" id="jira-api-token" placeholder="${config?.has_token ? '••••••••••••••••' : 'Ingresa el token de Jira'}" style="width: 100%; padding: 12px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 12px; color: var(--text-main);">
-                    <p style="font-size: 0.65rem; color: var(--text-muted); margin-top: 4px;">Este token se almacenará cifrado y nunca será expuesto al frontend.</p>
+                <div style="background: rgba(99,102,241,0.08); border: 1px solid rgba(99,102,241,0.3); border-radius: 12px; padding: 14px;">
+                    <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 8px;">
+                        🔐 Cada usuario debe configurar su propio token de Jira en su perfil.
+                        ${userHasToken ? '<span style="color: var(--ok); font-weight: 600;"> Token configurado ✓</span>' : '<span style="color: var(--error); font-weight: 600;"> Sin token</span>'}
+                    </div>
+                    <button class="btn btn-ghost" id="btn-config-user-jira" style="font-size: 0.75rem; padding: 8px 12px; width: 100%;">
+                        ${userHasToken ? '🔄 Cambiar mi Token' : '➕ Configurar mi Token'}
+                    </button>
                 </div>
                 <div style="display: flex; gap: 12px; margin-top: 12px;">
                     <button class="btn btn-ghost" id="cancel-jira" style="flex: 1; padding: 14px;">Cancelar</button>
-                    <button class="btn btn-primary" id="save-jira" style="flex: 2; padding: 14px;">Guardar Configuración</button>
+                    <button class="btn btn-primary" id="save-jira" style="flex: 2; padding: 14px;">Guardar Proyecto</button>
                 </div>
             </div>
         `;
     },
 
-    bindJiraConfigEvents(overlay, options) {
+    bindJiraConfigEvents(content, options) {
+        const dialog = content.closest('dialog');
         const close = () => {
-            overlay.close();
-            overlay.remove();
+            dialog?.close();
+            dialog?.remove();
         };
 
-        overlay.querySelector('#cancel-jira').addEventListener('click', close);
+        content.querySelector('#cancel-jira').addEventListener('click', close);
 
-        overlay.querySelector('#save-jira').addEventListener('click', async () => {
+        content.querySelector('#btn-config-user-jira')?.addEventListener('click', async () => {
+            close();
+            const { config } = options;
+            const { hasConfig, email } = await ApiService.getJiraUserConfig(Store.state.activeProjectId);
+            Modals.render('jira-user-config', { config, hasConfig, savedEmail: email });
+        });
+
+        content.querySelector('#save-jira').addEventListener('click', async () => {
             const data = {
-                jira_domain: overlay.querySelector('#jira-domain').value.trim(),
-                jira_project_key: overlay.querySelector('#jira-project-key').value.trim(),
-                jira_user_email: overlay.querySelector('#jira-user-email').value.trim(),
-                jira_api_token: overlay.querySelector('#jira-api-token').value.trim() || undefined
+                jira_domain: content.querySelector('#jira-domain').value.trim(),
+                jira_project_key: content.querySelector('#jira-project-key').value.trim()
             };
 
-            if (!data.jira_domain || !data.jira_project_key || !data.jira_user_email) {
-                UI.toast('Todos los campos excepto el token son obligatorios', 'error');
+            if (!data.jira_domain || !data.jira_project_key) {
+                UI.toast('Dominio y Key del proyecto son obligatorios', 'error');
                 return;
             }
 
@@ -925,6 +947,95 @@ getStartRunWizardContent({ suite, suites, cuTitle }) {
                     UI.toast('✅ Configuración de Jira guardada');
                     close();
                 }
+            } catch (err) {
+                UI.toast(err.message, 'error');
+            }
+            UI.hideLoading();
+        });
+    },
+
+    getJiraUserConfigContent(options) {
+        const { hasConfig, savedEmail } = options;
+        return `
+            <div style="text-align: center; margin-bottom: 24px;">
+                <div style="font-size: 2.5rem; margin-bottom: 12px;">🔑</div>
+                <h2 style="font-size: 1.5rem; font-weight: 800; color: var(--text-main);">Tu Token de Jira</h2>
+                <p style="color: var(--text-muted); font-size: 0.9rem;">Configura tu email y token para conectar con Jira.</p>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 20px;">
+                <div class="field-group">
+                    <label class="field-label">Email de Usuario Jira</label>
+                    <input type="email" id="jira-user-email" placeholder="tu-email@empresa.com" value="${UI.escapeHTML(savedEmail || '')}" style="width: 100%; padding: 12px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 12px; color: var(--text-main);">
+                </div>
+                <div class="field-group">
+                    <label class="field-label">Jira API Token</label>
+                    <input type="password" id="jira-api-token" placeholder="Ingresa tu API Token de Jira" style="width: 100%; padding: 12px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 12px; color: var(--text-main);">
+                    <p style="font-size: 0.65rem; color: var(--text-muted); margin-top: 4px;">
+                        Genera tu token en: <a href="https://id.atlassian.com/manage-profile/security/api-tokens" target="_blank" style="color: var(--brand);">Atlassian Account → API Tokens</a>
+                    </p>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    <button class="btn btn-ghost" id="btn-test-jira" style="flex: 1; padding: 12px; font-size: 0.8rem;">🧪 Probar Conexión</button>
+                </div>
+                <div style="display: flex; gap: 12px;">
+                    <button class="btn btn-ghost" id="cancel-jira-user" style="flex: 1; padding: 14px;">Cancelar</button>
+                    <button class="btn btn-primary" id="save-jira-user" style="flex: 2; padding: 14px;">Guardar</button>
+                </div>
+            </div>
+        `;
+    },
+
+    bindJiraUserConfigEvents(content, options) {
+        const dialog = content.closest('dialog');
+        const close = () => {
+            dialog?.close();
+            dialog?.remove();
+        };
+
+        content.querySelector('#cancel-jira-user').addEventListener('click', close);
+
+        content.querySelector('#btn-test-jira')?.addEventListener('click', async () => {
+            const email = content.querySelector('#jira-user-email').value.trim();
+            const token = content.querySelector('#jira-api-token').value.trim();
+            if (!email || !token) {
+                UI.toast('Completa email y token para probar', 'warn');
+                return;
+            }
+            UI.showLoading();
+            try {
+                await ApiService.saveJiraUserConfig(Store.state.activeProjectId, { jira_user_email: email, jira_api_token: token });
+                const { config } = options;
+                await fetch(`${window.location.origin}/api/jira/projects/${Store.state.activeProjectId}/context?force_test=1`, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                }).then(async res => {
+                    if (!res.ok) {
+                        const err = await res.json();
+                        throw new Error(err.error || 'Token inválido');
+                    }
+                    UI.toast('✅ Conexión exitosa con Jira');
+                });
+            } catch (err) {
+                UI.toast(`❌ ${err.message}`, 'error');
+            }
+            UI.hideLoading();
+        });
+
+        content.querySelector('#save-jira-user').addEventListener('click', async () => {
+            const data = {
+                jira_user_email: content.querySelector('#jira-user-email').value.trim(),
+                jira_api_token: content.querySelector('#jira-api-token').value.trim()
+            };
+
+            if (!data.jira_user_email || !data.jira_api_token) {
+                UI.toast('Email y token son obligatorios', 'error');
+                return;
+            }
+
+            UI.showLoading();
+            try {
+                await ApiService.saveJiraUserConfig(Store.state.activeProjectId, data);
+                UI.toast('✅ Token guardado correctamente');
+                close();
             } catch (err) {
                 UI.toast(err.message, 'error');
             }

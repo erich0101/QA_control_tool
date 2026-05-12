@@ -90,8 +90,8 @@ export const TopBar = {
         container.querySelector('#btn-jira-config')?.addEventListener('click', async () => {
             UI.showLoading();
             try {
-                const { config } = await ApiService.getJiraConfig(Store.state.activeProjectId);
-                Modals.render('jira-config', { config });
+                const { config, userHasToken } = await ApiService.getJiraConfig(Store.state.activeProjectId);
+                Modals.render('jira-config', { config: config || {}, userHasToken: !!userHasToken });
             } catch (err) {
                 UI.toast("Error al obtener configuración de Jira", "error");
             }

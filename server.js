@@ -351,20 +351,26 @@ app.delete('/api/projects/:id', requireAuth, requireAdmin, async (req, res) => {
 });
 
 // ── JIRA CONFIG ──
+// ── JIRA CONFIG (Admin: domain + key) ──
+
 app.get('/api/projects/:id/jira-config', requireAuth, async (req, res) => {
     try {
-        const result = await query(`SELECT jira_domain, jira_project_key, jira_user_email, encrypted_token FROM qa_jira_configs WHERE project_id = ?`, [req.params.id]);
+        const projectId = req.params.id;
+        const result = await query(`SELECT jira_domain, jira_project_key FROM qa_jira_configs WHERE project_id = ?`, [projectId]);
         if (result.rows.length === 0) {
-            return res.json({ config: null });
+            return res.json({ config: null, userHasToken: false });
         }
         const row = result.rows[0];
-        res.json({ 
+
+        const userConfig = await query(`SELECT id FROM qa_jira_user_configs WHERE project_id = ? AND user_id = ?`, [projectId, req.user.id]);
+        const userHasToken = userConfig.rows.length > 0;
+
+        res.json({
             config: {
                 jira_domain: row.jira_domain,
-                jira_project_key: row.jira_project_key,
-                jira_user_email: row.jira_user_email,
-                has_token: !!row.encrypted_token
-            }
+                jira_project_key: row.jira_project_key
+            },
+            userHasToken
         });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -373,35 +379,26 @@ app.get('/api/projects/:id/jira-config', requireAuth, async (req, res) => {
 
 app.post('/api/projects/:id/jira-config', requireAuth, requireAdmin, async (req, res) => {
     try {
-        const { jira_domain, jira_project_key, jira_user_email, jira_api_token } = req.body;
+        const { jira_domain, jira_project_key } = req.body;
         const projectId = req.params.id;
 
-        if (!jira_domain || !jira_project_key || !jira_user_email) {
-            return res.status(400).json({ error: 'Faltan campos requeridos' });
+        if (!jira_domain || !jira_project_key) {
+            return res.status(400).json({ error: 'Faltan campos requeridos: jira_domain y jira_project_key' });
         }
 
-        // Si se envía un nuevo token, se cifra. Si no, se mantiene el anterior si existe.
-        let encToken = null;
-        if (jira_api_token) {
-            encToken = encrypt(jira_api_token);
-        }
-
-        const existing = await query(`SELECT project_id, encrypted_token FROM qa_jira_configs WHERE project_id = ?`, [projectId]);
+        const existing = await query(`SELECT project_id FROM qa_jira_configs WHERE project_id = ?`, [projectId]);
         
         if (existing.rows.length > 0) {
-            const finalToken = encToken || existing.rows[0].encrypted_token;
             await query(`
                 UPDATE qa_jira_configs 
-                SET jira_domain = ?, jira_project_key = ?, jira_user_email = ?, encrypted_token = ?, updated_at = CURRENT_TIMESTAMP
+                SET jira_domain = ?, jira_project_key = ?, updated_at = CURRENT_TIMESTAMP
                 WHERE project_id = ?
-            `, [jira_domain, jira_project_key, jira_user_email, finalToken, projectId]);
+            `, [jira_domain, jira_project_key, projectId]);
         } else {
-            if (!encToken) return res.status(400).json({ error: 'Se requiere un token para la primera configuración' });
             await query(`
-                INSERT INTO qa_jira_configs (project_id, jira_domain, jira_project_key, jira_user_email, encrypted_token)
-                VALUES (?, ?, ?, ?, ?)
-                RETURNING project_id
-            `, [projectId, jira_domain, jira_project_key, jira_user_email, encToken]);
+                INSERT INTO qa_jira_configs (project_id, jira_domain, jira_project_key)
+                VALUES (?, ?, ?)
+            `, [projectId, jira_domain, jira_project_key]);
         }
 
         res.json({ ok: true });
@@ -409,18 +406,87 @@ app.post('/api/projects/:id/jira-config', requireAuth, requireAdmin, async (req,
         res.status(500).json({ error: err.message });
     }
 });
+
+// ── JIRA USER CONFIG (Per-user credentials) ──
+
+app.get('/api/projects/:id/jira-user-config', requireAuth, async (req, res) => {
+    try {
+        const projectId = req.params.id;
+        const userId = req.user.id;
+
+        const result = await query(`SELECT jira_user_email FROM qa_jira_user_configs WHERE project_id = ? AND user_id = ?`, [projectId, userId]);
+        if (result.rows.length === 0) {
+            return res.json({ hasConfig: false });
+        }
+        res.json({ hasConfig: true, email: result.rows[0].jira_user_email });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/projects/:id/jira-user-config', requireAuth, async (req, res) => {
+    try {
+        const projectId = req.params.id;
+        const userId = req.user.id;
+        const { jira_user_email, jira_api_token } = req.body;
+
+        if (!jira_user_email || !jira_api_token) {
+            return res.status(400).json({ error: 'Faltan campos requeridos' });
+        }
+
+        const encToken = encrypt(jira_api_token);
+
+        const existing = await query(`SELECT id FROM qa_jira_user_configs WHERE project_id = ? AND user_id = ?`, [projectId, userId]);
+        if (existing.rows.length > 0) {
+            await query(`
+                UPDATE qa_jira_user_configs 
+                SET jira_user_email = ?, encrypted_token = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE project_id = ? AND user_id = ?
+            `, [jira_user_email, encToken, projectId, userId]);
+        } else {
+            await query(`
+                INSERT INTO qa_jira_user_configs (project_id, user_id, jira_user_email, encrypted_token)
+                VALUES (?, ?, ?, ?)
+            `, [projectId, userId, jira_user_email, encToken]);
+        }
+
+        res.json({ ok: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.delete('/api/projects/:id/jira-user-config', requireAuth, async (req, res) => {
+    try {
+        await query(`DELETE FROM qa_jira_user_configs WHERE project_id = ? AND user_id = ?`, [req.params.id, req.user.id]);
+        res.json({ ok: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // ── JIRA INTEGRATION (Bugs & Epics) ──
+
+async function getJiraUserCredentials(projectId, userId) {
+    const [projRes, userRes] = await Promise.all([
+        query(`SELECT jira_domain, jira_project_key FROM qa_jira_configs WHERE project_id = ?`, [projectId]),
+        query(`SELECT jira_user_email, encrypted_token FROM qa_jira_user_configs WHERE project_id = ? AND user_id = ?`, [projectId, userId])
+    ]);
+    if (projRes.rows.length === 0) return { error: 'Jira no configurado para este proyecto', code: 'NO_PROJECT_CONFIG' };
+    if (userRes.rows.length === 0) return { error: 'Configura tu token de Jira en tu perfil', code: 'NO_USER_TOKEN' };
+    return {
+        projectKey: projRes.rows[0].jira_project_key,
+        domain: projRes.rows[0].jira_domain,
+        userCredentials: userRes.rows[0]
+    };
+}
 
 app.get('/api/jira/projects/:id/epics', requireAuth, async (req, res) => {
     try {
-        const projectId = req.params.id;
-        if (!projectId || projectId === 'undefined') {
-            return res.status(400).json({ error: 'ID de proyecto inválido o no proporcionado.' });
-        }
-        const configRes = await query(`SELECT * FROM qa_jira_configs WHERE project_id = ?`, [projectId]);
-        if (configRes.rows.length === 0) return res.status(404).json({ error: 'Configuración de Jira no encontrada para este proyecto.' });
+        const creds = await getJiraUserCredentials(req.params.id, req.user.id);
+        if (creds.error) return res.status(creds.code === 'NO_PROJECT_CONFIG' ? 404 : 403).json({ error: creds.error });
         
-        const epics = await JiraService.getEpics(configRes.rows[0]);
+        const epics = await JiraService.getEpics(creds.userCredentials, creds.projectKey, creds.domain);
         res.json({ epics });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -429,17 +495,13 @@ app.get('/api/jira/projects/:id/epics', requireAuth, async (req, res) => {
 
 app.get('/api/jira/projects/:id/context', requireAuth, async (req, res) => {
     try {
-        const projectId = req.params.id;
-        const configRes = await query(`SELECT * FROM qa_jira_configs WHERE project_id = ?`, [projectId]);
-        if (configRes.rows.length === 0) {
-            return res.json({ epics: [], users: [], priorities: [], message: 'Jira no configurado' });
-        }
+        const creds = await getJiraUserCredentials(req.params.id, req.user.id);
+        if (creds.error) return res.status(creds.code === 'NO_PROJECT_CONFIG' ? 404 : 403).json({ error: creds.error, epics: [], users: [], priorities: [] });
         
-        const config = configRes.rows[0];
         const [epics, users, priorities] = await Promise.all([
-            JiraService.getEpics(config),
-            JiraService.getAssignableUsers(config),
-            JiraService.getPriorities(config)
+            JiraService.getEpics(creds.userCredentials, creds.projectKey, creds.domain),
+            JiraService.getAssignableUsers(creds.userCredentials, creds.projectKey, creds.domain),
+            JiraService.getPriorities(creds.userCredentials, creds.domain)
         ]);
 
         res.json({ epics, users, priorities });
@@ -451,11 +513,9 @@ app.get('/api/jira/projects/:id/context', requireAuth, async (req, res) => {
 app.get('/api/jira/projects/:id/tracking', requireAuth, async (req, res) => {
     try {
         const projectId = req.params.id;
-        const configRes = await query(`SELECT * FROM qa_jira_configs WHERE project_id = ?`, [projectId]);
-        if (configRes.rows.length === 0) return res.status(404).json({ error: 'Configuración de Jira no encontrada.' });
-        const config = configRes.rows[0];
+        const creds = await getJiraUserCredentials(projectId, req.user.id);
+        if (creds.error) return res.status(creds.code === 'NO_PROJECT_CONFIG' ? 404 : 403).json({ error: creds.error });
 
-        // 1. Obtener bugs vinculados de nuestra DB
         const dbBugs = await query(`
             SELECT d.id, d.title, d.jira_key, d.jira_url, d.created_at
             FROM qa_defects d
@@ -468,11 +528,9 @@ app.get('/api/jira/projects/:id/tracking', requireAuth, async (req, res) => {
 
         if (dbBugs.rows.length === 0) return res.json({ tracking: [] });
 
-        // 2. Sincronizar con Jira en lote
         const keys = dbBugs.rows.map(b => b.jira_key);
-        const jiraIssues = await JiraService.getTicketsDetails(config, keys);
+        const jiraIssues = await JiraService.getTicketsDetails(creds.userCredentials, creds.domain, keys);
 
-        // 3. Cruzar datos
         const tracking = dbBugs.rows.map(bug => {
             const jira = jiraIssues.find(j => j.key === bug.jira_key);
             return {
@@ -495,10 +553,12 @@ app.get('/api/jira/projects/:id/tracking', requireAuth, async (req, res) => {
 app.get('/api/jira/issues/:key/comments', requireAuth, async (req, res) => {
     try {
         const { project_id } = req.query;
-        const configRes = await query(`SELECT * FROM qa_jira_configs WHERE project_id = ?`, [project_id]);
-        if (configRes.rows.length === 0) return res.status(404).json({ error: 'Configuración de Jira no encontrada.' });
+        if (!project_id) return res.status(400).json({ error: 'project_id requerido' });
         
-        const comments = await JiraService.getIssueComments(configRes.rows[0], req.params.key);
+        const creds = await getJiraUserCredentials(project_id, req.user.id);
+        if (creds.error) return res.status(creds.code === 'NO_PROJECT_CONFIG' ? 404 : 403).json({ error: creds.error });
+        
+        const comments = await JiraService.getIssueComments(creds.userCredentials, creds.domain, req.params.key);
         res.json({ comments });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -510,10 +570,10 @@ app.post('/api/jira/issues/:key/comments', requireAuth, async (req, res) => {
         const { project_id, text, mentionId } = req.body;
         if (!text) return res.status(400).json({ error: 'El texto del comentario es requerido.' });
 
-        const configRes = await query(`SELECT * FROM qa_jira_configs WHERE project_id = ?`, [project_id]);
-        if (configRes.rows.length === 0) return res.status(404).json({ error: 'Configuración de Jira no encontrada.' });
+        const creds = await getJiraUserCredentials(project_id, req.user.id);
+        if (creds.error) return res.status(creds.code === 'NO_PROJECT_CONFIG' ? 404 : 403).json({ error: creds.error });
         
-        const result = await JiraService.addIssueComment(configRes.rows[0], req.params.key, text, mentionId);
+        const result = await JiraService.addIssueComment(creds.userCredentials, creds.domain, req.params.key, text, mentionId);
         res.json({ ok: true, comment: result });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -542,12 +602,12 @@ app.post('/api/jira/defects/:id/create-ticket', requireAuth, async (req, res) =>
         const ucRes = await query(`SELECT project_id FROM qa_use_cases WHERE id = ?`, [bug.use_case_id]);
         const projectId = ucRes.rows[0].project_id;
 
-        // 3. Obtener config de Jira
-        const configRes = await query(`SELECT * FROM qa_jira_configs WHERE project_id = ?`, [projectId]);
-        if (configRes.rows.length === 0) return res.status(404).json({ error: 'Configuración de Jira no encontrada.' });
+        // 3. Obtener credenciales del usuario
+        const creds = await getJiraUserCredentials(projectId, req.user.id);
+        if (creds.error) return res.status(creds.code === 'NO_PROJECT_CONFIG' ? 404 : 403).json({ error: creds.error });
 
         // 4. Crear Ticket
-        const jiraResult = await JiraService.createIssue(configRes.rows[0], bug, epicId, assigneeId, priorityId);
+        const jiraResult = await JiraService.createIssue(creds.userCredentials, creds.projectKey, creds.domain, bug, epicId, assigneeId, priorityId);
         
         // Generar URL del ticket
         const jiraUrl = `${jiraResult.self.split('/rest/')[0]}/browse/${jiraResult.key}`;
@@ -1754,19 +1814,13 @@ app.get('/api/stats/jira-daily', requireAuth, async (req, res) => {
         const { project_id } = req.query;
         if (!project_id) return res.status(400).json({ error: 'project_id requerido' });
 
-        const configRes = await query(`SELECT * FROM qa_jira_configs WHERE project_id = ?`, [project_id]);
-        if (configRes.rows.length === 0) {
-            return res.json({ issues: [], assigneeCounts: {}, closedToday: 0, openCount: 0, avgResolutionDays: 0, error: 'Jira no configurado' });
-        }
-        const config = configRes.rows[0];
-
-        if (!config.jira_project_key) {
-            return res.json({ error: 'Debe configurar un proyecto de Jira asociado.' });
+        const creds = await getJiraUserCredentials(project_id, req.user.id);
+        if (creds.error) {
+            return res.json({ issues: [], assigneeCounts: {}, closedToday: 0, openCount: 0, avgResolutionDays: 0, error: creds.error });
         }
 
-        // Consultar directamente a Jira por todos los bugs del proyecto con historial
-        const jql = `project = "${config.jira_project_key}" AND issuetype = Bug AND (updated >= "-2d" OR statusCategory != Done)`;
-        const jiraIssues = await JiraService.searchIssues(config, jql, 'changelog');
+        const jql = `project = "${creds.projectKey}" AND issuetype = Bug AND (updated >= "-2d" OR statusCategory != Done)`;
+        const jiraIssues = await JiraService.searchIssues(creds.userCredentials, creds.domain, jql, 'changelog');
 
         let totalResolutionTime = 0;
         let resolvedCount = 0;
@@ -1854,8 +1908,8 @@ app.get('/api/stats/jira-daily', requireAuth, async (req, res) => {
         const avgResolutionDays = resolvedCount > 0 ? (totalResolutionTime / resolvedCount / (1000 * 60 * 60 * 24)).toFixed(1) : 0;
 
         res.json({
-            projectName: config.jira_project_key,
-            jiraUrl: config.jira_domain,
+            projectName: creds.projectKey,
+            jiraUrl: creds.domain,
             avgResolutionDays,
             openCount,
             resolvedCount,
@@ -1879,14 +1933,12 @@ app.get('/api/stats/jira-daily', requireAuth, async (req, res) => {
 app.get('/api/stats/jira-productivity', requireAuth, async (req, res) => {
     const { project_id } = req.query;
     try {
-        const configRes = await query('SELECT * FROM qa_jira_configs WHERE project_id = ?', [project_id]);
-        if (configRes.rows.length === 0) return res.json({ error: 'Jira no configurado' });
+        const creds = await getJiraUserCredentials(project_id, req.user.id);
+        if (creds.error) return res.json({ error: creds.error });
 
-        const config = configRes.rows[0];
-        // JQL: Tickets resueltos en 30d O tickets que están abiertos actualmente
-        const jql = `project = "${config.jira_project_key}" AND issuetype = Bug AND (statusCategory != done OR resolved >= -30d)`;
+        const jql = `project = "${creds.projectKey}" AND issuetype = Bug AND (statusCategory != done OR resolved >= -30d)`;
         
-        const jiraIssues = await JiraService.searchIssues(config, jql);
+        const jiraIssues = await JiraService.searchIssues(creds.userCredentials, creds.domain, jql);
         const teamStats = {}; 
 
         jiraIssues.forEach(issue => {

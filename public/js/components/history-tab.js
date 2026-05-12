@@ -290,44 +290,29 @@ export const HistoryTab = {
             container.style.display = 'block';
             
             // 1. Cargar Contexto Completo
-            const { epics, users, priorities } = await ApiService.getJiraContext(projectId);
+            const { epics, users, priorities, error } = await ApiService.getJiraContext(projectId);
             
-            // Poblar Épicas
-            if (epics && epics.length > 0) {
-                epicSelect.innerHTML = '<option value="">— Sin Épica (General) —</option>' + 
-                    epics.map(e => `<option value="${e.id}">${UI.escapeHTML(e.key)} | ${UI.escapeHTML(e.summary)}</option>`).join('');
+            if (error) {
+                UI.toast(error, 'warn');
+                epicSelect.innerHTML = '<option value="">— ' + (error.includes('token') ? 'Configura tu token' : error) + ' —</option>';
+                assigneeSelect.innerHTML = '<option value="">— Sin asignar —</option>';
+                prioritySelect.innerHTML = '<option value="">Media</option>';
             } else {
-                epicSelect.innerHTML = '<option value="">— Sin Épicas disponibles —</option>';
-            }
-
-            // Poblar Usuarios
-            assigneeSelect.innerHTML = '<option value="">— Sin asignar —</option>' + 
-                (users || []).map(u => `<option value="${u.accountId}">${UI.escapeHTML(u.displayName)}</option>`).join('');
-
-            // Poblar Prioridades
-            prioritySelect.innerHTML = (priorities || []).map(p => 
-                `<option value="${p.id}" ${p.name === 'Medium' ? 'selected' : ''}>${UI.escapeHTML(p.name)}</option>`
-            ).join('');
-
-            // 2. Evento de creación
-            btnCreate.onclick = async () => {
-                const jira_domain = document.getElementById('jira-domain')?.value;
-                const jira_project_key = document.getElementById('jira-project-key')?.value?.toUpperCase();
-                const jira_user_email = document.getElementById('jira-user-email')?.value;
-                const jira_token = document.getElementById('jira-token')?.value;
-
-                if (!jira_domain || !jira_project_key || !jira_user_email) {
-                    UI.toast('Dominio, Proyecto y Email son obligatorios', 'error');
-                    return;
+                if (epics && epics.length > 0) {
+                    epicSelect.innerHTML = '<option value="">— Sin Épica (General) —</option>' + 
+                        epics.map(e => `<option value="${e.id}">${UI.escapeHTML(e.key)} | ${UI.escapeHTML(e.summary)}</option>`).join('');
+                } else {
+                    epicSelect.innerHTML = '<option value="">— Sin Épicas disponibles —</option>';
                 }
 
-                await ApiService.saveJiraConfig(Store.state.activeProjectId, {
-                    jira_domain,
-                    jira_project_key,
-                    jira_user_email,
-                    jira_token: jira_token || undefined
-                });
+                assigneeSelect.innerHTML = '<option value="">— Sin asignar —</option>' + 
+                    (users || []).map(u => `<option value="${u.accountId}">${UI.escapeHTML(u.displayName)}</option>`).join('');
 
+                prioritySelect.innerHTML = (priorities || []).map(p => 
+                    `<option value="${p.id}" ${p.name === 'Medium' ? 'selected' : ''}>${UI.escapeHTML(p.name)}</option>`
+                ).join('');
+            }
+            btnCreate.onclick = async () => {
                 const epicId = epicSelect.value;
                 const assigneeId = assigneeSelect.value;
                 const priorityId = prioritySelect.value;
@@ -352,8 +337,7 @@ export const HistoryTab = {
             };
 
         } catch (err) {
-            console.log('Jira no configurado o error al cargar épicas:', err.message);
-            container.style.display = 'none';
+            console.log('Jira no configurado o error al cargar:', err.message);
         }
     },
 
@@ -430,7 +414,7 @@ export const HistoryTab = {
                 </div>
 
                 <!-- Sección Jira Integration (Persistida o Nueva) -->
-                <div id="jira-integration-container" style="margin-top: 24px; padding: 20px; background: rgba(0, 82, 204, 0.05); border: 1px solid rgba(0, 82, 204, 0.2); border-radius: 16px; display: ${bug.jira_key ? 'none' : 'none'};">
+                <div id="jira-integration-container" style="margin-top: 24px; padding: 20px; background: rgba(0, 82, 204, 0.05); border: 1px solid rgba(0, 82, 204, 0.2); border-radius: 16px; display: ${bug.jira_key ? 'none' : 'block'};">
                     <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 16px;">
                         <img src="https://wac-cdn.atlassian.com/assets/img/favicons/atlassian/favicon.png" style="width: 16px; height: 16px;">
                         <span style="font-size: 0.75rem; font-weight: 800; color: #0052cc; text-transform: uppercase; letter-spacing: 0.05em;">Integración con Jira</span>
@@ -439,7 +423,7 @@ export const HistoryTab = {
                     <div class="field-group" style="margin-bottom: 16px;">
                         <label class="field-label" style="font-size: 0.65rem;">SELECCIONAR ÉPICA DESTINO</label>
                         <select id="jira-epic-select" style="width: 100%; font-size: 0.8rem; padding: 10px; border-radius: 8px; background: var(--bg-surface); border: 1px solid var(--border); color: var(--text-main);">
-                            <option value="">Cargando épicas...</option>
+                            <option value="">Cargando...</option>
                         </select>
                     </div>
 
@@ -455,10 +439,6 @@ export const HistoryTab = {
                             <select id="jira-priority-select" style="width: 100%; font-size: 0.8rem; padding: 10px; border-radius: 8px; background: var(--bg-surface); border: 1px solid var(--border); color: var(--text-main);">
                                 <option value="">Cargando...</option>
                             </select>
-                        </div>
-                        <div class="field-group" style="grid-column: span 2;">
-                            <label class="field-label" style="font-size: 0.65rem;">PROYECTO JIRA (KEY)</label>
-                            <input type="text" id="jira-project-key" placeholder="Ej: PROY" style="width: 100%; font-size: 0.8rem; padding: 10px; border-radius: 8px; background: var(--bg-surface); border: 1px solid var(--border); color: var(--text-main);">
                         </div>
                     </div>
 
