@@ -34,7 +34,9 @@ const SEVERITY_ICONS = {
 
 export const UserStories = {
     expandedId: null,
-    openSections: new Set(['hu_detallada', 'recomendaciones', 'escenarios_prueba']),
+    activeTab: 'analisis',
+    searchQuery: '',
+    _isListening: false,
 
     render(container) {
         const { useCases, selectedUseCaseId, userStories, activeProjectId, loadedForUC } = Store.state;
@@ -75,34 +77,36 @@ export const UserStories = {
                 <!-- Barra Lateral (Maestro) -->
                 <div class="us-sidebar">
                     <div class="us-sidebar-header">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                            <span style="font-size: 0.85rem; font-weight: 800; color: var(--text-main); text-transform: uppercase; letter-spacing: 0.05em;">Historias de Usuario</span>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                            <span style="font-size: 0.75rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em;">Historias de Usuario</span>
                             <div style="display: flex; gap: 6px;">
                                 <span class="tab-badge" title="Total de HUs">${userStories.length} HU</span>
                                 <span class="tab-badge" style="background: var(--brand); color: white;" title="Total de Escenarios">${totalScenarios} E</span>
                             </div>
                         </div>
-                        
-                        <div style="display: flex; flex-direction: column; gap: 10px;">
-                            <select id="cu-select" style="width: 100%; height: 36px; font-size: 0.8rem;">
+
+                        <div style="display: flex; flex-direction: column; gap: 8px;">
+                            <select id="cu-select" class="w-full" style="height: 36px; font-size: 0.8rem;">
                                 <option value="">— Filtrar por Caso de Uso —</option>
                                 ${useCases.map(cu => `
                                     <option value="${cu.id}" ${cu.id === selectedUseCaseId ? 'selected' : ''}>${UI.escapeHTML(cu.key_id || 'CU')} - ${UI.escapeHTML(cu.title)}</option>
                                 `).join('')}
                             </select>
-                            
-                            <div class="search-input-wrapper">
-                                <input type="text" id="us-search" placeholder="🔍 Buscar ID o título..." style="width: 100%; height: 36px; font-size: 0.8rem; background: var(--bg-main);">
-                            </div>
-                        </div>
 
-                        <div style="display: flex; gap: 8px; margin-top: 12px;">
-                            ${isAdmin ? `
-                                <button class="btn btn-ghost btn-sm" id="btn-new-cu" style="flex: 1; height: 34px; font-weight: 700; border: 1px dashed var(--border);">+ Nuevo CU</button>
-                            ` : ''}
-                            ${canCreateHU && selectedUseCaseId ? `
-                                <button class="btn btn-primary btn-sm" id="btn-new-us" style="flex: 2; height: 34px; font-weight: 700;">+ Nueva Historia</button>
-                            ` : ''}
+                            <div style="position: relative;">
+                                <input type="text" id="us-search" placeholder="Buscar historia..." value="${UI.escapeHTML(this.searchQuery)}"
+                                    style="width: 100%; padding: 6px 10px 6px 30px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-surface); color: var(--text-main); font-size: 0.78rem; outline: none; box-sizing: border-box;" />
+                                <span style="position: absolute; left: 8px; top: 50%; transform: translateY(-50%); font-size: 0.8rem; opacity: 0.4;">🔍</span>
+                            </div>
+
+                            <div style="display: flex; gap: 6px;">
+                                ${isAdmin ? `
+                                    <button class="btn btn-ghost btn-sm" id="btn-new-cu" style="height: 32px; font-weight: 700; flex: 1;">+ Nuevo CU</button>
+                                ` : ''}
+                                ${canCreateHU && selectedUseCaseId ? `
+                                    <button class="btn btn-primary btn-sm" id="btn-new-us" style="height: 32px; font-weight: 700; flex: 1;">+ Nueva HU</button>
+                                ` : ''}
+                            </div>
                         </div>
                     </div>
 
@@ -140,220 +144,214 @@ export const UserStories = {
     },
 
     renderSidebarList(userStories) {
-        if (userStories.length === 0) {
-            return `
-                <div style="padding: 20px; text-align: center; opacity: 0.5;">
-                    <div style="font-size: 2rem; margin-bottom: 8px;">📋</div>
-                    <p style="font-size: 0.8rem;">Sin historias disponibles</p>
-                </div>
-            `;
+        let filtered = userStories;
+        if (this.searchQuery) {
+            const q = this.searchQuery.toLowerCase();
+            filtered = filtered.filter(us =>
+                (us.title || '').toLowerCase().includes(q) ||
+                (us.key_id || '').toLowerCase().includes(q)
+            );
         }
-        return userStories.map(us => this.renderSidebarCard(us)).join('');
+        if (filtered.length === 0) {
+            return `<div style="padding: 20px; text-align: center; opacity: 0.5; font-size: 0.8rem;">Sin historias encontradas</div>`;
+        }
+        return `
+            <table style="width: 100%; border-collapse: collapse; font-size: 0.82rem;">
+                <tbody>
+                    ${filtered.map(us => this.renderSidebarRow(us)).join('')}
+                </tbody>
+            </table>
+        `;
     },
 
-    renderSidebarCard(us) {
+    renderSidebarRow(us) {
         const isActive = this.expandedId === us.id;
         const statusClass = (us.status || 'En Análisis').toLowerCase().replace(/\s+/g, '-').normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-        const priorityClass = (us.priority || 'media').toLowerCase();
+        const priorityColors = { Alta: '#ef4444', Media: '#f59e0b', Baja: '#22c55e' };
+        const priorityColor = priorityColors[us.priority] || '#f59e0b';
 
         return `
-            <div class="us-master-card ${isActive ? 'active' : ''}" data-id="${us.id}">
-                <div class="us-master-card-header">
-                    <span class="us-master-card-id">${UI.escapeHTML(us.key_id)}</span>
-                    <div class="us-master-card-badges">
-                        <span class="status-pill ${statusClass}" style="font-size: 0.6rem; padding: 2px 6px;">${UI.escapeHTML(us.status || 'En Análisis')}</span>
-                        <span class="priority-badge ${priorityClass}" style="font-size: 0.6rem; padding: 2px 6px;">${UI.escapeHTML(us.priority || 'Media')}</span>
+            <tr class="us-suite-row ${isActive ? 'selected' : ''}" data-id="${us.id}"
+                style="border-bottom: 1px solid rgba(255,255,255,0.04); cursor: pointer; transition: background 0.15s;"
+                onmouseover="this.style.background='rgba(99,102,241,0.08)'"
+                onmouseout="this.style.background='${isActive ? 'rgba(99,102,241,0.12)' : 'transparent'}'">
+                <td style="padding: 8px 10px;">
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 2px;">
+                        <span style="font-size: 0.6rem; font-weight: 800; color: var(--brand);">${UI.escapeHTML(us.key_id)}</span>
+                        <span class="status-pill ${statusClass}" style="font-size: 7px; padding: 1px 4px;">${UI.escapeHTML(us.status || 'En Análisis')}</span>
                     </div>
-                </div>
-                <div class="us-master-card-title">${UI.escapeHTML(us.title)}</div>
-            </div>
+                    <div style="font-size: 0.78rem; font-weight: 600; color: var(--text-main); line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${UI.escapeHTML(us.title)}</div>
+                    <div style="font-size: 0.62rem; color: ${priorityColor}; margin-top: 2px;">${UI.escapeHTML(us.priority || 'Media')}</div>
+                </td>
+            </tr>
         `;
     },
 
     renderDetailView(us) {
         if (!us) return this.renderPlaceholder();
-        
+
+        const tabs = [
+            { key: 'analisis', label: 'Análisis' },
+            { key: 'recomendaciones', label: 'Recomendaciones' },
+            { key: 'escenarios', label: 'Escenarios' },
+            { key: 'reglas', label: 'Reglas' },
+            { key: 'precondiciones', label: 'Precondiciones' },
+            { key: 'documentacion', label: 'Documentación' }
+        ];
+
         return `
-            <div class="us-detail-header">
-                <div style="display: flex; align-items: center; gap: 15px;">
-                    <div style="font-size: 1.5rem;">📄</div>
-                    <div>
-                        <div style="display: flex; align-items: center; gap: 10px;">
-                            <h2 style="margin: 0; font-size: 1.1rem; font-weight: 800; color: var(--text-main);">${UI.escapeHTML(us.key_id)}</h2>
-                            <span style="font-size: 0.7rem; color: var(--text-muted); background: rgba(255,255,255,0.05); padding: 2px 8px; border-radius: 4px;">Editando detalles</span>
-                        </div>
-                    </div>
+            <div class="us-detail-header" style="padding: 10px 20px; border-bottom: 1px solid var(--border); background: var(--bg-surface); display: flex; align-items: center; gap: 16px; flex-shrink: 0;">
+                <div style="flex: 1; min-width: 0;">
+                    <h2 style="margin: 0; font-size: 1rem; font-weight: 800; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${UI.escapeHTML(us.key_id)} · ${UI.escapeHTML(us.title)}</h2>
                 </div>
-                <div style="display: flex; gap: 12px;">
-                    <button class="btn btn-ghost btn-sm goto-suites" data-us-id="${us.id}">🧪 Ver Test Suites</button>
-                    <button class="btn btn-ghost btn-sm delete-us" data-id="${us.id}">🗑️ Eliminar</button>
-                    <button class="btn btn-ghost btn-sm cancel-edit">✕ Cancelar</button>
-                    <button class="btn btn-primary btn-sm save-us" data-id="${us.id}">💾 Guardar Cambios</button>
+                <div style="display: flex; gap: 6px; align-items: center; flex-shrink: 0;">
+                    <button class="btn btn-ghost btn-sm goto-suites" data-us-id="${us.id}" style="padding: 4px 8px; font-size: 0.72rem;">🧪 Ver Suites</button>
+                    <button class="btn btn-sm delete-us" data-id="${us.id}" style="padding: 4px 8px; background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.3);">🗑️</button>
+                    <div style="width: 1px; height: 18px; background: var(--border);"></div>
+                    <button class="btn btn-ghost btn-sm cancel-edit" style="padding: 4px 8px; font-size: 0.72rem;">Cancelar</button>
+                    <button class="btn btn-primary btn-sm save-us" data-id="${us.id}" style="padding: 4px 10px; font-size: 0.72rem;">💾 Guardar</button>
                 </div>
             </div>
 
-            <div class="us-detail-body">
-                <div style="display: grid; grid-template-columns: 1fr; gap: 20px;">
-                    <div class="field-group">
-                        <label class="field-label">Título de la Historia de Usuario</label>
-                        <input type="text" value="${UI.escapeHTML(us.title)}" class="us-edit-field main-title-input" data-id="${us.id}" data-field="title" placeholder="Ej: Login de usuarios...">
+            <!-- Metadata: Title, Status, Priority (always visible) -->
+            <div style="padding: 16px 20px; border-bottom: 1px solid var(--border); background: var(--bg-surface);">
+                <div style="display: grid; grid-template-columns: 1fr 120px 120px; gap: 12px; align-items: end;">
+                    <div class="field-group" style="margin: 0;">
+                        <label class="field-label">Título de la HU</label>
+                        <input type="text" value="${UI.escapeHTML(us.title)}" class="us-edit-field main-title-input" data-id="${us.id}" data-field="title" placeholder="Título de la historia..." style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-surface); color: var(--text-main); font-size: 0.85rem; outline: none; box-sizing: border-box;">
                     </div>
-                </div>
-
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-                    <div class="field-group">
+                    <div class="field-group" style="margin: 0;">
                         <label class="field-label">Estado</label>
-                        <select class="us-edit-field" data-id="${us.id}" data-field="status">
+                        <select class="us-edit-field" data-id="${us.id}" data-field="status" style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-surface); color: var(--text-main); font-size: 0.85rem; outline: none; box-sizing: border-box;">
                             ${STATUS_OPTIONS.map(s => `<option value="${s}" ${us.status === s ? 'selected' : ''}>${s}</option>`).join('')}
                         </select>
                     </div>
-                    <div class="field-group">
+                    <div class="field-group" style="margin: 0;">
                         <label class="field-label">Prioridad</label>
-                        <select class="us-edit-field" data-id="${us.id}" data-field="priority">
+                        <select class="us-edit-field" data-id="${us.id}" data-field="priority" style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-surface); color: var(--text-main); font-size: 0.85rem; outline: none; box-sizing: border-box;">
                             ${PRIORITY_OPTIONS.map(p => `<option value="${p}" ${us.priority === p ? 'selected' : ''}>${p}</option>`).join('')}
                         </select>
                     </div>
                 </div>
+            </div>
 
-                <!-- Secciones de Contenido -->
-                ${SECTIONS.map(sec => this.renderSection(us, sec)).join('')}
+            <!-- Tabs -->
+            <div class="us-detail-tabs" style="display: flex; gap: 0; border-bottom: 1px solid var(--border); background: var(--bg-surface-elevated); flex-shrink: 0;">
+                ${tabs.map(t => `
+                    <button class="us-detail-tab ${this.activeTab === t.key ? 'active' : ''}" data-tab="${t.key}"
+                        style="flex: 1; padding: 10px 8px; background: none; border: none; color: ${this.activeTab === t.key ? 'var(--brand)' : 'var(--text-muted)'}; font-size: 0.78rem; font-weight: ${this.activeTab === t.key ? '800' : '500'}; cursor: pointer; border-bottom: 2px solid ${this.activeTab === t.key ? 'var(--brand)' : 'transparent'}; transition: all 0.15s;">
+                        ${t.label}
+                    </button>
+                `).join('')}
+            </div>
+
+            <!-- Tab Content -->
+            <div class="us-detail-body" style="flex: 1; overflow-y: auto; padding: 16px 20px;">
+                ${this.renderTabContent(us)}
             </div>
         `;
     },
 
-    renderSection(us, sec) {
-        if (sec.key === 'escenarios_prueba') return this.renderScenariosSection(us);
-        if (sec.key === 'hu_detallada') return this.renderInconsistenciesSection(us);
-        if (sec.key === 'recomendaciones') return this.renderRecommendationsSection(us);
-
-        const isOpen = this.openSections.has(sec.key);
-        const val = us[sec.key] || '';
-        
-        let content = '';
-        if (sec.type === 'textarea') {
-            content = `<textarea class="us-edit-field section-textarea" data-id="${us.id}" data-field="${sec.key}" placeholder="Escribe aquí los detalles de ${sec.label.toLowerCase()}...">${UI.escapeHTML(val)}</textarea>`;
-        } else {
-            content = `<input type="text" value="${UI.escapeHTML(val)}" class="us-edit-field" data-id="${us.id}" data-field="${sec.key}" placeholder="https://...">`;
+    renderTabContent(us) {
+        switch (this.activeTab) {
+            case 'analisis':
+                return this.renderInconsistenciesTab(us);
+            case 'recomendaciones':
+                return this.renderRecommendationsTab(us);
+            case 'escenarios':
+                return this.renderScenariosTab(us);
+            case 'reglas':
+                return this.renderFieldTab(us, 'reglas_negocio', 'Reglas de Negocio');
+            case 'precondiciones':
+                return this.renderFieldTab(us, 'precondiciones', 'Precondiciones');
+            case 'documentacion':
+                return this.renderFieldTab(us, 'link_documentacion', 'Link Documentación', 'input');
+            default:
+                return '';
         }
-
-        return `
-            <div class="us-detail-section ${isOpen ? 'open' : ''}" data-section="${sec.key}">
-                <div class="us-detail-section-header" data-section="${sec.key}">
-                    <div class="us-detail-section-title">
-                        <span>${sec.icon}</span>
-                        <span>${sec.label}</span>
-                    </div>
-                    <span style="transition: transform 0.3s; transform: rotate(${isOpen ? '90deg' : '0deg'})">▶</span>
-                </div>
-                <div class="us-detail-section-content">
-                    ${content}
-                </div>
-            </div>
-        `;
     },
 
-    renderInconsistenciesSection(us) {
-        const isOpen = this.openSections.has('hu_detallada');
+    renderFieldTab(us, fieldKey, label, type = 'textarea') {
+        const val = us[fieldKey] || '';
+        if (type === 'textarea') {
+            return `
+                <div style="display: flex; flex-direction: column; gap: 12px;">
+                    <label class="field-label">${label}</label>
+                    <textarea class="us-edit-field" data-id="${us.id}" data-field="${fieldKey}"
+                        placeholder="Escribe aquí los detalles..."
+                        style="width: 100%; min-height: 200px; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-surface); color: var(--text-main); font-size: 0.85rem; outline: none; resize: vertical; box-sizing: border-box;">${UI.escapeHTML(val)}</textarea>
+                </div>
+            `;
+        } else {
+            return `
+                <div style="display: flex; flex-direction: column; gap: 12px;">
+                    <label class="field-label">${label}</label>
+                    <input type="text" value="${UI.escapeHTML(val)}" class="us-edit-field" data-id="${us.id}" data-field="${fieldKey}"
+                        placeholder="https://..."
+                        style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-surface); color: var(--text-main); font-size: 0.85rem; outline: none; box-sizing: border-box;">
+                </div>
+            `;
+}
+    },
+
+    renderInconsistenciesTab(us) {
         const items = us.inconsistencies || [];
-
         return `
-            <div class="us-detail-section ${isOpen ? 'open' : ''}" data-section="hu_detallada">
-                <div class="us-detail-section-header" data-section="hu_detallada">
-                    <div class="us-detail-section-title">
-                        <span>🔍</span>
-                        <span>Análisis de Inconsistencias</span>
-                    </div>
-                    <div style="display: flex; align-items: center; gap: 10px;">
-                        <span class="tab-badge">${items.length}</span>
-                        <span style="transition: transform 0.3s; transform: rotate(${isOpen ? '90deg' : '0deg'})">▶</span>
+            <div style="display: flex; flex-direction: column; gap: 12px;">
+                <div style="padding: 12px 16px; background: ${items.length > 0 ? 'rgba(245,158,11,0.07)' : 'rgba(34,197,94,0.06)'}; border: 1px solid ${items.length > 0 ? '#f59e0b33' : '#22c55e33'}; border-radius: 10px; border-left: 4px solid ${items.length > 0 ? '#f59e0b' : '#22c55e'};">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span>${items.length > 0 ? '⚠️' : '✅'}</span>
+                        <span style="font-size: 0.72rem; font-weight: 800; color: ${items.length > 0 ? '#f59e0b' : '#22c55e'}; text-transform: uppercase; letter-spacing: 0.05em;">
+                            ${items.length > 0 ? `Inconsistencias detectadas (${items.length})` : 'Sin inconsistencias — HU consistente'}
+                        </span>
                     </div>
                 </div>
-                <div class="us-detail-section-content" style="padding: 0;">
-                    <div id="us-inc-panel-${us.id}" style="margin: 16px; padding: 12px 16px; background: ${items.length > 0 ? 'rgba(245,158,11,0.07)' : 'rgba(34,197,94,0.06)'}; border: 1px solid ${items.length > 0 ? '#f59e0b33' : '#22c55e33'}; border-radius: 12px; border-left: 4px solid ${items.length > 0 ? '#f59e0b' : '#22c55e'};">
-                        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: ${items.length > 0 ? '10px' : '0'};">
-                            <span>${items.length > 0 ? '⚠️' : '✅'}</span>
-                            <span style="font-size: 0.7rem; font-weight: 800; color: ${items.length > 0 ? '#f59e0b' : '#22c55e'}; text-transform: uppercase; letter-spacing: 0.07em;">${items.length > 0 ? `Inconsistencias detectadas (${items.length})` : 'Sin inconsistencias — HU consistente'}</span>
-                        </div>
-                        ${items.length > 0 ? `<div style="display: flex; flex-direction: column; gap: 5px;">${items.map((item, i) => {
-                            const severity = item.severity || 'Alta';
-                            const color = SEVERITY_COLORS[severity] || '#ef4444';
-                            const icon = SEVERITY_ICONS[severity] || '🔴';
-                            return `
-                            <div style="display: flex; align-items: flex-start; gap: 10px; padding: 8px 10px; background: rgba(0,0,0,0.15); border-radius: 8px;">
-                                <span style="font-size: 0.65rem; font-weight: 800; color: ${color}; white-space: nowrap; margin-top: 2px; min-width: 28px; text-align: center;">${icon} A${i+1}</span>
-                                <span style="font-size: 0.82rem; color: var(--text-main); font-weight: 500; flex: 1; word-break: break-word; line-height: 1.4;">${UI.escapeHTML(item.title)}</span>
-                            </div>`;
-                        }).join('')}</div>` : ''}
-                    </div>
-                </div>
+                ${items.length > 0 ? `<div style="display: flex; flex-direction: column; gap: 6px;">${items.map((item, i) => {
+                    const severity = item.severity || 'Alta';
+                    const color = SEVERITY_COLORS[severity] || '#ef4444';
+                    const icon = SEVERITY_ICONS[severity] || '🔴';
+                    return `
+                    <div style="display: flex; align-items: flex-start; gap: 10px; padding: 8px 12px; background: rgba(0,0,0,0.15); border-radius: 8px;">
+                        <span style="font-size: 0.65rem; font-weight: 800; color: ${color}; white-space: nowrap; margin-top: 1px;">${icon}</span>
+                        <span style="font-size: 0.78rem; color: var(--text-main); font-weight: 500; flex: 1; word-break: break-word; line-height: 1.4;">${UI.escapeHTML(item.title)}</span>
+                    </div>`;
+                }).join('')}</div>` : ''}
             </div>
         `;
     },
 
-    renderRecommendationsSection(us) {
-        const isOpen = this.openSections.has('recomendaciones');
+    renderRecommendationsTab(us) {
         let recommendations = us.recommendations || [];
         if (typeof recommendations === 'string') {
             try { recommendations = JSON.parse(recommendations); } catch { recommendations = []; }
         }
         const items = Array.isArray(recommendations) ? recommendations : [];
-
         return `
-            <div class="us-detail-section ${isOpen ? 'open' : ''}" data-section="recomendaciones">
-                <div class="us-detail-section-header" data-section="recomendaciones">
-                    <div class="us-detail-section-title">
-                        <span>📋</span>
-                        <span>Recomendaciones de Prueba</span>
+            <div style="display: flex; flex-direction: column; gap: 6px;">
+                ${items.map((item, i) => `
+                    <div style="display: flex; align-items: flex-start; gap: 12px; padding: 10px 16px; background: rgba(99,102,241,0.07); border-radius: 8px; border-left: 3px solid rgba(99,102,241,0.5);">
+                        <span style="font-size: 0.75rem; font-weight: 800; color: #6366f1; white-space: nowrap; margin-top: 1px;">💡</span>
+                        <span style="font-size: 0.82rem; color: var(--text-main); flex: 1; line-height: 1.5;">${UI.escapeHTML(item.title || item.description || item)}</span>
                     </div>
-                    <div style="display: flex; align-items: center; gap: 10px;">
-                        <span class="tab-badge">${items.length}</span>
-                        <span style="transition: transform 0.3s; transform: rotate(${isOpen ? '90deg' : '0deg'})">▶</span>
-                    </div>
-                </div>
-                <div class="us-detail-section-content" style="padding: 20px;">
-                    <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px;">
-                        ${items.map((item, i) => `
-                            <div style="display: flex; align-items: flex-start; gap: 12px; padding: 10px 16px; background: rgba(99,102,241,0.07); border-radius: 8px; border-left: 3px solid rgba(99,102,241,0.5);">
-                                <span style="font-size: 0.75rem; font-weight: 800; color: #6366f1; white-space: nowrap; margin-top: 2px;">💡</span>
-                                <span style="font-size: 0.82rem; color: var(--text-main); flex: 1; line-height: 1.5;">${UI.escapeHTML(item.title || item.description || item)}</span>
-                            </div>
-                        `).join('')}
-                        ${items.length === 0 ? '<div style="text-align: center; opacity: 0.5; padding: 20px; font-size: 0.8rem;">Sin recomendaciones generadas</div>' : ''}
-                    </div>
-                </div>
+                `).join('')}
+                ${items.length === 0 ? '<div style="text-align: center; opacity: 0.5; padding: 30px; font-size: 0.82rem;">Sin recomendaciones generadas</div>' : ''}
             </div>
         `;
     },
 
-    renderScenariosSection(us) {
-        const isOpen = this.openSections.has('escenarios_prueba');
+    renderScenariosTab(us) {
         const scenarios = us.scenarios || [];
-        
         return `
-            <div class="us-detail-section ${isOpen ? 'open' : ''}" data-section="escenarios_prueba">
-                <div class="us-detail-section-header" data-section="escenarios_prueba">
-                    <div class="us-detail-section-title">
-                        <span>🎯</span>
-                        <span>Escenarios de Prueba</span>
+            <div style="display: flex; flex-direction: column; gap: 6px;">
+                ${scenarios.map((s, i) => `
+                    <div data-id="${s.id}" style="display: flex; align-items: center; gap: 12px; padding: 8px 16px; background: var(--bg-surface-elevated); border-radius: 8px; border: 1px solid var(--border);">
+                        <span style="min-width: 28px; text-align: center; font-size: 0.72rem; font-weight: 800; color: var(--brand);">E${i+1}</span>
+                        <input type="text" class="scenario-edit-field us-edit-field" data-id="${us.id}" data-scenario-id="${s.id}" data-field="title" value="${UI.escapeHTML(s.title)}" placeholder="Título del escenario..." style="flex: 1; border: none; background: transparent; outline: none; font-size: 0.85rem; color: var(--text-main); padding: 4px 0;">
+                        <button class="btn-icon delete-scenario" data-id="${s.id}" title="Eliminar Escenario" style="background: none; border: none; color: #ef4444; cursor: pointer; font-size: 12px; padding: 4px;">🗑️</button>
                     </div>
-                    <div style="display: flex; align-items: center; gap: 10px;">
-                        <span class="tab-badge">${scenarios.length}</span>
-                        <span style="transition: transform 0.3s; transform: rotate(${isOpen ? '90deg' : '0deg'})">▶</span>
-                    </div>
-                </div>
-                <div class="us-detail-section-content" style="padding: 20px;">
-                    <div style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 20px;">
-                        ${scenarios.map((s, i) => `
-                            <div class="scenario-item" data-id="${s.id}" style="display: flex; align-items: center; gap: 12px; padding: 8px 16px;">
-                                <span class="scenario-badge" style="margin-bottom: 0; min-width: 32px; text-align: center;">E${i+1}</span>
-                                <input type="text" class="scenario-edit-field us-edit-field" data-id="${us.id}" data-scenario-id="${s.id}" data-field="title" value="${UI.escapeHTML(s.title)}" placeholder="Título del escenario..." style="font-weight: 700; color: var(--text-main); flex: 1; border: none; background: transparent; outline: none; padding: 4px 0;">
-                                <button class="btn-icon danger delete-scenario" data-id="${s.id}" title="Eliminar Escenario">🗑</button>
-                            </div>
-                        `).join('')}
-                        ${scenarios.length === 0 ? '<div style="text-align: center; opacity: 0.5; padding: 20px; font-size: 0.8rem;">No hay escenarios vinculados</div>' : ''}
-                    </div>
-                    <button class="btn btn-ghost btn-sm" id="btn-add-scenario" data-us-id="${us.id}" style="width: 100%; border: 1px dashed var(--border);">+ Añadir Escenario</button>
-                </div>
+                `).join('')}
+                ${scenarios.length === 0 ? '<div style="text-align: center; opacity: 0.5; padding: 30px; font-size: 0.82rem;">No hay escenarios vinculados</div>' : ''}
+                <button id="btn-add-scenario" data-us-id="${us.id}" style="margin-top: 8px; padding: 10px; border: 1px dashed var(--border); border-radius: 8px; background: none; color: var(--text-muted); font-size: 0.82rem; cursor: pointer;">+ Añadir Escenario</button>
             </div>
         `;
     },
@@ -383,37 +381,31 @@ export const UserStories = {
         });
 
         // Sidebar selection
-        container.querySelectorAll('.us-master-card').forEach(card => {
-            card.addEventListener('click', () => {
-                const id = parseInt(card.dataset.id);
+        container.querySelectorAll('.us-suite-row').forEach(row => {
+            row.addEventListener('click', () => {
+                const id = parseInt(row.dataset.id);
                 if (this.expandedId === id) return;
                 this.expandedId = id;
+                this.activeTab = 'analisis';
                 this.render(container);
             });
         });
 
-        // Sidebar Search
+        // Sidebar Search with debounce
+        let searchTimeout;
         container.querySelector('#us-search')?.addEventListener('input', (e) => {
-            const query = e.target.value.toLowerCase().trim();
-            container.querySelectorAll('.us-master-card').forEach(card => {
-                const title = card.querySelector('.us-master-card-title').textContent.toLowerCase();
-                const key = card.querySelector('.us-master-card-id').textContent.toLowerCase();
-                card.style.display = (title.includes(query) || key.includes(query)) ? 'block' : 'none';
-            });
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                this.searchQuery = e.target.value;
+                this.render(container);
+            }, 150);
         });
 
-        // Section toggle
-        container.querySelectorAll('.us-detail-section-header').forEach(header => {
-            header.addEventListener('click', () => {
-                const section = header.closest('.us-detail-section');
-                const key = header.dataset.section;
-                if (this.openSections.has(key)) {
-                    this.openSections.delete(key);
-                    section.classList.remove('open');
-                } else {
-                    this.openSections.add(key);
-                    section.classList.add('open');
-                }
+        // Tab switching
+        container.querySelectorAll('.us-detail-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                this.activeTab = tab.dataset.tab;
+                this.render(container);
             });
         });
 

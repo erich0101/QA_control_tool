@@ -8,26 +8,30 @@ import { modalManager } from '../utils/modal-manager.js';
 
 /**
  * TEST-SUITES-TAB.JS - Tab "Test Suites"
- * Panels colapsables con Test Cases + SBS evidence.
+ * Grid/Table view with detail panel, inline execution, and dark theme.
  */
 export const TestSuitesTab = {
     selectedSuiteId: null,
-    expandedTCId: null,
+    selectedTCId: null,
     editingTCId: null,
+    detailTab: 'steps',
+    executionOverlay: null,
+    _isListening: false,
+    searchQuery: '',
+    suiteSearchQuery: '',
+    filterStatus: 'all',
     _lastJiraProjectId: null,
     _lastMainScroll: 0,
     _lastSidebarScroll: 0,
     _lastWindowScrollY: 0,
 
     render(container) {
-        // Preservar scroll actual antes de regenerar contenido
         const sidebarList = container.querySelector('.ts-sidebar-list');
         const mainContent = container.querySelector('.ts-main-content');
         const sidebarScroll = sidebarList ? sidebarList.scrollTop : 0;
         const mainScroll = mainContent ? mainContent.scrollTop : 0;
         const windowScrollY = window.scrollY;
 
-        // Usar valores guardados si están disponibles (ej: después de reloadSuites)
         const useMainScroll = this._lastMainScroll > 0 ? this._lastMainScroll : mainScroll;
         const useSidebarScroll = this._lastSidebarScroll > 0 ? this._lastSidebarScroll : sidebarScroll;
         const useWindowScrollY = this._lastWindowScrollY > 0 ? this._lastWindowScrollY : windowScrollY;
@@ -35,19 +39,16 @@ export const TestSuitesTab = {
         const { testSuites, activeProjectId, selectedUseCaseId, jiraEpics, loadedForUC } = Store.state;
         const totalTests = testSuites.reduce((acc, s) => acc + (s.test_cases || []).length, 0);
 
-        // Fetch guard: si cambió el CU y las suites se cargaron para otro CU, recargar
         if (selectedUseCaseId && loadedForUC.testSuites !== selectedUseCaseId) {
             this.loadSuitesForUC(selectedUseCaseId);
             return;
         }
 
-        // Si se deseleccionó el CU y había suites cargadas, limpiarlas
         if (!selectedUseCaseId && loadedForUC.testSuites) {
             Store.setTestSuites([]);
             return;
         }
 
-        // Cargar épicas si no existen o cambió el proyecto para evitar bucles
         if (activeProjectId && this._lastJiraProjectId !== activeProjectId) {
             this._lastJiraProjectId = activeProjectId;
             ApiService.getJiraContext(activeProjectId).then(ctx => {
@@ -74,7 +75,6 @@ export const TestSuitesTab = {
             return;
         }
 
-        // Si hay suites pero no hay ninguna seleccionada, seleccionar la primera por defecto
         if (testSuites.length > 0 && !this.selectedSuiteId) {
             this.selectedSuiteId = testSuites[0].id;
         }
@@ -85,23 +85,34 @@ export const TestSuitesTab = {
             <div class="ts-layout">
                 <div class="ts-sidebar">
                     <div class="ts-sidebar-header">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
                             <span style="font-size: 0.75rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em;">Test Suites</span>
                             <div style="display: flex; gap: 6px;">
                                 <span class="tab-badge" title="Total de Suites">${testSuites.length} S</span>
                                 <span class="tab-badge" style="background: var(--brand); color: white;" title="Total de Pruebas">${totalTests} T</span>
                             </div>
                         </div>
-                        <div style="display: flex; flex-direction: column; gap: 10px;">
+                        <div style="display: flex; flex-direction: column; gap: 8px;">
                             <select id="uc-filter" class="w-full">
                                 <option value="">Selecciona Caso de Uso</option>
                                 ${Store.state.useCases.map(uc => `
                                     <option value="${uc.id}" ${uc.id === selectedUseCaseId ? 'selected' : ''}>${UI.escapeHTML(uc.key_id || 'CU')} - ${UI.escapeHTML(uc.title)}</option>
                                 `).join('')}
                             </select>
-                            <button class="btn btn-primary btn-sm w-full" id="btn-new-suite" ${!selectedUseCaseId ? 'disabled' : ''}>+ Nueva Suite</button>
-                            <button class="btn btn-ghost btn-sm w-full" id="btn-sidebar-import-xlsx" ${!selectedUseCaseId ? 'disabled' : ''}>📥 Importar Matriz Dual</button>
-                            <button class="btn btn-success btn-sm w-full" id="btn-export-matrix" ${!selectedUseCaseId ? 'disabled' : ''} style="background: #10b981; border: none; color: white;">📊 Exportar Matriz (Excel)</button>
+                            <!-- Search suites + actions row -->
+                            <div style="display: flex; gap: 6px; align-items: center;">
+                                <div style="position: relative; flex: 1;">
+                                    <input type="text" id="suite-search" placeholder="Buscar suite..." value="${UI.escapeHTML(this.suiteSearchQuery)}"
+                                        style="width: 100%; padding: 6px 10px 6px 30px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-surface); color: var(--text-main); font-size: 0.78rem; outline: none; box-sizing: border-box;" />
+                                </div>
+                            </div>
+                            <div style="display: flex; gap: 6px;">
+                                <button class="btn btn-primary btn-sm" id="btn-new-suite" ${!selectedUseCaseId ? 'disabled' : ''} style="flex: 1;">+ Nueva</button>
+                            </div>
+                            <div style="display: flex; gap: 6px;">
+                                <button class="btn btn-ghost btn-sm" id="btn-sidebar-import-xlsx" ${!selectedUseCaseId ? 'disabled' : ''} style="flex: 1; font-size: 0.72rem;">📥</button>
+                                <button class="btn btn-success btn-sm" id="btn-export-matrix" ${!selectedUseCaseId ? 'disabled' : ''} style="flex: 1; font-size: 0.72rem; background: #10b981; border: none; color: white;">📊</button>
+                            </div>
                         </div>
                     </div>
                     <div class="ts-sidebar-list">
@@ -109,17 +120,16 @@ export const TestSuitesTab = {
                     </div>
                 </div>
                 <div class="ts-main-content">
-                    ${this.renderDetailView(selectedSuite)}
+                    ${this.renderMainContent(selectedSuite)}
                 </div>
             </div>
-            <!-- HU Drawer UI -->
+            ${this.renderExecutionOverlay()}
             <div id="hu-drawer-overlay" class="hu-drawer-overlay"></div>
             <div id="hu-drawer" class="hu-drawer"></div>
         `;
 
         this.bindEvents(container);
 
-        // Restaurar scroll position del sidebar y área principal
         const newSidebarList = container.querySelector('.ts-sidebar-list');
         const newMainContent = container.querySelector('.ts-main-content');
         if (newSidebarList && useSidebarScroll > 0) {
@@ -133,6 +143,513 @@ export const TestSuitesTab = {
         if (useWindowScrollY > 0) {
             window.scrollTo(0, useWindowScrollY);
         }
+    },
+
+    renderSidebarList(suites) {
+        let filtered = suites;
+        if (this.suiteSearchQuery) {
+            const q = this.suiteSearchQuery.toLowerCase();
+            filtered = filtered.filter(s =>
+                (s.title || '').toLowerCase().includes(q) ||
+                (`${s.id}` || '').includes(q)
+            );
+        }
+        if (filtered.length === 0) {
+            return `<div style="padding: 20px; text-align: center; opacity: 0.5; font-size: 0.8rem;">Sin suites encontradas</div>`;
+        }
+        return `
+            <table style="width: 100%; border-collapse: collapse; font-size: 0.82rem;">
+                <tbody>
+                    ${filtered.map((suite, idx) => {
+                        const isActive = this.selectedSuiteId === suite.id;
+                        const isExecuting = !!suite.active_run_id;
+                        const testCount = (suite.test_cases || []).length;
+
+                        let incIndicator = '';
+                        const rawInc = suite.inconsistencies;
+                        const incList = Array.isArray(rawInc) ? rawInc : (() => { try { return JSON.parse(rawInc || '[]'); } catch { return []; } })();
+                        if (incList.length > 0) {
+                            incIndicator = `<span title="Tiene inconsistencias" style="font-size: 0.65rem; color: #f59e0b;">⚠️</span>`;
+                        }
+
+                        return `
+                            <tr class="ts-suite-row ${isActive ? 'selected' : ''}" data-id="${suite.id}"
+                                style="border-bottom: 1px solid rgba(255,255,255,0.04); cursor: pointer; transition: background 0.15s;"
+                                onmouseover="this.style.background='rgba(99,102,241,0.08)'"
+                                onmouseout="this.style.background='${isActive ? 'rgba(99,102,241,0.12)' : 'transparent'}'">
+                                <td style="padding: 8px 10px;">
+                                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 2px;">
+                                        <span style="font-size: 0.6rem; font-weight: 800; color: var(--brand);">SUITE #${suite.id}</span>
+                                        ${isExecuting ? '<span class="status-pill ok" style="font-size: 7px; padding: 1px 4px;">LIVE</span>' : ''}
+                                    </div>
+                                    <div style="font-size: 0.78rem; font-weight: 600; color: var(--text-main); line-height: 1.2;">${UI.escapeHTML(suite.title)} ${incIndicator}</div>
+                                    <div style="font-size: 0.62rem; color: var(--text-muted); margin-top: 3px;">
+                                        🧪 ${testCount} tests${suite.assigned_to_name ? ` · 👤 ${UI.escapeHTML(suite.assigned_to_name)}` : ''}
+                                    </div>
+                                </td>
+                            </tr>
+                        `;
+                    }).join('')}
+                </tbody>
+            </table>
+        `;
+    },
+
+    renderMainContent(suite) {
+        if (!suite) {
+            return `
+                <div class="empty-state" style="height: 100%; display: flex; align-items: center; justify-content: center;">
+                    <div style="text-align: center; opacity: 0.5;">
+                        <div style="font-size: 3rem; margin-bottom: 16px;">🧪</div>
+                        <h3 style="font-weight: 700;">Selecciona una Test Suite</h3>
+                        <p>Haz clic en una suite de la izquierda para gestionar sus casos de prueba.</p>
+                    </div>
+                </div>
+            `;
+        }
+
+        const tcs = suite.test_cases || [];
+        const isAdmin = Store.state.user?.role === 'Admin' || Store.state.user?.role === 'Analista QA';
+        const selectedTC = tcs.find(tc => tc.id === this.selectedTCId);
+
+        return `
+            <!-- Breadcrumb + Suite Header -->
+            <div class="ts-detail-header" style="padding: 10px 20px; border-bottom: 1px solid var(--border); background: var(--bg-surface); flex-shrink: 0; display: flex; align-items: center; gap: 16px;">
+                <div style="flex: 1; min-width: 0;">
+                    <h2 style="margin: 0; font-size: 1rem; font-weight: 800; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${UI.escapeHTML(suite.title)}</h2>
+                    ${suite.jira_epic_key ? `<span class="tab-badge" style="background: rgba(59, 130, 246, 0.1); color: var(--brand); font-size: 0.65rem; margin-top: 2px; display: inline-block;">Épica: ${UI.escapeHTML(suite.jira_epic_key)}</span>` : ''}
+                </div>
+                <div style="display: flex; gap: 6px; align-items: center; flex-shrink: 0;">
+                    <button class="btn btn-ghost btn-sm edit-suite" data-id="${suite.id}" title="Editar Suite" style="padding: 4px 8px;">✏️</button>
+                    <button class="btn btn-sm delete-suite" data-id="${suite.id}" title="Eliminar Suite" style="padding: 4px 8px; background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.3);">🗑️</button>
+                    <div style="width: 1px; height: 18px; background: var(--border);"></div>
+                    <button class="btn btn-success btn-sm run-suite" data-id="${suite.id}" style="padding: 4px 10px; font-size: 0.72rem;">▶ EJECUTAR</button>
+                    <button class="btn btn-sm" id="btn-ai-gen-tc" data-suite-id="${suite.id}" style="background: linear-gradient(135deg,#a855f7,#6366f1); color: white; border: none; padding: 4px 10px; font-size: 0.72rem;">✨ AI Tool</button>
+                    <button class="btn btn-primary btn-sm" id="btn-new-tc" data-suite-id="${suite.id}" style="padding: 4px 10px; font-size: 0.72rem;">+ Nuevo TC</button>
+                </div>
+            </div>
+
+            <!-- Toolbar: search + filters -->
+            <div class="ts-toolbar" style="padding: 10px 20px; background: var(--bg-surface-elevated); border-bottom: 1px solid var(--border); display: flex; gap: 10px; align-items: center; flex-shrink: 0;">
+                <div style="position: relative; flex: 1; max-width: 320px;">
+                    <input type="text" id="ts-search" placeholder="🔍 Buscar test case..." value="${UI.escapeHTML(this.searchQuery)}"
+                        style="width: 100%; padding: 7px 12px 7px 36px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-surface); color: var(--text-main); font-size: 0.82rem; outline: none;" />
+                    <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-size: 0.85rem; opacity: 0.4;">🔍</span>
+                </div>
+                <select id="ts-filter-status" style="padding: 7px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-surface); color: var(--text-main); font-size: 0.82rem; outline: none;">
+                    <option value="all" ${this.filterStatus === 'all' ? 'selected' : ''}>Todos</option>
+                    <option value="PENDING" ${this.filterStatus === 'PENDING' ? 'selected' : ''}>Pendientes</option>
+                    <option value="OK" ${this.filterStatus === 'OK' ? 'selected' : ''}>Aprobados</option>
+                    <option value="FAIL" ${this.filterStatus === 'FAIL' ? 'selected' : ''}>Fallidos</option>
+                    <option value="BLOCKED" ${this.filterStatus === 'BLOCKED' ? 'selected' : ''}>Bloqueados</option>
+                </select>
+                <div style="margin-left: auto; font-size: 0.75rem; color: var(--text-muted);">
+                    ${tcs.length} tests
+                </div>
+            </div>
+
+            <!-- Grid Panel -->
+            <div class="ts-grid-panel" style="flex: 1; overflow-y: auto; padding: 16px 20px;">
+                ${tcs.length === 0 ? `
+                    <div class="empty-state" style="padding: 60px;">
+                        <div class="empty-state-icon">📄</div>
+                        <h3>Sin casos de prueba</h3>
+                        <p>Esta suite aún no tiene tests. ¡Crea el primero!</p>
+                    </div>
+                ` : this.renderTCGrid(tcs, suite)}
+            </div>
+        `;
+    },
+
+    renderTCGrid(tcs, suite) {
+        const isAdmin = Store.state.user?.role === 'Admin' || Store.state.user?.role === 'Analista QA';
+        const user = Store.state.user;
+        const activeRunId = suite?.active_run_id;
+
+        let filtered = tcs;
+        if (this.searchQuery) {
+            const q = this.searchQuery.toLowerCase();
+            filtered = filtered.filter(tc =>
+                (tc.title || '').toLowerCase().includes(q) ||
+                (tc.key_id || '').toLowerCase().includes(q) ||
+                (tc.assignee_name || '').toLowerCase().includes(q)
+            );
+        }
+        if (this.filterStatus !== 'all') {
+            filtered = filtered.filter(tc => tc.status === this.filterStatus);
+        }
+
+        if (filtered.length === 0) {
+            return `<div style="text-align: center; padding: 40px; opacity: 0.5; color: var(--text-muted); font-size: 0.85rem;">No hay tests que coincidan</div>`;
+        }
+
+        return `
+            <table class="ts-grid-table" style="width: 100%; border-collapse: collapse; font-size: 0.82rem;">
+                <thead>
+                    <tr style="border-bottom: 1px solid var(--border); color: var(--text-muted);">
+                        <th style="padding: 8px 12px; text-align: left; font-weight: 700; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em;">Status</th>
+                        <th style="padding: 8px 12px; text-align: left; font-weight: 700; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em;">Key</th>
+                        <th style="padding: 8px 12px; text-align: left; font-weight: 700; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em;">Título</th>
+                        <th style="padding: 8px 12px; text-align: left; font-weight: 700; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em;">Prioridad</th>
+                        <th style="padding: 8px 12px; text-align: left; font-weight: 700; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em;">Asignado</th>
+                        <th style="padding: 8px 12px; text-align: left; font-weight: 700; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em;">Última Ejecución</th>
+                        <th style="padding: 8px 12px; text-align: left; font-weight: 700; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em;">Evidencia</th>
+                        <th style="padding: 8px 12px; text-align: center; font-weight: 700; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em;">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${this.renderTCGridWithDetail(filtered, suite, isAdmin, user, activeRunId)}
+                </tbody>
+            </table>
+        `;
+    },
+
+    renderTCGridWithDetail(tcs, suite, isAdmin, user, activeRunId) {
+        let html = '';
+        tcs.forEach((tc, index) => {
+            html += this.renderTCGridRow(tc, suite, isAdmin, user, activeRunId);
+            if (this.selectedTCId === tc.id) {
+                html += this.renderExpandedDetailRow(tc, suite, isAdmin, user);
+            }
+        });
+        return html;
+    },
+
+    renderTCGridRow(tc, suite, isAdmin, user, activeRunId) {
+        const statusClass = (tc.status || 'pending').toLowerCase();
+        const isSelected = this.selectedTCId === tc.id;
+        const isAssignedToMe = tc.assigned_to === user?.id;
+        const statusLabel = tc.status === 'OK' ? 'PASS' : UI.escapeHTML(tc.status || 'PENDING');
+        const lastExec = tc.last_execution_at ? this._formatDate(tc.last_execution_at) : '—';
+        const evidenceCount = (tc.executions || []).filter(e => e.attachments?.length).length;
+        const assignee = (Store.state.team || []).find(u => u.id === tc.assigned_to);
+
+        const typeColors = { Epic: '#a78bfa', Bug: '#f87171', Task: '#60a5fa', Story: '#34d399' };
+        const priorityColors = { Alta: '#ef4444', Media: '#f59e0b', Baja: '#22c55e' };
+
+        const typeColor = typeColors['Task'] || '#60a5fa';
+        const priorityColor = priorityColors[tc.priority] || '#f59e0b';
+
+        return `
+            <tr class="ts-grid-row ${isSelected ? 'selected' : ''}" data-tc-id="${tc.id}"
+                style="border-bottom: 1px solid rgba(255,255,255,0.04); cursor: pointer; transition: background 0.15s;"
+                onmouseover="this.style.background='rgba(99,102,241,0.08)'"
+                onmouseout="this.style.background='${isSelected ? 'rgba(99,102,241,0.12)' : 'transparent'}'">
+                <td style="padding: 10px 12px;">
+                    <span class="status-pill ${statusClass}" style="font-size: 9px; width: 60px; text-align: center; justify-content: center; font-weight: 700; display: inline-flex; padding: 3px 6px;">
+                        ${statusLabel}
+                    </span>
+                </td>
+                <td style="padding: 10px 12px; font-weight: 800; color: var(--brand); font-size: 0.75rem;">${UI.escapeHTML(tc.key_id || 'TC')}</td>
+                <td style="padding: 10px 12px; color: var(--text-main); font-weight: 500;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="width: 8px; height: 8px; border-radius: 50%; background: ${typeColor}; flex-shrink: 0;"></span>
+                        <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 240px;">${UI.escapeHTML(tc.title)}</span>
+                    </div>
+                </td>
+                <td style="padding: 10px 12px;">
+                    <span style="font-size: 0.72rem; font-weight: 700; color: ${priorityColor};">${UI.escapeHTML(tc.priority || 'Media')}</span>
+                </td>
+                <td style="padding: 10px 12px;">
+                    ${assignee ? `
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <span style="width: 22px; height: 22px; border-radius: 50%; background: var(--brand); display: inline-flex; align-items: center; justify-content: center; font-size: 0.65rem; font-weight: 800; color: white;">${assignee.name.charAt(0)}</span>
+                            <span style="font-size: 0.78rem; color: var(--text-muted);">${UI.escapeHTML(assignee.name.split(' ')[0])}</span>
+                        </div>
+                    ` : '<span style="color: var(--text-muted); opacity: 0.4;">—</span>'}
+                </td>
+                <td style="padding: 10px 12px; font-size: 0.75rem; color: var(--text-muted);">${lastExec}</td>
+                <td style="padding: 10px 12px; text-align: center;">
+                    ${evidenceCount > 0 ? `<span style="background: rgba(34,197,94,0.15); color: #22c55e; font-size: 0.72rem; font-weight: 700; padding: 2px 8px; border-radius: 10px;">${evidenceCount}</span>` : '<span style="color: var(--text-muted); opacity: 0.3;">—</span>'}
+                </td>
+                <td style="padding: 10px 12px; text-align: center;">
+                    <div style="display: flex; gap: 6px; justify-content: center;">
+                        ${(isAssignedToMe || isAdmin) && !activeRunId ? `
+                            <button class="btn btn-success btn-sm run-tc-grid" data-id="${tc.id}" title="Ejecutar" style="padding: 3px 10px; font-size: 0.65rem; font-weight: 800;">▶</button>
+                        ` : ''}
+                        ${isAdmin ? `
+                            <button class="btn btn-sm delete-tc-grid" data-tc-id="${tc.id}" title="Eliminar" style="padding: 3px 10px; font-size: 0.65rem; font-weight: 800; opacity: ${activeRunId ? '0.3' : '1'}; cursor: ${activeRunId ? 'not-allowed' : 'pointer'}; background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.3);">🗑️</button>
+                        ` : ''}
+                    </div>
+                </td>
+            </tr>
+        `;
+    },
+
+    renderExpandedDetailRow(tc, suite, isAdmin, user) {
+        const isEditing = this.editingTCId === tc.id;
+        const readOnlyAttr = isEditing ? '' : 'disabled';
+        const readOnlyClass = isEditing ? '' : 'is-readonly';
+        const assignee = (Store.state.team || []).find(u => u.id === tc.assigned_to);
+        const linkedUS = (Store.state.userStories || []).find(u => Number(u.id) === Number(tc.us_id));
+        const executions = tc.executions || [];
+        const tabs = ['steps', 'expected', 'metadata', 'evidencia'];
+        const tabLabels = { steps: 'Pasos', expected: 'Esperado', metadata: 'Metadata', evidencia: 'Evidencia' };
+
+        return `
+            <tr class="ts-expanded-row" style="border-bottom: 1px solid var(--border); background: var(--bg-surface-elevated);">
+                <td colspan="8" style="padding: 0;">
+                    <div style="padding: 16px 20px; display: flex; flex-direction: column; gap: 14px;">
+                        <!-- Header row: TC info + actions -->
+                        <div style="display: flex; align-items: center; gap: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--border);">
+                            <div style="flex: 1;">
+                                <span style="font-size: 0.65rem; font-weight: 800; color: var(--brand);">${UI.escapeHTML(tc.key_id || 'TC')}</span>
+                                <span style="margin: 0 8px; color: var(--text-muted);">·</span>
+                                <span style="font-size: 0.85rem; font-weight: 700; color: var(--text-main);">${UI.escapeHTML(tc.title)}</span>
+                            </div>
+                            <div style="display: flex; gap: 8px; align-items: center;">
+                                ${isEditing ? `
+                                    <button class="btn btn-ghost btn-sm cancel-edit-btn" data-tc-id="${tc.id}">Cancelar</button>
+                                    <button class="btn btn-primary btn-sm save-tc-btn" data-tc-id="${tc.id}">Guardar</button>
+                                ` : `
+                                    <button class="btn btn-primary btn-sm edit-tc-btn" data-tc-id="${tc.id}">✏️ EDITAR</button>
+                                `}
+                            </div>
+                        </div>
+
+                        <!-- Tabs -->
+                        <div class="ts-expanded-tabs" style="display: flex; gap: 4px; border-bottom: 1px solid var(--border); padding-bottom: 0;">
+                            ${tabs.map(t => `
+                                <button class="ts-expanded-tab ${this.detailTab === t ? 'active' : ''}" data-tab="${t}" data-tc-id="${tc.id}"
+                                    style="padding: 8px 16px; background: none; border: none; color: ${this.detailTab === t ? 'var(--brand)' : 'var(--text-muted)'}; font-size: 0.78rem; font-weight: ${this.detailTab === t ? '800' : '500'}; cursor: pointer; border-bottom: 2px solid ${this.detailTab === t ? 'var(--brand)' : 'transparent'}; margin-bottom: -1px; transition: all 0.15s;">
+                                    ${tabLabels[t]}
+                                </button>
+                            `).join('')}
+                        </div>
+
+                        <!-- Tab Content -->
+                        <div class="ts-expanded-body" style="display: flex; flex-direction: column; gap: 14px;">
+                            ${this.renderDetailTabContent(tc, suite, isEditing, readOnlyAttr, readOnlyClass, linkedUS, assignee, isAdmin)}
+                        </div>
+                    </div>
+                </td>
+            </tr>
+        `;
+    },
+
+    renderDetailPanel(tc, suite) {
+        const isEditing = this.editingTCId === tc.id;
+        const readOnlyAttr = isEditing ? '' : 'disabled';
+        const readOnlyClass = isEditing ? '' : 'is-readonly';
+        const linkedUS = (Store.state.userStories || []).find(u => Number(u.id) === Number(tc.us_id));
+        const assignee = (Store.state.team || []).find(u => u.id === tc.assigned_to);
+        const isAdmin = Store.state.user?.role === 'Admin' || Store.state.user?.role === 'Analista QA';
+
+        const tabs = ['steps', 'expected', 'metadata', 'evidencia'];
+        const tabLabels = { steps: 'Pasos', expected: 'Esperado', metadata: 'Metadata', evidencia: 'Evidencia' };
+
+        return `
+            <div class="ts-detail-panel" style="border-left: 1px solid var(--border); background: var(--bg-surface); display: flex; flex-direction: column; overflow: hidden;">
+                <!-- Panel Header -->
+                <div style="padding: 14px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; flex-shrink: 0;">
+                    <div style="flex: 1;">
+                        <div style="font-size: 0.68rem; color: var(--brand); font-weight: 800; margin-bottom: 2px;">${UI.escapeHTML(tc.key_id || 'TC')}</div>
+                        <div style="font-size: 0.9rem; font-weight: 700; color: var(--text-main); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${UI.escapeHTML(tc.title)}</div>
+                    </div>
+                    <button id="ts-close-detail" style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.1rem; padding: 4px;">✕</button>
+                </div>
+
+                <!-- Tabs -->
+                <div class="ts-detail-tabs" style="display: flex; border-bottom: 1px solid var(--border); flex-shrink: 0;">
+                    ${tabs.map(t => `
+                        <button class="ts-detail-tab ${this.detailTab === t ? 'active' : ''}" data-tab="${t}"
+                            style="flex: 1; padding: 10px 8px; background: none; border: none; color: ${this.detailTab === t ? 'var(--brand)' : 'var(--text-muted)'}; font-size: 0.78rem; font-weight: ${this.detailTab === t ? '800' : '500'}; cursor: pointer; border-bottom: 2px solid ${this.detailTab === t ? 'var(--brand)' : 'transparent'}; transition: all 0.15s;">
+                            ${tabLabels[t]}
+                        </button>
+                    `).join('')}
+                </div>
+
+                <!-- Tab Content -->
+                <div class="ts-detail-body" style="flex: 1; overflow-y: auto; padding: 16px;">
+                    ${this.renderDetailTabContent(tc, suite, isEditing, readOnlyAttr, readOnlyClass, linkedUS, assignee, isAdmin)}
+                </div>
+
+                <!-- Actions Footer -->
+                <div style="padding: 12px 16px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 10px; flex-shrink: 0;">
+                    ${isEditing ? `
+                        <button class="btn btn-ghost btn-sm cancel-edit-btn" data-tc-id="${tc.id}">Cancelar</button>
+                        <button class="btn btn-primary btn-sm save-tc-btn" data-tc-id="${tc.id}">Guardar</button>
+                    ` : `
+                        <button class="btn btn-primary btn-sm edit-tc-btn" data-tc-id="${tc.id}">✏️ EDITAR</button>
+                    `}
+                </div>
+            </div>
+        `;
+    },
+
+    renderDetailTabContent(tc, suite, isEditing, readOnlyAttr, readOnlyClass, linkedUS, assignee, isAdmin) {
+        switch (this.detailTab) {
+            case 'steps':
+                return `
+                    <div style="display: flex; flex-direction: column; gap: 16px;">
+                        <div class="field-group">
+                            <label class="field-label">Precondiciones</label>
+                            <textarea class="tc-edit-field ${readOnlyClass}" data-field="preconditions" ${readOnlyAttr} style="min-height: 60px;">${UI.escapeHTML(tc.preconditions || '')}</textarea>
+                        </div>
+                        <div class="field-group">
+                            <label class="field-label">Pasos del Test</label>
+                            <div class="highlighter-container">
+                                <div class="highlighter-backdrop">${UI.highlightSteps(tc.steps)}</div>
+                                <textarea class="tc-edit-field highlighted-textarea ${readOnlyClass}" data-field="steps" ${readOnlyAttr} style="min-height: 180px;">${UI.escapeHTML(tc.steps || '')}</textarea>
+                            </div>
+                        </div>
+                        <div class="field-group">
+                            <label class="field-label">Datos de Prueba</label>
+                            <textarea class="tc-edit-field ${readOnlyClass}" data-field="test_data" ${readOnlyAttr} style="min-height: 60px;">${UI.escapeHTML(tc.test_data || '')}</textarea>
+                        </div>
+                    </div>
+                `;
+
+            case 'expected':
+                return `
+                    <div style="display: flex; flex-direction: column; gap: 16px;">
+                        <div class="field-group">
+                            <label class="field-label">Resultado Esperado</label>
+                            <textarea class="tc-edit-field ${readOnlyClass}" data-field="expected_result" ${readOnlyAttr} style="min-height: 100px;">${UI.escapeHTML(tc.expected_result || '')}</textarea>
+                        </div>
+                        <div class="field-group">
+                            <label class="field-label">Criterios de Aceptación</label>
+                            <textarea class="tc-edit-field ${readOnlyClass}" data-field="acceptance_criteria" ${readOnlyAttr} style="min-height: 100px;">${UI.escapeHTML(tc.acceptance_criteria || '')}</textarea>
+                        </div>
+                        <div class="field-group">
+                            <label class="field-label">Suposiciones</label>
+                            <textarea class="tc-edit-field ${readOnlyClass}" data-field="assumptions" ${readOnlyAttr} style="min-height: 60px;">${UI.escapeHTML(tc.assumptions || '')}</textarea>
+                        </div>
+                    </div>
+                `;
+
+            case 'metadata':
+                return `
+                    <div style="display: flex; flex-direction: column; gap: 16px;">
+                        <div class="tt-editor-grid" style="grid-template-columns: 1fr 1fr; gap: 12px;">
+                            <div class="field-group">
+                                <label class="field-label">Historia de Usuario</label>
+                                <select class="tc-us-select-detail ${readOnlyClass}" data-tc-id="${tc.id}" ${readOnlyAttr}>
+                                    <option value="">— No vinculada —</option>
+                                    ${Store.state.userStories.map(us => {
+                                        const fullTitle = `${us.key_id} - ${us.title}`;
+                                        const displayTitle = fullTitle.length > 80 ? fullTitle.substring(0, 80) + '...' : fullTitle;
+                                        return `<option value="${us.id}" ${us.id === tc.us_id ? 'selected' : ''} title="${UI.escapeHTML(fullTitle)}">${UI.escapeHTML(displayTitle)}</option>`;
+                                    }).join('')}
+                                </select>
+                            </div>
+                            <div class="field-group">
+                                <label class="field-label">Asignado a</label>
+                                <select class="tc-assign-select-detail ${readOnlyClass}" data-tc-id="${tc.id}" ${readOnlyAttr}>
+                                    <option value="">— Sin asignar —</option>
+                                    ${(Store.state.team || []).map(u => `
+                                        <option value="${u.id}" ${u.id === tc.assigned_to ? 'selected' : ''}>${UI.escapeHTML(u.name)} (${UI.escapeHTML(u.role)})</option>
+                                    `).join('')}
+                                </select>
+                            </div>
+                        </div>
+                        <div class="tt-editor-grid" style="grid-template-columns: 1fr 1fr; gap: 12px;">
+                            <div class="field-group">
+                                <label class="field-label">Prioridad</label>
+                                <select class="tc-meta-select-detail ${readOnlyClass}" data-tc-id="${tc.id}" data-field="priority" ${readOnlyAttr}>
+                                    ${['Alta', 'Media', 'Baja'].map(p => `<option value="${p}" ${tc.priority === p ? 'selected' : ''}>${p}</option>`).join('')}
+                                </select>
+                            </div>
+                            <div class="field-group">
+                                <label class="field-label">Epic Jira</label>
+                                <select class="tc-meta-select-detail ${readOnlyClass}" data-tc-id="${tc.id}" data-field="jira_epic_key" ${readOnlyAttr}>
+                                    <option value="">— Sin Épica —</option>
+                                    ${(Store.state.jiraEpics || []).map(e => `<option value="${e.key}" ${tc.jira_epic_key === e.key ? 'selected' : ''}>${e.key} - ${e.name}</option>`).join('')}
+                                </select>
+                            </div>
+                        </div>
+                        <div style="background: rgba(0,0,0,0.1); padding: 12px; border-radius: 8px; display: flex; flex-direction: column; gap: 10px;">
+                            <label style="display: flex; align-items: center; gap: 10px; font-size: 0.78rem; cursor: pointer;">
+                                <div class="switch">
+                                    <input type="checkbox" class="tc-meta-check-detail" data-tc-id="${tc.id}" data-field="is_smoke" ${tc.is_smoke ? 'checked' : ''} ${readOnlyAttr}>
+                                    <span class="slider"></span>
+                                </div>
+                                💨 Smoke
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 10px; font-size: 0.78rem; cursor: pointer;">
+                                <div class="switch">
+                                    <input type="checkbox" class="tc-meta-check-detail" data-tc-id="${tc.id}" data-field="is_regression" ${tc.is_regression ? 'checked' : ''} ${readOnlyAttr}>
+                                    <span class="slider"></span>
+                                </div>
+                                🔄 Regresión
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 10px; font-size: 0.78rem; cursor: pointer;">
+                                <div class="switch">
+                                    <input type="checkbox" class="tc-meta-check-detail" data-tc-id="${tc.id}" data-field="is_integration" ${tc.is_integration ? 'checked' : ''} ${readOnlyAttr}>
+                                    <span class="slider"></span>
+                                </div>
+                                🔗 Integración
+                            </label>
+                        </div>
+                        ${linkedUS ? `
+                            <button class="btn btn-ghost btn-sm view-hu-details" data-us-id="${linkedUS.id}" style="font-size: 0.72rem; font-weight: 800; color: var(--brand); border-color: rgba(59,130,246,0.2); padding: 5px 12px; align-self: flex-start;">
+                                📖 Ver Detalles de HU
+                            </button>
+                        ` : ''}
+                    </div>
+                `;
+
+            case 'evidencia':
+                const executions = tc.executions || [];
+                if (executions.length === 0) {
+                    return `<div style="text-align: center; padding: 40px; opacity: 0.4; color: var(--text-muted); font-size: 0.85rem;">Sin ejecuciones aún</div>`;
+                }
+                return `
+                    <div style="display: flex; flex-direction: column; gap: 10px;">
+                        ${executions.map(exec => {
+                            const execDate = exec.executed_at ? this._formatDate(exec.executed_at) : '—';
+                            const execStatus = exec.status === 'OK' ? 'PASS' : UI.escapeHTML(exec.status || 'PENDING');
+                            const statusClass = (exec.status || 'pending').toLowerCase();
+                            const attachments = exec.attachments || [];
+                            return `
+                                <div style="background: rgba(0,0,0,0.15); border: 1px solid var(--border); border-radius: 10px; padding: 12px;">
+                                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+                                        <span class="status-pill ${statusClass}" style="font-size: 8px; width: 55px; text-align: center; justify-content: center; font-weight: 700; display: inline-flex; padding: 2px 5px;">${execStatus}</span>
+                                        <span style="font-size: 0.75rem; color: var(--text-muted);">${execDate}</span>
+                                        ${exec.executed_by_name ? `<span style="font-size: 0.72rem; color: var(--text-muted);">· ${UI.escapeHTML(exec.executed_by_name)}</span>` : ''}
+                                    </div>
+                                    ${exec.notes ? `<div style="font-size: 0.8rem; color: var(--text-main); margin-bottom: 8px; line-height: 1.5;">${UI.escapeHTML(exec.notes)}</div>` : ''}
+                                    ${attachments.length > 0 ? `
+                                        <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                                            ${attachments.map(att => `
+                                                <a href="/api/attachments/${att.id}" target="_blank" style="font-size: 0.72rem; background: rgba(99,102,241,0.1); color: var(--brand); padding: 3px 10px; border-radius: 6px; text-decoration: none; display: flex; align-items: center; gap: 4px;">
+                                                    📎 ${UI.escapeHTML(att.filename || 'archivo')}
+                                                </a>
+                                            `).join('')}
+                                        </div>
+                                    ` : '<div style="font-size: 0.75rem; opacity: 0.4; color: var(--text-muted);">Sin evidencia</div>'}
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                `;
+
+            default:
+                return '';
+        }
+    },
+
+    renderExecutionOverlay() {
+        if (!this.executionOverlay) return '';
+        const { tcId, status, logs } = this.executionOverlay;
+        return `
+            <div id="ts-exec-overlay" style="position: fixed; bottom: 20px; right: 20px; width: 480px; background: var(--bg-surface-elevated); border: 1px solid var(--border); border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.5); z-index: 9998; overflow: hidden;">
+                <div style="padding: 14px 16px; background: linear-gradient(135deg,#6366f1,#a855f7); display: flex; align-items: center; gap: 10px;">
+                    <div style="width: 8px; height: 8px; border-radius: 50%; background: #22c55e; animation: pulse 2s infinite;"></div>
+                    <span style="font-size: 0.85rem; font-weight: 800; color: white;">Ejecución en curso</span>
+                    <button id="ts-exec-close" style="margin-left: auto; background: rgba(0,0,0,0.2); border: none; color: white; width: 24px; height: 24px; border-radius: 50%; cursor: pointer; font-size: 0.9rem;">✕</button>
+                </div>
+                <div style="padding: 14px 16px; font-size: 0.78rem; color: var(--text-muted); max-height: 200px; overflow-y: auto; font-family: monospace;">
+                    ${(logs || []).map(log => `<div style="margin-bottom: 4px;">${UI.escapeHTML(log)}</div>`).join('')}
+                </div>
+            </div>
+        `;
+    },
+
+    _formatDate(dateStr) {
+        if (!dateStr) return '';
+        const d = new Date(dateStr);
+        return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' });
     },
 
     showHUDrawer(usId) {
@@ -151,25 +668,20 @@ export const TestSuitesTab = {
                 <button class="btn-icon close-hu-drawer" style="font-size: 1.2rem;">✕</button>
             </div>
             <div class="hu-drawer-body">
-                </section>
-
                 <section>
                     <div class="hu-drawer-section-title">🎯 Reglas de Negocio</div>
                     <div class="hu-drawer-content">${UI.escapeHTML(us.reglas_negocio || 'No hay reglas de negocio definidas.')}</div>
                 </section>
-
                 <section>
                     <div class="hu-drawer-section-title">⚙️ Precondiciones</div>
                     <div class="hu-drawer-content">${UI.escapeHTML(us.precondiciones || 'No hay precondiciones registradas.')}</div>
                 </section>
-
             </div>
         `;
 
         overlay.classList.add('is-open');
         drawer.classList.add('is-open');
 
-        // Bind close events
         const close = () => {
             overlay.classList.remove('is-open');
             drawer.classList.remove('is-open');
@@ -179,400 +691,18 @@ export const TestSuitesTab = {
         overlay.onclick = close;
     },
 
-    renderSidebarList(suites) {
-        if (suites.length === 0) {
-            return `<div style="padding: 20px; text-align: center; opacity: 0.5; font-size: 0.8rem;">Sin suites disponibles</div>`;
-        }
-        return suites.map(suite => {
-            const isActive = this.selectedSuiteId === suite.id;
-            const isExecuting = !!suite.active_run_id;
-            const testCount = (suite.test_cases || []).length;
-            
-            // Indicator for inconsistencies
-            let incIndicator = '';
-            const rawInc = suite.inconsistencies;
-            const incList = Array.isArray(rawInc) ? rawInc : (() => { try { return JSON.parse(rawInc || '[]'); } catch { return []; } })();
-            if (incList.length > 0) {
-                incIndicator = `<span title="Tiene inconsistencias" style="font-size: 0.7rem; color: #f59e0b; margin-left: 4px;">⚠️</span>`;
-            }
-
-            return `
-                <div class="ts-master-card ${isActive ? 'active' : ''}" data-id="${suite.id}" style="padding: 8px 10px; margin-bottom: 6px;">
-                    <div class="ts-master-card-header" style="margin-bottom: 4px;">
-                        <span class="ts-master-card-id" style="font-size: 0.65rem;">SUITE #${suite.id}</span>
-                        ${isExecuting ? '<span class="status-pill ok" style="font-size: 8px; padding: 1px 5px;">LIVE</span>' : ''}
-                    </div>
-                    <div class="ts-master-card-title" style="font-size: 0.8rem; line-height: 1.2;">${UI.escapeHTML(suite.title)} ${incIndicator}</div>
-                    <div style="margin-top: 4px; font-size: 0.65rem; color: var(--text-muted); display: flex; align-items: center; gap: 8px;">
-                        <span>🧪 ${testCount} tests</span>
-                        ${suite.assigned_to_name ? `<span>👤 ${UI.escapeHTML(suite.assigned_to_name)}</span>` : ''}
-                    </div>
-                </div>
-            `;
-        }).join('');
-    },
-
-    renderDetailView(suite) {
-        if (!suite) {
-            return `
-                <div class="empty-state" style="height: 100%; display: flex; align-items: center; justify-content: center;">
-                    <div style="text-align: center; opacity: 0.5;">
-                        <div style="font-size: 3rem; margin-bottom: 16px;">🧪</div>
-                        <h3 style="font-weight: 700;">Selecciona una Test Suite</h3>
-                        <p>Haz clic en una suite de la izquierda para gestionar sus casos de prueba.</p>
-                    </div>
-                </div>
-            `;
-        }
-
-        const tcs = suite.test_cases || [];
-        const isAdmin = Store.state.user?.role === 'Admin' || Store.state.user?.role === 'Analista QA';
-        const canPlaySuite = !!suite.active_run_id || tcs.some(tc => tc.assigned_to === Store.state.user?.id) || isAdmin;
-
-        return `
-            <div class="ts-detail-header">
-                <div style="display: flex; align-items: center; gap: 16px;">
-                    <div style="font-size: 1.2rem;">📁</div>
-                    <div>
-                        <div style="display: flex; align-items: center; gap: 10px;">
-                            <h2 style="margin: 0; font-size: 1.1rem; font-weight: 800; color: var(--text-main);">${UI.escapeHTML(suite.title)}</h2>
-                            ${suite.jira_epic_key ? `<span class="tab-badge" style="background: rgba(59, 130, 246, 0.1); color: var(--brand); font-size: 0.65rem;">Épica: ${UI.escapeHTML(suite.jira_epic_key)}</span>` : ''}
-                        </div>
-                        <p style="margin: 4px 0 0; font-size: 0.75rem; color: var(--text-muted);">${UI.escapeHTML(suite.description || 'Sin descripción')}</p>
-                    </div>
-                </div>
-                <div style="display: flex; gap: 12px; align-items: center;">
-                    <button class="btn btn-ghost btn-sm edit-suite" data-id="${suite.id}" title="Editar Suite">✏️</button>
-                    <button class="btn btn-ghost btn-sm delete-suite" data-id="${suite.id}" title="Eliminar Suite" style="color: var(--fail);">🗑️</button>
-                    <div style="width: 1px; height: 24px; background: var(--border); margin: 0 4px;"></div>
-                    ${canPlaySuite ? `<button class="btn btn-success btn-sm run-suite" data-id="${suite.id}">${suite.active_run_id ? '⏸ Ver Ejecución' : '▶ EJECUTAR'}</button>` : ''}
-                    <button class="btn btn-ai btn-sm" id="btn-ai-gen-tc" data-suite-id="${suite.id}" style="background:linear-gradient(135deg,#a855f7,#6366f1);color:white;border:none;">✨ AI Tool</button>
-                    <button class="btn btn-primary btn-sm" id="btn-new-tc" data-suite-id="${suite.id}">+ Nuevo Test Case</button>
-                </div>
-            </div>
-            ${this._renderInconsistenciesPanel(suite)}
-            <div class="ts-detail-body">
-                ${tcs.length === 0
-                ? `<div class="empty-state" style="padding: 60px;">
-                        <div class="empty-state-icon">📄</div>
-                        <h3>Sin casos de prueba</h3>
-                        <p>Esta suite aún no tiene tests. ¡Crea el primero!</p>
-                       </div>`
-                : tcs.map(tc => this.renderTestCase(tc, suite.id)).join('')
-            }
-            </div>
-        `;
-    },
-
-    _renderInconsistenciesPanel(suite) {
-        const raw = suite.inconsistencies;
-        const items = Array.isArray(raw) ? raw : (() => { try { return JSON.parse(raw || '[]'); } catch { return []; } })();
-        const hasItems = items.length > 0;
-
-        const borderColor = hasItems ? '#f59e0b' : '#22c55e';
-        const bgColor = hasItems ? 'rgba(245,158,11,0.07)' : 'rgba(34,197,94,0.06)';
-        const borderLeft = hasItems ? '#f59e0b' : '#22c55e';
-        const icon = hasItems ? '⚠️' : '✅';
-        const labelColor = hasItems ? '#f59e0b' : '#22c55e';
-        const label = hasItems
-            ? `Inconsistencias detectadas (${items.length})`
-            : 'Sin inconsistencias — HU consistente';
-
-        const itemsHtml = hasItems ? items.map((inc, i) => `
-            <div style="display:flex; align-items:flex-start; gap:10px; padding:8px 10px; background:rgba(0,0,0,0.15); border-radius:8px;">
-                <span style="font-size:0.65rem; font-weight:800; color:${labelColor}; white-space:nowrap; margin-top:2px;">A${i+1}</span>
-                <span style="font-size:0.82rem; color:var(--text-main); font-weight:500; flex:1;">${UI.escapeHTML(inc.title)}</span>
-                <button data-suite-id="${suite.id}" data-inc-idx="${i}" class="inc-remove-btn"
-                    style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:0.75rem;padding:0 4px;opacity:0.6;" title="Eliminar">✕</button>
-            </div>`).join('') : '';
-
-        return `
-            <div id="suite-inc-panel-${suite.id}"
-                style="margin:0 0 16px; padding:12px 16px; background:${bgColor}; border:1px solid ${borderColor}33; border-radius:12px; border-left:4px solid ${borderLeft};">
-                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:${hasItems ? '10px' : '0'};">
-                    <div style="display:flex; align-items:center; gap:8px;">
-                        <span>${icon}</span>
-                        <span style="font-size:0.7rem; font-weight:800; color:${labelColor}; text-transform:uppercase; letter-spacing:0.07em;">${label}</span>
-                    </div>
-                    <button class="inc-add-btn" data-suite-id="${suite.id}"
-                        style="font-size:0.68rem; padding:3px 10px; border-radius:6px; border:1px solid ${borderColor}55; background:transparent; color:${labelColor}; cursor:pointer; font-weight:700;">+ Agregar</button>
-                </div>
-                ${hasItems ? `<div id="inc-list-${suite.id}" style="display:flex; flex-direction:column; gap:5px;">${itemsHtml}</div>` : ''}
-                <div id="inc-add-form-${suite.id}" style="display:none; margin-top:10px; display:none;">
-                    <div style="display:flex; gap:8px; align-items:center;">
-                        <input id="inc-new-input-${suite.id}" type="text" placeholder="Descripción de la inconsistencia..."
-                            style="flex:1; padding:7px 10px; border-radius:7px; border:1px solid ${borderColor}55; background:rgba(255,255,255,0.05); color:white; font-size:0.82rem; outline:none;" />
-                        <button class="inc-save-btn" data-suite-id="${suite.id}"
-                            style="padding:6px 14px; border-radius:7px; border:none; background:${borderLeft}; color:black; font-weight:800; cursor:pointer; font-size:0.8rem;">Guardar</button>
-                        <button class="inc-cancel-btn" data-suite-id="${suite.id}"
-                            style="padding:6px 10px; border-radius:7px; border:1px solid rgba(255,255,255,0.1); background:transparent; color:#64748b; cursor:pointer; font-size:0.8rem;">✕</button>
-                    </div>
-                </div>
-            </div>`;
-    },
-
-    _bindInconsistencyPanel(container, suite) {
-        const suiteId = suite.id;
-        const raw = suite.inconsistencies;
-        let items = Array.isArray(raw) ? [...raw] : (() => { try { return JSON.parse(raw || '[]'); } catch { return []; } })();
-
-        const refresh = async () => {
-            await ApiService.updateSuiteInconsistencies(suiteId, items);
-            // Patch store in-place to avoid full reload
-            const s = Store.state.testSuites.find(x => x.id === suiteId);
-            if (s) s.inconsistencies = items;
-            const panel = document.getElementById(`suite-inc-panel-${suiteId}`);
-            if (panel) {
-                const newPanel = document.createElement('div');
-                newPanel.innerHTML = this._renderInconsistenciesPanel({ ...suite, inconsistencies: items });
-                panel.replaceWith(newPanel.firstElementChild);
-                this._bindInconsistencyPanel(container, { ...suite, inconsistencies: items });
-            }
+    bindEvents(container) {
+        // Global clear TC function
+        window.__tsClearTC = () => {
+            this.selectedTCId = null;
+            this.render(container);
         };
 
-        container.querySelector(`.inc-add-btn[data-suite-id="${suiteId}"]`)?.addEventListener('click', () => {
-            const form = document.getElementById(`inc-add-form-${suiteId}`);
-            if (form) { form.style.display = form.style.display === 'none' ? 'block' : 'none'; }
-            // No auto-focus to avoid unwanted scroll
-        });
-
-        container.querySelector(`.inc-cancel-btn[data-suite-id="${suiteId}"]`)?.addEventListener('click', () => {
-            const form = document.getElementById(`inc-add-form-${suiteId}`);
-            if (form) form.style.display = 'none';
-        });
-
-        container.querySelector(`.inc-save-btn[data-suite-id="${suiteId}"]`)?.addEventListener('click', async () => {
-            const input = document.getElementById(`inc-new-input-${suiteId}`);
-            const val = (input?.value || '').trim();
-            if (!val) return;
-            items.push({ title: val });
-            await refresh();
-        });
-
-        container.querySelectorAll(`.inc-remove-btn[data-suite-id="${suiteId}"]`).forEach(btn => {
-            btn.addEventListener('click', async () => {
-                const idx = parseInt(btn.dataset.incIdx);
-                items.splice(idx, 1);
-                await refresh();
-            });
-        });
-    },
-
-    // Flag para evitar múltiples listeners
-    _isListening: false,
-    setupRealtimeListener() {
-        if (this._isListening) return;
-
-        window.addEventListener('realtime-refresh', async () => {
-            const container = document.getElementById('tab-content');
-            if (Store.state.activeTab === 'test-suites' && container) {
-                console.log('⚡ Realtime: Refreshing Test Suites...');
-                await this.reloadSuites();
-                this.render(container);
-            }
-        });
-        this._isListening = true;
-    },
-
-    renderTestCase(tc, suiteId) {
-        const isExpanded = this.expandedTCId === tc.id;
-        const statusClass = (tc.status || 'pending').toLowerCase();
-        const isPending = tc.status === 'PENDING' && Store.state.testSuites.find(s => s.id === suiteId)?.active_run_id;
-        const assignee = (Store.state.team || []).find(u => u.id === tc.assigned_to);
-        const linkedUS = (Store.state.userStories || []).find(u => Number(u.id) === Number(tc.us_id));
-        const user = Store.state.user;
-        const suite = Store.state.testSuites.find(s => s.id === suiteId);
-        const activeRunId = suite?.active_run_id;
-        const isAdmin = user?.role === 'Admin' || user?.role === 'Analista QA';
-        const isAssignedToMe = tc.assigned_to === user?.id;
-        const isEditing = this.editingTCId === tc.id;
-        const readOnlyAttr = isEditing ? '' : 'disabled';
-        const readOnlyClass = isEditing ? '' : 'is-readonly';
-
-        return `
-            <div class="tt-tc-row ${isExpanded ? 'is-open' : ''}" data-tc-id="${tc.id}" style="background: var(--bg-surface-elevated); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 10px; overflow: hidden; transition: all 0.2s;">
-                <div class="tt-tc-header test-card-header" data-tc-id="${tc.id}" style="padding: 12px 20px; min-height: 52px; display: flex; align-items: center; gap: 14px; cursor: pointer;">
-                    <div class="status-pill ${statusClass}" style="font-size: 9px; width: 70px; text-align: center; justify-content: center; font-weight: 700; flex-shrink: 0;">
-                        ${tc.status === 'OK' ? 'PASS' : UI.escapeHTML(tc.status || 'PENDING')}
-                    </div>
-                    
-                    <span class="tt-key tt-tc-key" style="font-size: 10px; opacity: 0.8; width: 40px; flex-shrink: 0; font-weight: 800; color: var(--brand);">${UI.escapeHTML(tc.key_id || 'TC')}</span>
-                    
-                    <input type="text" value="${UI.escapeHTML(tc.title)}" 
-                        class="tc-title-input tt-tc-title" data-tc-id="${tc.id}" 
-                        style="font-size: 13px; font-weight: 600; color: var(--text-main); flex: 1; background: transparent; border: none; outline: none;"
-                        ${activeRunId ? 'disabled' : ''}>
-                    
-                    <div style="display: flex; align-items: center; gap: 16px; margin-left: auto;">
-                        <div style="width: 85px; display: flex; justify-content: center;">
-                            ${(isAssignedToMe || isAdmin) && !activeRunId ? `
-                                <button class="btn btn-success btn-sm run-tc" data-id="${tc.id}" title="Iniciar ejecución individual" 
-                                    style="padding: 4px 12px; font-size: 0.65rem; font-weight: 800; letter-spacing: 0.05em;">
-                                    ▶ EJECUTAR
-                                </button>
-                            ` : activeRunId ? `
-                                <span style="font-size: 9px; color: var(--ok); font-weight: 800; opacity: 0.6; display: flex; align-items: center; gap: 4px;">
-                                    <span style="width: 6px; height: 6px; background: var(--ok); border-radius: 50%; animation: pulse 2s infinite;"></span>
-                                    EN CICLO
-                                </span>
-                            ` : ''}
-                        </div>
-
-                        <span class="tt-tc-assignee" style="width: 70px; font-size: 11px; opacity: 0.6; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500;">
-                            ${assignee ? UI.escapeHTML(assignee.name.split(' ')[0]) : '—'}
-                        </span>
-
-                        <div style="width: 32px; display: flex; justify-content: center;">
-                            ${isAdmin ? `<button class="btn-icon danger delete-tc" data-tc-id="${tc.id}" data-suite-id="${suiteId}" title="${activeRunId ? 'No se puede eliminar durante la ejecución' : 'Eliminar'}" style="padding: 0; font-size: 12px; opacity: ${activeRunId ? '0.1' : '1'}; cursor: ${activeRunId ? 'not-allowed' : 'pointer'};" ${activeRunId ? 'disabled' : ''}>🗑</button>` : ''}
-                        </div>
-
-                        <span class="tt-tc-expand" style="width: 24px; text-align: center; font-size: 10px; color: var(--text-muted); transition: transform 0.2s; transform: ${isExpanded ? 'rotate(180deg)' : 'none'};">${isExpanded ? '▼' : '▶'}</span>
-                    </div>
-                </div>
-                ${isExpanded ? `
-                    <div class="tt-tc-editor">
-                        <div class="tt-editor-grid">
-                            <div class="field-group">
-                                <label class="field-label">Historia de Usuario vinculada</label>
-                                <select class="tc-us-select" data-tc-id="${tc.id}" ${readOnlyAttr}>
-                                    <option value="">— No vinculada —</option>
-                                    ${Store.state.userStories.map(us => {
-            const fullTitle = `${us.key_id} - ${us.title}`;
-            const displayTitle = fullTitle.length > 80 ? fullTitle.substring(0, 80) + '...' : fullTitle;
-            return `<option value="${us.id}" ${us.id === tc.us_id ? 'selected' : ''} title="${UI.escapeHTML(fullTitle)}">${UI.escapeHTML(displayTitle)}</option>`;
-        }).join('')}
-                                </select>
-                            </div>
-                            <div class="field-group">
-                                <label class="field-label">Asignado a</label>
-                                <select class="tc-assign-select" data-tc-id="${tc.id}" ${readOnlyAttr}>
-                                    <option value="">— Sin asignar —</option>
-                                    ${(Store.state.team || []).map(u => `
-                                        <option value="${u.id}" ${u.id === tc.assigned_to ? 'selected' : ''}>${UI.escapeHTML(u.name)} (${UI.escapeHTML(u.role)})</option>
-                                    `).join('')}
-                                </select>
-                            </div>
-                            <div class="field-group">
-                                <label class="field-label">Escenario de Prueba</label>
-                                <div style="font-size: 0.8rem; padding: 10px; background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 6px; color: var(--text-muted); display: flex; align-items: center; gap: 8px;">
-                                    ${tc.scenario_id ? `
-                                        <span style="color: var(--ok);">●</span> 
-                                        <span>Sincronizado automáticamente con el título</span>
-                                    ` : `
-                                        <span style="color: var(--warn);">○</span> 
-                                        <span>Se generará al vincular la HU y guardar</span>
-                                    `}
-                                </div>
-                            </div>
-                        </div>
-
-                        <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-bottom: 16px;">
-                            <span class="field-label" style="color: var(--brand); font-weight: 800; display: block; margin-bottom: 12px;">🧠 Metadata Inteligente</span>
-                            <div class="tt-editor-grid" style="grid-template-columns: repeat(2, 1fr);">
-                                <div class="field-group">
-                                    <label class="field-label">Prioridad</label>
-                                    <select class="tc-meta-select" data-tc-id="${tc.id}" data-field="priority" ${readOnlyAttr}>
-                                        ${['Alta', 'Media', 'Baja'].map(p => `<option value="${p}" ${tc.priority === p ? 'selected' : ''}>${p}</option>`).join('')}
-                                    </select>
-                                </div>
-                                <div class="field-group">
-                                    <label class="field-label">Jira Tracking / Epic</label>
-                                    <select class="tc-meta-select" data-tc-id="${tc.id}" data-field="jira_epic_key" ${readOnlyAttr}>
-                                        <option value="">— Sin Épica —</option>
-                                        ${(Store.state.jiraEpics || []).map(e => `<option value="${e.key}" ${tc.jira_epic_key === e.key ? 'selected' : ''}>${e.key} - ${e.name}</option>`).join('')}
-                                    </select>
-                                </div>
-
-                            </div>
-
-                            <div style="margin-top: 20px; display: flex; gap: 24px; flex-wrap: wrap; background: rgba(0,0,0,0.1); padding: 12px; border-radius: 6px;">
-                                <label style="display: flex; align-items: center; gap: 10px; font-size: 0.75rem; cursor: pointer;">
-                                    <div class="switch">
-                                        <input type="checkbox" class="tc-meta-check" data-tc-id="${tc.id}" data-field="is_smoke" ${tc.is_smoke ? 'checked' : ''} ${readOnlyAttr}>
-                                        <span class="slider"></span>
-                                    </div>
-                                    💨 Smoke
-                                </label>
-                                <label style="display: flex; align-items: center; gap: 10px; font-size: 0.75rem; cursor: pointer;">
-                                    <div class="switch">
-                                        <input type="checkbox" class="tc-meta-check" data-tc-id="${tc.id}" data-field="is_regression" ${tc.is_regression ? 'checked' : ''} ${readOnlyAttr}>
-                                        <span class="slider"></span>
-                                    </div>
-                                    🔄 Regresión
-                                </label>
-                                <label style="display: flex; align-items: center; gap: 10px; font-size: 0.75rem; cursor: pointer;">
-                                    <div class="switch">
-                                        <input type="checkbox" class="tc-meta-check" data-tc-id="${tc.id}" data-field="is_integration" ${tc.is_integration ? 'checked' : ''} ${readOnlyAttr}>
-                                        <span class="slider"></span>
-                                    </div>
-                                    🔗 Integración
-                                </label>
-
-                                ${linkedUS ? `
-                                    <button class="btn btn-ghost btn-sm view-hu-details" data-us-id="${linkedUS.id}" 
-                                        style="margin-left: auto; font-size: 0.65rem; font-weight: 800; color: var(--brand); border-color: rgba(59, 130, 246, 0.2); padding: 4px 12px; height: 28px;">
-                                        📖 DETALLES DE LA HU
-                                    </button>
-                                ` : ''}
-                            </div>
-                        </div>
-                        <div style="display: flex; flex-direction: column; gap: 20px; margin-bottom: 20px;">
-                            <div class="field-group">
-                                <label class="field-label">Suposiciones realizadas</label>
-                                <textarea class="tc-edit-field ${readOnlyClass}" data-tc-id="${tc.id}" data-field="assumptions" placeholder="—" ${readOnlyAttr}>${UI.escapeHTML(tc.assumptions || '')}</textarea>
-                            </div>
-                            <div class="field-group">
-                                <label class="field-label">Precondiciones específicas</label>
-                                <textarea class="tc-edit-field ${readOnlyClass}" data-tc-id="${tc.id}" data-field="preconditions" placeholder="—" ${readOnlyAttr}>${UI.escapeHTML(tc.preconditions || '')}</textarea>
-                            </div>
-                            <div class="field-group">
-                                <label class="field-label">Pasos del test</label>
-                                <div class="highlighter-container">
-                                    <div class="highlighter-backdrop">${UI.highlightSteps(tc.steps)}</div>
-                                    <textarea class="tc-edit-field highlighted-textarea ${readOnlyClass}" data-tc-id="${tc.id}" data-field="steps" placeholder="—" ${readOnlyAttr}>${UI.escapeHTML(tc.steps || '')}</textarea>
-                                </div>
-                            </div>
-                            <div class="field-group">
-                                <label class="field-label">Resultado esperado</label>
-                                <textarea class="tc-edit-field ${readOnlyClass}" data-tc-id="${tc.id}" data-field="expected_result" placeholder="—" ${readOnlyAttr}>${UI.escapeHTML(tc.expected_result || '')}</textarea>
-                            </div>
-                            <div class="field-group">
-                                <label class="field-label">Datos de prueba</label>
-                                <textarea class="tc-edit-field ${readOnlyClass}" data-tc-id="${tc.id}" data-field="test_data" placeholder="—" ${readOnlyAttr}>${UI.escapeHTML(tc.test_data || '')}</textarea>
-                            </div>
-                            <div class="field-group">
-                                <label class="field-label">Criterios de aceptación</label>
-                                <textarea class="tc-edit-field ${readOnlyClass}" data-tc-id="${tc.id}" data-field="acceptance_criteria" placeholder="—" ${readOnlyAttr}>${UI.escapeHTML(tc.acceptance_criteria || '')}</textarea>
-                            </div>
-                        </div>
-
-                        <div class="tt-editor-actions" style="border-top: 1px solid var(--border); padding-top: 16px; display: flex; justify-content: flex-end; gap: 12px;">
-                             ${isEditing ? `
-                                <button class="btn btn-ghost btn-sm cancel-edit-btn" data-tc-id="${tc.id}">Cancelar</button>
-                                <button class="btn btn-primary btn-sm save-tc-btn" data-tc-id="${tc.id}">Guardar cambios</button>
-                            ` : `
-                                <button class="btn btn-primary btn-sm edit-tc-btn" data-tc-id="${tc.id}" 
-                                    ${(!isAdmin && !isAssignedToMe) || activeRunId ? 'disabled' : ''} 
-                                    ${activeRunId ? 'title="No se puede editar mientras la suite está en ejecución"' : ''}>
-                                    ✏️ EDITAR TEST
-                                </button>
-                            `}
-                        </div>
-                    </div>
-                ` : ''}
-            </div>
-        `;
-    },
-
-
-
-    bindEvents(container) {
         // Edit mode toggle
         container.querySelectorAll('.edit-tc-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                // Guardar scroll actual en propiedades de instancia
                 const mainContent = container.querySelector('.ts-main-content');
                 const sidebarList = container.querySelector('.ts-sidebar-list');
                 this._lastMainScroll = mainContent ? mainContent.scrollTop : 0;
@@ -594,7 +724,7 @@ export const TestSuitesTab = {
             });
         });
 
-        // Auto-resize and highlighter sync
+        // Auto-resize textareas
         container.querySelectorAll('textarea').forEach(tx => {
             UI.autoResizeTextarea(tx);
             tx.addEventListener('input', () => {
@@ -606,12 +736,42 @@ export const TestSuitesTab = {
                     }
                 }
             });
-            // Sincronizar scroll si aplica
             tx.addEventListener('scroll', () => {
                 const backdrop = tx.previousElementSibling;
                 if (backdrop && backdrop.classList.contains('highlighter-backdrop')) {
                     backdrop.scrollTop = tx.scrollTop;
                 }
+            });
+        });
+
+        // Search input
+        container.querySelector('#ts-search')?.addEventListener('input', (e) => {
+            this.searchQuery = e.target.value;
+            this.render(container);
+        });
+
+        // Status filter
+        container.querySelector('#ts-filter-status')?.addEventListener('change', (e) => {
+            this.filterStatus = e.target.value;
+            this.render(container);
+        });
+
+        // Detail tab switching (expanded row tabs + old panel tabs)
+        container.querySelectorAll('.ts-expanded-tab, .ts-detail-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                this.detailTab = tab.dataset.tab;
+                this.render(container);
+            });
+        });
+
+        // TC row click -> select (toggle if same)
+        container.querySelectorAll('.ts-grid-row').forEach(row => {
+            row.addEventListener('click', (e) => {
+                if (e.target.closest('button')) return;
+                const tcId = parseInt(row.dataset.tcId);
+                this.selectedTCId = (this.selectedTCId === tcId) ? null : tcId;
+                this.editingTCId = null;
+                this.render(container);
             });
         });
 
@@ -644,11 +804,21 @@ export const TestSuitesTab = {
             Modals.render('new-suite');
         });
 
+        // Suite search
+        let suiteSearchTimeout;
+        container.querySelector('#suite-search')?.addEventListener('input', (e) => {
+            clearTimeout(suiteSearchTimeout);
+            suiteSearchTimeout = setTimeout(() => {
+                this.suiteSearchQuery = e.target.value;
+                this.render(container);
+            }, 150);
+        });
+
         // Seleccionar suite desde sidebar
-        container.querySelectorAll('.ts-master-card').forEach(card => {
-            card.addEventListener('click', () => {
-                this.selectedSuiteId = parseInt(card.dataset.id);
-                this.expandedTCId = null;
+        container.querySelectorAll('.ts-suite-row').forEach(row => {
+            row.addEventListener('click', () => {
+                this.selectedSuiteId = parseInt(row.dataset.id);
+                this.selectedTCId = null;
                 this.render(container);
             });
         });
@@ -681,14 +851,14 @@ export const TestSuitesTab = {
                 if (!await modalManager.confirm('¿Eliminar esta Suite y todos sus Test Cases?')) return;
                 UI.showLoading();
                 await ApiService.deleteTestSuite(id);
-                this.selectedSuiteId = null; // Reset selection
+                this.selectedSuiteId = null;
                 await this.reloadSuites();
                 UI.hideLoading();
                 UI.toast('Suite eliminada');
             });
         });
 
-        // Run Suite Play
+        // Run Suite
         container.querySelectorAll('.run-suite').forEach(btn => {
             btn.addEventListener('click', async (e) => {
                 e.stopPropagation();
@@ -696,18 +866,16 @@ export const TestSuitesTab = {
                 const suite = Store.state.testSuites.find(s => s.id === suiteId);
 
                 if (suite?.active_run_id) {
-                    ExecutionTab.projectSuites = []; // Invalidar por seguridad
+                    ExecutionTab.projectSuites = [];
                     Store.setState({ activeTab: 'execution' });
                     return;
                 }
 
                 UI.showLoading();
                 try {
-                    // Para el botón PLAY, siempre forzamos solo tests asignados al usuario actual
-                    // a menos que sea un Admin que quiera ejecutar todo (aunque el pedido dice "solo asignado")
                     const res = await ApiService.startSuiteExecution(suiteId, true);
                     if (res.ok) {
-                        ExecutionTab.projectSuites = []; // Invalidar para forzar recarga
+                        ExecutionTab.projectSuites = [];
                         UI.toast('🚀 Ejecución de tests asignados iniciada');
                         Store.setState({ activeTab: 'execution' });
                     }
@@ -718,8 +886,8 @@ export const TestSuitesTab = {
             });
         });
 
-        // Run Individual TC Play
-        container.querySelectorAll('.run-tc').forEach(btn => {
+        // Run Individual TC from grid
+        container.querySelectorAll('.run-tc-grid').forEach(btn => {
             btn.addEventListener('click', async (e) => {
                 e.stopPropagation();
                 const tcId = parseInt(btn.dataset.id);
@@ -727,7 +895,7 @@ export const TestSuitesTab = {
                 try {
                     const res = await ApiService.startTestCaseExecution(tcId);
                     if (res.ok) {
-                        ExecutionTab.projectSuites = []; // Invalidar para forzar recarga
+                        ExecutionTab.projectSuites = [];
                         UI.toast('⚡ Ejecución individual iniciada');
                         Store.setState({ activeTab: 'execution' });
                     }
@@ -748,11 +916,10 @@ export const TestSuitesTab = {
             UI.toast('Test Case creado');
         });
 
+        // Import XLSX
         container.querySelector('#btn-sidebar-import-xlsx')?.addEventListener('click', () => {
-            const suiteId = this.selectedSuiteId;
-            // Quitamos el bloqueo por suiteId, ahora permitimos importar y crear suite al vuelo
             Modals.render('import-dual', {
-                suiteId,
+                suiteId: this.selectedSuiteId,
                 useCaseId: Store.state.selectedUseCaseId,
                 onSuccess: async () => {
                     await this.reloadSuites();
@@ -769,112 +936,64 @@ export const TestSuitesTab = {
             ApiService.exportUseCaseMatrix(ucId);
         });
 
-        // TC us_id change: Update scenarios dropdown
-        container.querySelectorAll('.tc-us-select').forEach(select => {
-            select.addEventListener('click', e => e.stopPropagation());
-            select.addEventListener('change', (e) => {
-                const tcId = select.dataset.tcId;
-                const usId = parseInt(e.target.value);
-                const scenarioSelect = container.querySelector(`.tc-scenario-select[data-tc-id="${tcId}"]`);
-
-                if (!usId) {
-                    scenarioSelect.innerHTML = '<option value="">— No vinculado —</option>';
-                    scenarioSelect.disabled = true;
-                    return;
-                }
-
-                const us = Store.state.userStories.find(u => Number(u.id) === Number(usId));
-                const scenarios = us?.scenarios || [];
-
-                // Obtener escenarios usados globalmente para filtrar
-                const usedScenarioIds = Store.state.testSuites
-                    .flatMap(s => s.test_cases || [])
-                    .filter(t => t.scenario_id && Number(t.id) !== Number(tcId))
-                    .map(t => Number(t.scenario_id));
-
-                scenarioSelect.innerHTML = `
-                    <option value="">— No vinculado —</option>
-                    ${scenarios
-                        .filter(s => !usedScenarioIds.includes(Number(s.id)))
-                        .map((s, i) => {
-                            const cleanTitle = s.title.replace(/^E\d+:\s*/, '').trim();
-                            const originalIndex = scenarios.findIndex(orig => Number(orig.id) === Number(s.id));
-                            return `
-                                <optgroup label="Escenario E${originalIndex + 1}">
-                                    <option value="${s.id}">E${originalIndex + 1} | ${UI.escapeHTML(cleanTitle)}</option>
-                                </optgroup>
-                            `;
-                        }).join('')}
-                `;
-                scenarioSelect.disabled = false;
+        // Delete TC from grid
+        container.querySelectorAll('.delete-tc-grid').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const tcId = parseInt(btn.dataset.tcId);
+                if (!await modalManager.confirm('¿Eliminar este Test Case?')) return;
+                UI.showLoading();
+                await ApiService.deleteTestCase(tcId);
+                this.selectedTCId = null;
+                await this.reloadSuites();
+                UI.hideLoading();
+                UI.toast('Test Case eliminado');
             });
         });
 
-        // Reserva automática manejada por el backend al guardar
-
-
-        // TC title change (Wait for Save Button)
-        container.querySelectorAll('.tc-title-input').forEach(input => {
-            input.addEventListener('click', e => e.stopPropagation());
-        });
-
-        // TC fields change (Wait for Save Button)
-        container.querySelectorAll('.tc-edit-field').forEach(input => {
-            input.addEventListener('click', e => e.stopPropagation());
-        });
-
-        // Save test case manually
+        // Save TC
         container.querySelectorAll('.save-tc-btn').forEach(btn => {
             btn.addEventListener('click', async (e) => {
                 e.preventDefault();
                 e.stopPropagation();
                 if (btn.disabled) return;
 
-                // Preservar scroll antes de operaciones
                 const mainContent = container.querySelector('.ts-main-content');
                 const mainScroll = mainContent ? mainContent.scrollTop : 0;
                 const windowScrollY = window.scrollY;
 
                 const tcId = parseInt(btn.dataset.tcId);
-                const title = container.querySelector(`.tc-title-input[data-tc-id="${tcId}"]`).value;
-                const us_id = container.querySelector(`.tc-us-select[data-tc-id="${tcId}"]`).value;
-                const scenario_id = container.querySelector(`.tc-scenario-select[data-tc-id="${tcId}"]`)?.value;
-                const assigned_to = container.querySelector(`.tc-assign-select[data-tc-id="${tcId}"]`).value;
-                const steps = container.querySelector(`.tc-edit-field[data-tc-id="${tcId}"][data-field="steps"]`).value;
-                const expected = container.querySelector(`.tc-edit-field[data-tc-id="${tcId}"][data-field="expected_result"]`).value;
-                const preconditions = container.querySelector(`.tc-edit-field[data-tc-id="${tcId}"][data-field="preconditions"]`).value;
+                const tc = Store.state.testSuites.flatMap(s => s.test_cases || []).find(t => t.id === tcId);
+                if (!tc) return;
 
-                // Metadata
-                const priority = container.querySelector(`.tc-meta-select[data-tc-id="${tcId}"][data-field="priority"]`)?.value || 'Media';
-                const is_smoke = container.querySelector(`.tc-meta-check[data-tc-id="${tcId}"][data-field="is_smoke"]`)?.checked || false;
-                const is_regression = container.querySelector(`.tc-meta-check[data-tc-id="${tcId}"][data-field="is_regression"]`)?.checked || false;
-                const is_integration = container.querySelector(`.tc-meta-check[data-tc-id="${tcId}"][data-field="is_integration"]`)?.checked || false;
-                const jira_epic_key = container.querySelector(`.tc-meta-select[data-tc-id="${tcId}"][data-field="jira_epic_key"]`)?.value || '';
-
-                const assumptions = container.querySelector(`.tc-edit-field[data-tc-id="${tcId}"][data-field="assumptions"]`).value;
-                const test_data = container.querySelector(`.tc-edit-field[data-tc-id="${tcId}"][data-field="test_data"]`).value;
-                const acceptance_criteria = container.querySelector(`.tc-edit-field[data-tc-id="${tcId}"][data-field="acceptance_criteria"]`).value;
+                const title = tc.title;
+                const us_id = container.querySelector(`.tc-us-select-detail[data-tc-id="${tcId}"]`)?.value;
+                const assigned_to = container.querySelector(`.tc-assign-select-detail[data-tc-id="${tcId}"]`)?.value;
+                const steps = container.querySelector(`textarea[data-field="steps"]`)?.value;
+                const expected_result = container.querySelector(`textarea[data-field="expected_result"]`)?.value;
+                const preconditions = container.querySelector(`textarea[data-field="preconditions"]`)?.value;
+                const test_data = container.querySelector(`textarea[data-field="test_data"]`)?.value;
+                const acceptance_criteria = container.querySelector(`textarea[data-field="acceptance_criteria"]`)?.value;
+                const assumptions = container.querySelector(`textarea[data-field="assumptions"]`)?.value;
+                const priority = container.querySelector(`.tc-meta-select-detail[data-tc-id="${tcId}"][data-field="priority"]`)?.value || 'Media';
+                const jira_epic_key = container.querySelector(`.tc-meta-select-detail[data-tc-id="${tcId}"][data-field="jira_epic_key"]`)?.value || '';
+                const is_smoke = container.querySelector(`.tc-meta-check-detail[data-tc-id="${tcId}"][data-field="is_smoke"]`)?.checked || false;
+                const is_regression = container.querySelector(`.tc-meta-check-detail[data-tc-id="${tcId}"][data-field="is_regression"]`)?.checked || false;
+                const is_integration = container.querySelector(`.tc-meta-check-detail[data-tc-id="${tcId}"][data-field="is_integration"]`)?.checked || false;
 
                 const payload = {
                     title,
                     us_id: us_id ? parseInt(us_id) : null,
-                    scenario_id: scenario_id ? parseInt(scenario_id) : null,
                     assigned_to: assigned_to ? parseInt(assigned_to) : null,
-                    steps: steps,
-                    expected_result: expected,
-                    preconditions: preconditions,
-                    priority, is_smoke, is_regression, is_integration, jira_epic_key,
-                    assumptions, test_data, acceptance_criteria
+                    steps, expected_result, preconditions, test_data, acceptance_criteria, assumptions,
+                    priority, jira_epic_key, is_smoke, is_regression, is_integration
                 };
-                console.log('DEBUG: Sending Update for TC', tcId, payload);
+
                 UI.showLoading();
-                const res = await ApiService.updateTestCase(tcId, payload);
-                console.log('DEBUG: API Response:', res);
+                await ApiService.updateTestCase(tcId, payload);
                 this.editingTCId = null;
-                // Guardar scroll antes de reload
-                const mainBeforeReload = container.querySelector('.ts-main-content');
-                this._lastMainScroll = mainBeforeReload ? mainBeforeReload.scrollTop : 0;
-                this._lastWindowScrollY = window.scrollY;
+                this._lastMainScroll = mainScroll;
+                this._lastWindowScrollY = windowScrollY;
 
                 await this.reloadSuites();
                 UI.hideLoading();
@@ -882,39 +1001,16 @@ export const TestSuitesTab = {
             });
         });
 
-        // Evidence Collapsible (Removido de TestSuitesTab)
-
-        // Toggle TC expand (details)
-        container.querySelectorAll('.test-card-header').forEach(header => {
-            header.addEventListener('click', (e) => {
-                if (e.target.closest('button') || e.target.closest('input') || e.target.closest('select')) return;
-                const tcId = parseInt(header.dataset.tcId);
-                this.expandedTCId = this.expandedTCId === tcId ? null : tcId;
-                this.render(container);
-            });
+        // Execution overlay close
+        container.querySelector('#ts-exec-close')?.addEventListener('click', () => {
+            this.executionOverlay = null;
+            this.render(container);
         });
 
-        // Delete TC
-        container.querySelectorAll('.delete-tc').forEach(btn => {
-            btn.addEventListener('click', async (e) => {
-                e.stopPropagation();
-                const tcId = parseInt(btn.dataset.tcId);
-                if (!await modalManager.confirm('¿Eliminar este Test Case?')) return;
-                UI.showLoading();
-                await ApiService.deleteTestCase(tcId);
-                await this.reloadSuites();
-                UI.hideLoading();
-                UI.toast('Test Case eliminado');
-            });
-        });
-        // Bind inconsistency panel for selected suite
-        const selectedSuiteObj = Store.state.testSuites.find(s => s.id === this.selectedSuiteId);
-        if (selectedSuiteObj) this._bindInconsistencyPanel(container, selectedSuiteObj);
         // Bind AI Gemini Generator
         this.bindGeminiModal(container);
     },
 
-    // ─── Gemini Modal ─────────────────────────────────────────────────────
     _geminiImages: [],
 
     bindGeminiModal(container) {
@@ -926,7 +1022,6 @@ export const TestSuitesTab = {
 
     openGeminiModal(container, suiteId) {
         this._geminiImages = [];
-        // Remove old modal if exists
         document.getElementById('modal-gemini-tc')?.remove();
 
         const savedKey = localStorage.getItem('gemini_api_key') || '';
@@ -935,7 +1030,6 @@ export const TestSuitesTab = {
         modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);';
         modal.innerHTML = `
             <div style="max-width:760px;width:95vw;max-height:90vh;display:flex;flex-direction:column;background:rgba(10,12,28,0.98);border:1px solid rgba(99,102,241,0.35);border-radius:20px;box-shadow:0 30px 60px rgba(0,0,0,0.7);overflow:hidden;">
-                <!-- Header -->
                 <div style="background:linear-gradient(135deg,#4f46e5,#7c3aed);padding:16px 24px;color:white;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;">
                     <div>
                         <h2 style="margin:0;font-size:1.1rem;font-weight:800;">✨ Generar Tests con Gemini IA</h2>
@@ -943,14 +1037,12 @@ export const TestSuitesTab = {
                     </div>
                     <button id="gemini-tc-close" style="background:rgba(0,0,0,0.25);border:none;color:white;width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:1.1rem;">&times;</button>
                 </div>
-                <!-- API Key -->
                 <div style="padding:10px 24px;background:rgba(0,0,0,0.3);border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;gap:12px;flex-shrink:0;">
                     <label style="font-size:0.68rem;font-weight:800;color:#818cf8;white-space:nowrap;text-transform:uppercase;">🔑 API Key</label>
                     <input id="gemini-tc-key" type="password" placeholder="AIza..." value="${savedKey}"
                         style="flex:1;padding:6px 10px;border-radius:7px;border:1px solid rgba(99,102,241,0.4);background:rgba(255,255,255,0.05);color:white;font-family:monospace;font-size:0.78rem;outline:none;"/>
                     <a href="https://aistudio.google.com/app/apikey" target="_blank" style="font-size:0.68rem;color:#818cf8;white-space:nowrap;text-decoration:none;">Obtener →</a>
                 </div>
-                <!-- Body -->
                 <div style="flex:1;overflow-y:auto;padding:20px 24px;display:flex;flex-direction:column;gap:16px;">
                     <div>
                         <div style="font-size:0.68rem;font-weight:800;color:#818cf8;text-transform:uppercase;margin-bottom:6px;">📋 Historia de Usuario / Contexto</div>
@@ -970,7 +1062,6 @@ export const TestSuitesTab = {
                     </div>
                     <div id="gemini-tc-status" style="display:none;font-size:0.8rem;padding:10px 14px;border-radius:8px;font-weight:600;"></div>
                 </div>
-                <!-- Footer -->
                 <div style="padding:14px 24px;background:rgba(0,0,0,0.25);border-top:1px solid rgba(255,255,255,0.06);display:flex;justify-content:flex-end;gap:10px;flex-shrink:0;">
                     <button id="gemini-tc-cancel" style="padding:9px 18px;border-radius:9px;border:1px solid rgba(255,255,255,0.1);background:transparent;color:#64748b;font-weight:600;cursor:pointer;font-size:0.85rem;">Cancelar</button>
                     <button id="gemini-tc-submit" style="padding:9px 24px;border-radius:9px;border:none;background:linear-gradient(to right,#6366f1,#a855f7);color:white;font-weight:800;cursor:pointer;font-size:0.9rem;display:flex;align-items:center;gap:8px;">
@@ -986,7 +1077,6 @@ export const TestSuitesTab = {
         modal.querySelector('#gemini-tc-cancel').onclick = close;
         modal.addEventListener('click', e => { if (e.target === modal) close(); });
 
-        // File picker
         const fileInput = modal.querySelector('#gemini-tc-file');
         modal.querySelector('#gemini-tc-dropzone').addEventListener('click', (e) => {
             if (e.target.closest('button')) return;
@@ -994,12 +1084,10 @@ export const TestSuitesTab = {
         });
         fileInput.onchange = (e) => this._addGeminiImages(Array.from(e.target.files));
 
-        // API key persistence
         modal.querySelector('#gemini-tc-key').addEventListener('input', (e) => {
             localStorage.setItem('gemini_api_key', e.target.value);
         });
 
-        // Drag & drop handler (global reference)
         window._geminiTcDrop = (e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -1007,7 +1095,6 @@ export const TestSuitesTab = {
             this._addGeminiImages(Array.from(e.dataTransfer.files));
         };
 
-        // Ctrl+V paste
         const pasteHandler = (e) => {
             if (!document.getElementById('modal-gemini-tc')) return;
             const items = (e.clipboardData || e.originalEvent?.clipboardData)?.items || [];
@@ -1020,7 +1107,6 @@ export const TestSuitesTab = {
         document.addEventListener('paste', pasteHandler);
         this._removePasteListener = () => document.removeEventListener('paste', pasteHandler);
 
-        // Submit
         modal.querySelector('#gemini-tc-submit').onclick = () => this._callGemini(suiteId, container);
     },
 
@@ -1129,27 +1215,21 @@ Devuelve ÚNICAMENTE un array JSON válido. Cada elemento representa UN test cas
 
             this._setGeminiStatus(`✅ Creando ${parsed.length} tests en la suite...`, 'ok');
 
-            // Extraer metadatos globales del lote (iguales para todos los items)
             const huName = parsed[0]?.hu_name || '';
             const inconsistencies = parsed[0]?.inconsistencies || [];
 
             UI.showLoading();
 
-            // Guardar inconsistencias en la suite (a nivel global)
             if (inconsistencies.length > 0) {
-                // Obtenemos la suite actual, le sumamos las nuevas inconsistencias a las que ya tuviera
                 const currentSuite = Store.state.testSuites.find(s => s.id === suiteId);
                 const rawExisting = currentSuite?.inconsistencies;
                 const existingInconsistencies = Array.isArray(rawExisting) ? rawExisting : (() => { try { return JSON.parse(rawExisting || '[]'); } catch { return []; } })();
-                
-                // Evitamos duplicados básicos comparando títulos
                 const newInconsistencies = inconsistencies.filter(inc => !existingInconsistencies.some(e => e.title === inc.title));
                 if (newInconsistencies.length > 0) {
                     await ApiService.updateSuiteInconsistencies(suiteId, [...existingInconsistencies, ...newInconsistencies]);
                 }
             }
 
-            // Create each test case via API
             for (const item of parsed) {
                 const precStr = Array.isArray(item.preconditions) ? item.preconditions.join('\n') : '';
                 const tdStr = Array.isArray(item.testData) ? item.testData.join('\n') : '';
@@ -1201,5 +1281,18 @@ Devuelve ÚNICAMENTE un array JSON válido. Cada elemento representa UN test cas
             UI.toast(err.message, 'error');
         }
         UI.hideLoading();
+    },
+
+    setupRealtimeListener() {
+        if (this._isListening) return;
+        window.addEventListener('realtime-refresh', async () => {
+            const container = document.getElementById('tab-content');
+            if (Store.state.activeTab === 'test-suites' && container) {
+                console.log('⚡ Realtime: Refreshing Test Suites...');
+                await this.reloadSuites();
+                this.render(container);
+            }
+        });
+        this._isListening = true;
     }
 };

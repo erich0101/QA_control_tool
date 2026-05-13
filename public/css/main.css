@@ -1305,6 +1305,114 @@ input:checked + .slider:before {
 }
 .side-panel-body::-webkit-scrollbar { width: 6px; }
 
+/* ─── Test Suites Grid/Table View ─── */
+.ts-toolbar {
+    gap: 12px;
+}
+.ts-grid-table {
+    font-size: 0.82rem;
+}
+.ts-grid-table thead tr {
+    border-bottom: 1px solid var(--border);
+}
+.ts-grid-table th {
+    padding: 8px 12px;
+    text-align: left;
+    font-weight: 700;
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+.ts-grid-table td {
+    padding: 10px 12px;
+    vertical-align: middle;
+}
+.ts-grid-row.selected {
+    background: rgba(99, 102, 241, 0.12);
+}
+.ts-grid-row:hover {
+    background: rgba(99, 102, 241, 0.08);
+}
+.ts-detail-panel {
+    height: 100%;
+}
+.ts-detail-tabs {
+    background: var(--bg-surface-elevated);
+}
+.ts-detail-tab {
+    font-size: 0.78rem;
+}
+.ts-detail-tab.active {
+    color: var(--brand);
+    font-weight: 800;
+}
+.ts-detail-body {
+    scrollbar-width: thin;
+}
+.ts-detail-body::-webkit-scrollbar { width: 4px; }
+.ts-detail-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+/* ─── Test Suites Expanded Row ─── */
+.ts-expanded-row {
+    background: var(--bg-surface-elevated);
+    box-shadow: inset 0 1px 0 rgba(99,102,241,0.2);
+}
+.ts-expanded-row:hover {
+    background: var(--bg-surface-elevated);
+}
+.ts-expanded-tabs {
+    display: flex;
+    gap: 4px;
+}
+.ts-expanded-tab {
+    font-size: 0.78rem;
+    padding: 8px 16px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    transition: all 0.15s;
+    color: var(--text-muted);
+}
+.ts-expanded-tab.active {
+    color: var(--brand);
+    font-weight: 800;
+    border-bottom-color: var(--brand);
+}
+.ts-expanded-body {
+    padding: 4px 0;
+}
+
+/* ─── User Stories Tabs ─── */
+.us-detail-tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--border);
+}
+.us-detail-tab {
+    flex: 1;
+    padding: 10px 8px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    transition: all 0.15s;
+}
+.us-detail-tab.active {
+    color: var(--brand);
+    font-weight: 800;
+    border-bottom-color: var(--brand);
+}
+.us-detail-body {
+    flex: 1;
+    overflow-y: auto;
+}
+
 /* ─── MODAL SYSTEM ─── */
 .modal-overlay {
     position: fixed; inset: 0;

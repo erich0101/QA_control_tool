@@ -292,7 +292,49 @@ ${bug.actual_result || '—'}
 
         if (!res.ok) return [];
         const data = await res.json();
-        return data.comments || [];
+        return (data.comments || []).map(c => ({
+            id: c.id,
+            author: c.author?.displayName || 'Unknown',
+            created: c.created,
+            body: this.extractTextFromADF(c.body),
+            rawBody: c.body
+        }));
+    },
+
+    extractTextFromADF(adf) {
+        if (typeof adf === 'string') return adf;
+        if (!adf || !adf.content) return '';
+
+        let text = '';
+        const processNode = (node) => {
+            if (node.type === 'text' && node.text) {
+                text += node.text;
+            }
+            if (node.content && Array.isArray(node.content)) {
+                node.content.forEach(processNode);
+            }
+            if (node.type === 'mention') {
+                text += `@[${node.attrs?.display || 'user'}]`;
+            }
+        };
+
+        adf.content.forEach(processNode);
+        return text;
+    },
+
+    extractMentionAccountIds(adf) {
+        if (!adf || !adf.content) return [];
+        const ids = [];
+        const findMentions = (node) => {
+            if (node.type === 'mention' && node.attrs?.id) {
+                ids.push(node.attrs.id);
+            }
+            if (node.content && Array.isArray(node.content)) {
+                node.content.forEach(findMentions);
+            }
+        };
+        adf.content.forEach(findMentions);
+        return ids;
     },
 
     async addIssueComment(userCredentials, domain, issueKey, text, mentionId = null) {
@@ -386,22 +428,21 @@ ${bug.actual_result || '—'}
             try {
                 const comments = await this.getIssueComments(userCredentials, domain, issue.key);
                 const mentions = comments.filter(c => {
-                    const body = c.body || '';
-                    return typeof body === 'string' && body.includes(myAccountId);
+                    const mentionIds = this.extractMentionAccountIds(c.rawBody || c.body);
+                    return mentionIds.includes(myAccountId);
                 });
                 if (mentions.length > 0) {
                     mentionedIssues.push({
                         ...issue,
                         mentions: mentions.map(c => ({
                             id: c.id,
-                            author: c.author?.displayName || 'Unknown',
+                            author: c.author,
                             created: c.created,
                             preview: (c.body || '').substring(0, 150)
                         }))
                     });
                 }
             } catch (e) {
-                // Skip issues where comments can't be fetched
                 console.warn(`Could not fetch comments for ${issue.key}:`, e.message);
             }
         }
