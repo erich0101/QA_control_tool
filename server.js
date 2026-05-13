@@ -481,6 +481,41 @@ async function getJiraUserCredentials(projectId, userId) {
     };
 }
 
+function normalizeStatus(name, cat) {
+    const n = (name || '').toLowerCase();
+    const c = cat || '';
+    if (c === 'new' || n.includes('to do') || n.includes('por hacer') || n.includes('tareas')) return 'To Do';
+    if (c === 'indeterminate' || n.includes('progress') || n.includes('curso') || n.includes('desarrollo') || n.includes('en curso')) return 'In Progress';
+    if (n.includes('review') || n.includes('revisión') || n.includes('revisar') || n.includes('en revisión')) return 'In Review';
+    if (c === 'done' || n.includes('done') || n.includes('finaliz') || n.includes('cerrad') || n.includes('resolved')) return 'Done';
+    return 'Other';
+}
+
+function matchTransition(toName, targetStatus) {
+    const n = (toName || '').toLowerCase();
+    if (targetStatus === 'To Do') return n.includes('to do') || n.includes('por hacer') || n.includes('tareas');
+    if (targetStatus === 'In Progress') return n.includes('progress') || n.includes('curso') || n.includes('desarrollo') || n.includes('en curso');
+    if (targetStatus === 'In Review') return n.includes('review') || n.includes('revisión') || n.includes('revisar') || n.includes('en revisión');
+    return false;
+}
+
+function getLastStatusChange(issue, targetStatus) {
+    const histories = issue.changelog?.histories || [];
+    let lastDate = null;
+    histories.forEach(h => {
+        h.items.forEach(item => {
+            if (item.field === 'status') {
+                const toName = item.toString || '';
+                if (matchTransition(toName, targetStatus)) {
+                    const d = new Date(h.created);
+                    if (!lastDate || d > lastDate) lastDate = d;
+                }
+            }
+        });
+    });
+    return lastDate;
+}
+
 app.get('/api/jira/projects/:id/epics', requireAuth, async (req, res) => {
     try {
         const creds = await getJiraUserCredentials(req.params.id, req.user.id);
@@ -488,6 +523,294 @@ app.get('/api/jira/projects/:id/epics', requireAuth, async (req, res) => {
         
         const epics = await JiraService.getEpics(creds.userCredentials, creds.projectKey, creds.domain);
         res.json({ epics });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get('/api/jira/projects/:id/epic-stats', requireAuth, async (req, res) => {
+    try {
+        const creds = await getJiraUserCredentials(req.params.id, req.user.id);
+        if (creds.error) return res.status(creds.code === 'NO_PROJECT_CONFIG' ? 404 : 403).json({ error: creds.error });
+
+        const { epicKey, from, to } = req.query;
+        if (!epicKey || !from || !to) {
+            return res.status(400).json({ error: 'epicKey, from y to son requeridos' });
+        }
+
+        const dateFrom = new Date(from);
+        const dateTo = new Date(to);
+        dateTo.setHours(23, 59, 59, 999);
+
+        const jql = `project = "${creds.projectKey}" AND issuetype = Bug AND (parent = "${epicKey}" OR "Epic Link" = "${epicKey}")`;
+        const allBugs = await JiraService.searchIssues(creds.userCredentials, creds.domain, jql);
+
+        if (allBugs.length === 0) {
+            return res.json({ error: 'No se encontraron bugs para esta épica' });
+        }
+
+        const bugsInPeriod = allBugs.filter(b => {
+            const created = new Date(b.fields.created);
+            return created >= dateFrom && created <= dateTo;
+        });
+
+        const resolvedInPeriod = allBugs.filter(b => {
+            const resDate = b.fields.resolutiondate;
+            if (!resDate) return false;
+            const d = new Date(resDate);
+            return d >= dateFrom && d <= dateTo;
+        });
+
+        const openAtStart = allBugs.filter(b => {
+            const created = new Date(b.fields.created) < dateFrom;
+            const resolved = b.fields.resolutiondate ? new Date(b.fields.resolutiondate) < dateFrom : true;
+            return created && !resolved;
+        });
+
+        const stillOpen = allBugs.filter(b => !b.fields.resolutiondate);
+        const resolved = allBugs.filter(b => !!b.fields.resolutiondate);
+
+        // === AGING BUCKETS ===
+        const now = new Date();
+        const agingBuckets = { '0-3d': 0, '4-7d': 0, '8-15d': 0, '+15d': 0 };
+        stillOpen.forEach(b => {
+            const created = new Date(b.fields.created);
+            const lastStatus = getLastStatusChange(b, 'To Do') || getLastStatusChange(b, 'In Progress') || created;
+            const days = (now - lastStatus) / (1000 * 60 * 60 * 24);
+            if (days <= 3) agingBuckets['0-3d']++;
+            else if (days <= 7) agingBuckets['4-7d']++;
+            else if (days <= 15) agingBuckets['8-15d']++;
+            else agingBuckets['+15d']++;
+        });
+
+        // === SLA ADVANCED ===
+        const resolutionDays = resolved.map(b => {
+            return (new Date(b.fields.resolutiondate) - new Date(b.fields.created)) / (1000 * 60 * 60 * 24);
+        }).filter(d => d >= 0);
+
+        const sortedDays = [...resolutionDays].sort((a, b) => a - b);
+        const medianResolution = sortedDays.length > 0 ? sortedDays[Math.floor(sortedDays.length / 2)] : 0;
+        const p90Resolution = sortedDays.length > 0 ? sortedDays[Math.floor(sortedDays.length * 0.9)] : 0;
+        const avgResolutionDays = resolutionDays.length > 0 ? resolutionDays.reduce((a, b) => a + b, 0) / resolutionDays.length : 0;
+        const slaTarget = 5;
+        const withinSLA = resolutionDays.filter(d => d <= slaTarget).length;
+        const slaCompliance = resolutionDays.length > 0 ? Math.round((withinSLA / resolutionDays.length) * 100) : 0;
+
+        // === WEEKLY TREND ===
+        const weeks = [];
+        let cur = new Date(dateFrom);
+        cur.setHours(0, 0, 0, 0);
+        while (cur <= dateTo) {
+            const weekEnd = new Date(cur);
+            weekEnd.setDate(weekEnd.getDate() + 6);
+            if (weekEnd > dateTo) weekEnd.setTime(dateTo.getTime());
+            const weekStartStr = cur.toISOString().split('T')[0];
+            const weekEndStr = weekEnd.toISOString().split('T')[0];
+            const createdThisWeek = bugsInPeriod.filter(b => {
+                const d = new Date(b.fields.created);
+                return d >= cur && d <= weekEnd;
+            }).length;
+            const resolvedThisWeek = allBugs.filter(b => {
+                if (!b.fields.resolutiondate) return false;
+                const d = new Date(b.fields.resolutiondate);
+                return d >= cur && d <= weekEnd;
+            }).length;
+            const openAtWeekStart = allBugs.filter(b => {
+                const created = new Date(b.fields.created) < cur;
+                const resolved = b.fields.resolutiondate ? new Date(b.fields.resolutiondate) < cur : true;
+                return created && !resolved;
+            }).length;
+            const backlogEnd = Math.max(0, openAtWeekStart + createdThisWeek - resolvedThisWeek);
+            weeks.push({
+                label: weekStartStr,
+                created: createdThisWeek,
+                resolved: resolvedThisWeek,
+                backlogStart: openAtWeekStart,
+                backlogEnd: backlogEnd,
+                delta: createdThisWeek - resolvedThisWeek
+            });
+            cur.setDate(cur.getDate() + 7);
+        }
+
+        // === BACKLOG TREND ===
+        const firstWeek = weeks[0];
+        const lastWeek = weeks[weeks.length - 1];
+        const backlogDelta = firstWeek && lastWeek ? lastWeek.backlogEnd - firstWeek.backlogStart : 0;
+        const backlogDeltaPercent = firstWeek && firstWeek.backlogStart > 0 
+            ? Math.round(((lastWeek.backlogEnd - firstWeek.backlogStart) / firstWeek.backlogStart) * 100) 
+            : 0;
+
+        // === RESOLUTION RATE ===
+        const bugResolutionRate = bugsInPeriod.length > 0 
+            ? Math.round((resolvedInPeriod.length / bugsInPeriod.length) * 100) 
+            : resolved.length > 0 ? 100 : 0;
+
+        // === STATUS BREAKDOWN ===
+        const statusBreakdown = { 'To Do': 0, 'In Progress': 0, 'In Review': 0, 'Done': 0, 'Other': 0 };
+        const priorityBreakdown = {};
+        const criticalOpen = { count: 0, oldestDays: 0 };
+        bugsInPeriod.forEach(b => {
+            const statusName = b.fields.status?.name || '';
+            const statusCat = b.fields.status?.statusCategory?.key || '';
+            const normalized = normalizeStatus(statusName, statusCat);
+            statusBreakdown[normalized] = (statusBreakdown[normalized] || 0) + 1;
+            const prio = b.fields.priority?.name || 'Unknown';
+            priorityBreakdown[prio] = (priorityBreakdown[prio] || 0) + 1;
+            if (b.fields.priority?.name === 'Highest' && !b.fields.resolutiondate) {
+                const days = (now - new Date(b.fields.created)) / (1000 * 60 * 60 * 24);
+                criticalOpen.count++;
+                if (days > criticalOpen.oldestDays) criticalOpen.oldestDays = days;
+            }
+        });
+
+        // === AVG AGE BY STATUS ===
+        const avgAgeByStatus = {};
+        ['To Do', 'In Progress', 'In Review'].forEach(s => {
+            const statusBugs = bugsInPeriod.filter(b => normalizeStatus(b.fields.status?.name, b.fields.status?.statusCategory?.key) === s);
+            if (statusBugs.length === 0) { avgAgeByStatus[s] = 0; return; }
+            const totalDays = statusBugs.reduce((sum, b) => {
+                const created = new Date(b.fields.created);
+                const lastStatus = getLastStatusChange(b, s);
+                const fromDate = lastStatus || created;
+                return sum + (now - fromDate) / (1000 * 60 * 60 * 24);
+            }, 0);
+            avgAgeByStatus[s] = parseFloat((totalDays / statusBugs.length).toFixed(1));
+        });
+
+        // === RELEASE RISK SCORE ===
+        const backlogGrowthFactor = Math.abs(backlogDeltaPercent) / 100;
+        const criticalFactor = criticalOpen.count * 0.3;
+        const agingFactor = (agingBuckets['+15d'] / Math.max(stillOpen.length, 1)) * 0.3;
+        const slaFactor = (100 - slaCompliance) / 100 * 0.25;
+        const openFactor = (stillOpen.length / Math.max(bugsInPeriod.length, 1)) * 0.15;
+        const rawRisk = (criticalFactor + backlogGrowthFactor * 0.25 + agingFactor + slaFactor + openFactor);
+        const riskScore = Math.min(100, Math.round(rawRisk * 100));
+        const riskLabel = riskScore < 30 ? 'low' : riskScore < 60 ? 'moderate' : 'high';
+
+        // === QA HEALTH SCORE ===
+        const healthScore = Math.max(0, Math.min(100, Math.round(
+            (slaCompliance * 0.25) +
+            (Math.min(bugResolutionRate, 100) * 0.25) +
+            (Math.max(0, 100 - riskScore) * 0.30) +
+            (Math.max(0, 100 - (criticalOpen.count * 10)) * 0.20)
+        )));
+
+        // === INSIGHTS ===
+        const insights = [];
+        if (backlogDeltaPercent < 0) {
+            insights.push({ type: 'success', text: `Backlog disminuyendo ${Math.abs(backlogDeltaPercent)}% — tendencia positiva` });
+        } else if (backlogDeltaPercent > 0) {
+            insights.push({ type: 'warning', text: `Backlog creciendo ${backlogDeltaPercent}% — riesgo de acumulación` });
+        }
+        if (criticalOpen.count > 0) {
+            insights.push({ type: 'critical', text: `${criticalOpen.count} bug(s) crítico(s) abierto(s) — ${criticalOpen.oldestDays > slaTarget ? 'excede(n) SLA de ' + slaTarget + ' días' : 'dentro de SLA'}` });
+        }
+        if (slaCompliance < 70) {
+            insights.push({ type: 'warning', text: `SLA compliance al ${slaCompliance}% — ${slaTarget} días como target` });
+        } else if (slaCompliance >= 90) {
+            insights.push({ type: 'success', text: `SLA compliance al ${slaCompliance}% — excelente resolución` });
+        }
+        if (bugResolutionRate > 100) {
+            insights.push({ type: 'success', text: `Resolution rate ${bugResolutionRate}% — el equipo resolve más de lo que entra` });
+        } else if (bugResolutionRate < 50 && bugsInPeriod.length > 5) {
+            insights.push({ type: 'warning', text: `Resolution rate ${bugResolutionRate}% — backlog acumulándose` });
+        }
+        if (agingBuckets['+15d'] > 0) {
+            insights.push({ type: 'warning', text: `${agingBuckets['+15d']} bug(s) con más de 15 días sin resolver — possible deuda técnica` });
+        }
+
+        res.json({
+            summary: {
+                total: bugsInPeriod.length,
+                created: bugsInPeriod.length,
+                resolved: resolvedInPeriod.length,
+                open: stillOpen.length,
+                openAtStart: openAtStart.length,
+                avgResolutionDays: parseFloat(avgResolutionDays.toFixed(1)),
+                medianResolution: parseFloat(medianResolution.toFixed(1)),
+                p90Resolution: parseFloat(p90Resolution.toFixed(1)),
+                slaCompliance,
+                bugResolutionRate,
+                backlogDelta,
+                backlogDeltaPercent
+            },
+            healthScore,
+            riskScore,
+            riskLabel,
+            statusBreakdown,
+            priorityBreakdown,
+            trend: weeks,
+            avgAgeByStatus,
+            agingBuckets,
+            insights,
+            sla: {
+                target: slaTarget,
+                median: parseFloat(medianResolution.toFixed(1)),
+                p90: parseFloat(p90Resolution.toFixed(1)),
+                compliance: slaCompliance,
+                withinSLA,
+                total: resolutionDays.length
+            }
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get('/api/jira/projects/:id/my-tickets', requireAuth, async (req, res) => {
+    try {
+        const creds = await getJiraUserCredentials(req.params.id, req.user.id);
+        if (creds.error) return res.status(creds.code === 'NO_PROJECT_CONFIG' ? 404 : 403).json({ error: creds.error });
+
+        const { filter } = req.query;
+        const maxResults = parseInt(req.query.maxResults) || 50;
+
+        let issues = [];
+        if (filter === 'assigned') {
+            issues = await JiraService.getMyAssignedIssues(creds.userCredentials, creds.domain, creds.projectKey, maxResults);
+        } else if (filter === 'created') {
+            issues = await JiraService.getMyCreatedIssues(creds.userCredentials, creds.domain, creds.projectKey, maxResults);
+        } else if (filter === 'mentions') {
+            issues = await JiraService.getIssuesWhereMentioned(creds.userCredentials, creds.domain, creds.projectKey, 30);
+        } else {
+            return res.status(400).json({ error: 'filter debe ser: assigned, created, o mentions' });
+        }
+
+        const result = issues.map(i => ({
+            key: i.key,
+            id: i.id,
+            summary: i.fields?.summary,
+            status: i.fields?.status?.name,
+            statusCategory: i.fields?.status?.statusCategory?.key,
+            priority: i.fields?.priority?.name,
+            assignee: i.fields?.assignee?.displayName,
+            assigneeAvatar: i.fields?.assignee?.avatarUrls?.['24x24'],
+            reporter: i.fields?.reporter?.displayName,
+            created: i.fields?.created,
+            updated: i.fields?.updated,
+            issueType: i.fields?.issuetype?.name,
+            parent: i.fields?.parent?.key,
+            mentions: i.mentions || null
+        }));
+
+        res.json({ total: result.length, tickets: result });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get('/api/debug/jira-test', requireAuth, async (req, res) => {
+    try {
+        const { projectId, jql } = req.query;
+        if (!projectId || !jql) {
+            return res.status(400).json({ error: 'projectId y jql son requeridos' });
+        }
+        const creds = await getJiraUserCredentials(projectId, req.user.id);
+        if (creds.error) return res.status(creds.code === 'NO_PROJECT_CONFIG' ? 404 : 403).json({ error: creds.error });
+
+        const results = await JiraService.searchIssues(creds.userCredentials, creds.domain, jql);
+        const first = results.length > 0 ? results[0] : null;
+        res.json({ total: results.length, jqlUsed: jql, creds: { projectKey: creds.projectKey, domain: creds.domain }, firstIssue: first ? { key: first.key, id: first.id, projectKey: first.fields?.project?.key, fields: first.fields } : null });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

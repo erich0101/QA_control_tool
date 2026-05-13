@@ -240,14 +240,22 @@ ${bug.actual_result || '—'}
         return this.searchIssues(userCredentials, domain, jql);
     },
 
-    async searchIssues(userCredentials, domain, jql, expand = null) {
+    async searchIssues(userCredentials, domain, jql, expand = null, extraFields = []) {
         const auth = Buffer.from(`${userCredentials.jira_user_email}:${decrypt(userCredentials.encrypted_token)}`).toString('base64');
         const baseUrl = domain.replace(/\/$/, '');
         const url = `${baseUrl}/rest/api/3/search/jql`;
 
+        let fields;
+        if (extraFields.includes('*all')) {
+            fields = ['*all'];
+        } else {
+            const defaultFields = ["summary", "status", "assignee", "reporter", "created", "parent", "priority", "resolutiondate", "updated"];
+            fields = extraFields.length > 0 ? [...new Set([...defaultFields, ...extraFields])] : defaultFields;
+        }
+
         const body = {
             jql: jql,
-            fields: ["summary", "status", "assignee", "reporter", "created", "parent", "priority", "resolutiondate", "updated"],
+            fields: fields,
             maxResults: 100,
             fieldsByKeys: false
         };
@@ -354,6 +362,50 @@ ${bug.actual_result || '—'}
 
         const data = await res.json();
         return { ok: true, user: { accountId: data.accountId, displayName: data.displayName, email: data.email } };
+    },
+
+    async getMyAssignedIssues(userCredentials, domain, projectKey, maxResults = 50) {
+        const jql = `project = "${projectKey}" AND assignee = currentUser() AND statusCategory != Done ORDER BY updated DESC`;
+        return this.searchIssues(userCredentials, domain, jql, null, ['summary', 'status', 'statusCategory', 'priority', 'assignee', 'reporter', 'created', 'updated', 'issuetype', 'parent']);
+    },
+
+    async getMyCreatedIssues(userCredentials, domain, projectKey, maxResults = 50) {
+        const jql = `project = "${projectKey}" AND reporter = currentUser() ORDER BY created DESC`;
+        return this.searchIssues(userCredentials, domain, jql, null, ['summary', 'status', 'statusCategory', 'priority', 'assignee', 'reporter', 'created', 'updated', 'issuetype', 'parent']);
+    },
+
+    async getIssuesWhereMentioned(userCredentials, domain, projectKey, daysBack = 30) {
+        const me = await this.testConnection(userCredentials, domain);
+        const myAccountId = me.user.accountId;
+
+        const jql = `project = "${projectKey}" AND updated >= "-${daysBack}d" ORDER BY updated DESC`;
+        const issues = await this.searchIssues(userCredentials, domain, jql, null, ['summary', 'status', 'statusCategory', 'priority', 'assignee', 'reporter', 'created', 'updated', 'issuetype', 'parent']);
+
+        const mentionedIssues = [];
+        for (const issue of issues) {
+            try {
+                const comments = await this.getIssueComments(userCredentials, domain, issue.key);
+                const mentions = comments.filter(c => {
+                    const body = c.body || '';
+                    return typeof body === 'string' && body.includes(myAccountId);
+                });
+                if (mentions.length > 0) {
+                    mentionedIssues.push({
+                        ...issue,
+                        mentions: mentions.map(c => ({
+                            id: c.id,
+                            author: c.author?.displayName || 'Unknown',
+                            created: c.created,
+                            preview: (c.body || '').substring(0, 150)
+                        }))
+                    });
+                }
+            } catch (e) {
+                // Skip issues where comments can't be fetched
+                console.warn(`Could not fetch comments for ${issue.key}:`, e.message);
+            }
+        }
+        return mentionedIssues;
     }
 };
 

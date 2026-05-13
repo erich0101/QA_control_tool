@@ -3,11 +3,12 @@ import { ApiService } from '../services/api.js';
 import { UI } from '../utils/ui-utils.js';
 import { DashboardJiraDaily } from './dashboard-jira-daily.js';
 import { DashboardJiraTeam } from './dashboard-jira-team.js';
+import { DashboardEpicReport } from './dashboard-epic-report.js';
 
 export const DashboardTab = {
     stats: [],
     overview: null,
-    activeSubTab: 'overview', // 'overview', 'performance', 'team'
+    activeSubTab: 'overview', // 'overview', 'performance', 'daily', 'team', 'epic-report'
 
     async render(container) {
         const scrollPos = container.scrollTop;
@@ -36,6 +37,7 @@ export const DashboardTab = {
                 <div class="sub-tab-item ${this.activeSubTab === 'performance' ? 'active' : ''}" data-subtab="performance" style="padding: 12px 4px; font-size: 0.8rem; font-weight: 700; cursor: pointer; color: ${this.activeSubTab === 'performance' ? 'var(--brand)' : 'var(--text-muted)'}; border-bottom: 2px solid ${this.activeSubTab === 'performance' ? 'var(--brand)' : 'transparent'};">Control & Tiempos</div>
                 <div class="sub-tab-item ${this.activeSubTab === 'daily' ? 'active' : ''}" data-subtab="daily" style="padding: 12px 4px; font-size: 0.8rem; font-weight: 700; cursor: pointer; color: ${this.activeSubTab === 'daily' ? 'var(--brand)' : 'var(--text-muted)'}; border-bottom: 2px solid ${this.activeSubTab === 'daily' ? 'var(--brand)' : 'transparent'};">Jira & Daily</div>
                 <div class="sub-tab-item ${this.activeSubTab === 'team' ? 'active' : ''}" data-subtab="team" style="padding: 12px 4px; font-size: 0.8rem; font-weight: 700; cursor: pointer; color: ${this.activeSubTab === 'team' ? 'var(--brand)' : 'var(--text-muted)'}; border-bottom: 2px solid ${this.activeSubTab === 'team' ? 'var(--brand)' : 'transparent'};">Productividad</div>
+                <div class="sub-tab-item ${this.activeSubTab === 'epic-report' ? 'active' : ''}" data-subtab="epic-report" style="padding: 12px 4px; font-size: 0.8rem; font-weight: 700; cursor: pointer; color: ${this.activeSubTab === 'epic-report' ? 'var(--brand)' : 'var(--text-muted)'}; border-bottom: 2px solid ${this.activeSubTab === 'epic-report' ? 'var(--brand)' : 'transparent'};">📋 Reporte Cliente</div>
             </div>
             <div id="dashboard-content-area"></div>
         `;
@@ -45,6 +47,8 @@ export const DashboardTab = {
             await DashboardJiraDaily.render(contentArea);
         } else if (this.activeSubTab === 'team') {
             await DashboardJiraTeam.render(contentArea);
+        } else if (this.activeSubTab === 'epic-report') {
+            await DashboardEpicReport.render(contentArea);
         } else {
             contentArea.innerHTML = await this.renderSubTabContent(activeProjectId);
         }

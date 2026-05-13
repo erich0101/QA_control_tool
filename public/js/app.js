@@ -9,6 +9,7 @@ import { ExecutionTab } from './components/execution-tab.js';
 import { DashboardTab } from './components/dashboard-tab.js';
 import { HistoryTab } from './components/history-tab.js';
 import { JiraTrackingTab } from './components/jira-tracking-tab.js';
+import { MiJiraTab } from './components/mi-jira-tab.js';
 import { UI } from './utils/ui-utils.js';
 import { RealtimeService } from './services/realtime.js';
 
@@ -126,6 +127,9 @@ function renderActiveTab(container, state) {
             break;
         case 'dashboard':
             DashboardTab.render(container);
+            break;
+        case 'mi-jira':
+            MiJiraTab.render(container);
             break;
         default:
             UserStories.render(container);

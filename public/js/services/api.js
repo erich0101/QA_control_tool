@@ -207,6 +207,11 @@ export const ApiService = {
     async getJiraComments(projectId, issueKey) {
         return fetch(`/api/jira/issues/${issueKey}/comments?project_id=${projectId}`).then(json);
     },
+    async getJiraEpicStats(projectId, epicKey, from, to) {
+        const params = new URLSearchParams({ epicKey, from, to });
+        const res = await fetch(`/api/jira/projects/${projectId}/epic-stats?${params}`);
+        return await res.json();
+    },
     async addJiraComment(projectId, issueKey, text, mentionId = null) {
         return fetch(`/api/jira/issues/${issueKey}/comments`, {
             method: 'POST',
@@ -276,5 +281,11 @@ export const ApiService = {
             body: JSON.stringify({ execution_type: 'REGRESSION', only_assigned: true }),
             headers
         }).then(json);
+    },
+    async debugJiraTest(projectId, jql) {
+        return fetch(`/api/debug/jira-test?projectId=${projectId}&jql=${encodeURIComponent(jql)}`).then(r => r.json());
+    },
+    async getMyJiraTickets(projectId, filter, maxResults = 50) {
+        return fetch(`/api/jira/projects/${projectId}/my-tickets?filter=${filter}&maxResults=${maxResults}`).then(json);
     }
 };

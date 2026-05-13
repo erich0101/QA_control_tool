@@ -10,11 +10,8 @@ const TABS = [
     { id: 'execution', icon: '⚡', label: 'Ejecución' },
     { id: 'history', icon: '🕒', label: 'Historial' },
     { id: 'jira-tracking', icon: '🎯', label: 'Seguimiento Jira' },
-    { id: 'dashboard', icon: '📊', label: 'Dashboard' }
-];
-
-const ADMIN_TABS = [
-    ...TABS,
+    { id: 'dashboard', icon: '📊', label: 'Dashboard' },
+    { id: 'mi-jira', icon: '👤', label: 'Mi JIRA' },
     { id: 'team', icon: '👥', label: 'Gestión de Equipo' }
 ];
 
@@ -28,9 +25,7 @@ export const TabBar = {
             return 0;
         };
 
-        const activeTabs = (Store.state.user?.role === 'Admin' || Store.state.user?.role === 'Analista QA') ? ADMIN_TABS : TABS;
-
-        container.innerHTML = activeTabs.map(tab => `
+        container.innerHTML = TABS.map(tab => `
             <div class="tab-item ${activeTab === tab.id ? 'active' : ''}" data-tab="${tab.id}">
                 <span>${tab.icon}</span>
                 <span>${tab.label}</span>

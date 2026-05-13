@@ -184,7 +184,7 @@ export const DashboardJiraDaily = {
                                                     ${renderUser(issue.assignee, issue.avatar)}
                                                 </td>
                                                 <td style="padding: 20px 24px; font-size: 0.75rem; color: #36b37e;">
-                                                    ${(issue.status === 'Finalizada' || issue.status === 'Finalizado') ? renderUser(issue.doneUser?.name, issue.doneUser?.avatar) : renderUser(null, null)}
+                                                    ${(issue.statusCategory === 'done' || issue.status === 'Finalizada' || issue.status === 'Finalizado' || issue.status === 'Done' || issue.status === 'Resolved') ? renderUser(issue.doneUser?.name, issue.doneUser?.avatar) : renderUser(null, null)}
                                                 </td>
                                             </tr>
                                         `;
