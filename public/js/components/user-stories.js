@@ -329,8 +329,8 @@ export const UserStories = {
         return `
             <div style="display: flex; flex-direction: column; gap: 6px;">
                 ${items.map((item, i) => `
-                    <div style="display: flex; align-items: flex-start; gap: 12px; padding: 10px 16px; background: rgba(59,130,246,0.07); border-radius: 8px; border-left: 3px solid rgba(59,130,246,0.5);">
-                        <span style="font-size: 0.75rem; font-weight: 800; color: #3b82f6; white-space: nowrap; margin-top: 1px;">💡</span>
+                    <div style="display: flex; align-items: flex-start; gap: 12px; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.04);">
+                        <span style="font-size: 0.75rem; font-weight: 800; color: var(--brand); white-space: nowrap; margin-top: 1px;">💡</span>
                         <span style="font-size: 0.82rem; color: var(--text-main); flex: 1; line-height: 1.5;">${UI.escapeHTML(item.title || item.description || item)}</span>
                     </div>
                 `).join('')}
@@ -344,7 +344,7 @@ export const UserStories = {
         return `
             <div style="display: flex; flex-direction: column; gap: 6px;">
                 ${scenarios.map((s, i) => `
-                    <div data-id="${s.id}" style="display: flex; align-items: center; gap: 12px; padding: 8px 16px; background: var(--bg-surface-elevated); border-radius: 8px; border: 1px solid var(--border);">
+                    <div data-id="${s.id}" style="display: flex; align-items: center; gap: 12px; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.04);">
                         <span style="min-width: 28px; text-align: center; font-size: 0.72rem; font-weight: 800; color: var(--brand);">E${i+1}</span>
                         <input type="text" class="scenario-edit-field us-edit-field" data-id="${us.id}" data-scenario-id="${s.id}" data-field="title" value="${UI.escapeHTML(s.title)}" placeholder="Título del escenario..." style="flex: 1; border: none; background: transparent; outline: none; font-size: 0.85rem; color: var(--text-main); padding: 4px 0;">
                         <button class="btn-icon delete-scenario" data-id="${s.id}" title="Eliminar Escenario" style="background: none; border: none; color: #ef4444; cursor: pointer; font-size: 12px; padding: 4px;">🗑️</button>

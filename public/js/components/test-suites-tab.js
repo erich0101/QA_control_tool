@@ -21,18 +21,15 @@ export const TestSuitesTab = {
     _lastJiraProjectId: null,
     _lastMainScroll: 0,
     _lastSidebarScroll: 0,
-    _lastWindowScrollY: 0,
 
     render(container) {
         const sidebarList = container.querySelector('.ts-sidebar-list');
         const mainContent = container.querySelector('.ts-main-content');
         const sidebarScroll = sidebarList ? sidebarList.scrollTop : 0;
         const mainScroll = mainContent ? mainContent.scrollTop : 0;
-        const windowScrollY = window.scrollY;
 
         const useMainScroll = this._lastMainScroll > 0 ? this._lastMainScroll : mainScroll;
         const useSidebarScroll = this._lastSidebarScroll > 0 ? this._lastSidebarScroll : sidebarScroll;
-        const useWindowScrollY = this._lastWindowScrollY > 0 ? this._lastWindowScrollY : windowScrollY;
 
         const { testSuites, activeProjectId, selectedUseCaseId, jiraEpics, loadedForUC } = Store.state;
         const totalTests = testSuites.reduce((acc, s) => acc + (s.test_cases || []).length, 0);
@@ -137,9 +134,6 @@ export const TestSuitesTab = {
         if (newMainContent && useMainScroll > 0) {
             newMainContent.scrollTop = useMainScroll;
             this._lastMainScroll = useMainScroll;
-        }
-        if (useWindowScrollY > 0) {
-            window.scrollTo(0, useWindowScrollY);
         }
     },
 
@@ -544,7 +538,7 @@ export const TestSuitesTab = {
                                 </select>
                             </div>
                         </div>
-                        <div style="background: rgba(0,0,0,0.1); padding: 12px; border-radius: 8px; display: flex; flex-direction: column; gap: 10px;">
+                        <div style="padding: 12px; display: flex; flex-direction: column; gap: 10px;">
                             <label style="display: flex; align-items: center; gap: 10px; font-size: 0.78rem; cursor: pointer;">
                                 <div class="switch">
                                     <input type="checkbox" class="tc-meta-check-detail" data-tc-id="${tc.id}" data-field="is_smoke" ${tc.is_smoke ? 'checked' : ''} ${readOnlyAttr}>
@@ -588,7 +582,7 @@ export const TestSuitesTab = {
                             const statusClass = (exec.status || 'pending').toLowerCase();
                             const attachments = exec.attachments || [];
                             return `
-                                <div style="background: rgba(0,0,0,0.15); border: 1px solid var(--border); border-radius: 10px; padding: 12px;">
+                                <div style="border-bottom: 1px solid rgba(255,255,255,0.05); padding: 12px 0;">
                                     <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
                                         <span class="status-pill ${statusClass}" style="font-size: 8px; width: 55px; text-align: center; justify-content: center; font-weight: 700; display: inline-flex; padding: 2px 5px;">${execStatus}</span>
                                         <span style="font-size: 0.75rem; color: var(--text-muted);">${execDate}</span>
@@ -693,7 +687,6 @@ export const TestSuitesTab = {
                 const sidebarList = container.querySelector('.ts-sidebar-list');
                 this._lastMainScroll = mainContent ? mainContent.scrollTop : 0;
                 this._lastSidebarScroll = sidebarList ? sidebarList.scrollTop : 0;
-                this._lastWindowScrollY = window.scrollY;
 
                 this.editingTCId = parseInt(btn.dataset.tcId);
                 this.render(container);
@@ -934,7 +927,6 @@ export const TestSuitesTab = {
 
                 const mainContent = container.querySelector('.ts-main-content');
                 const mainScroll = mainContent ? mainContent.scrollTop : 0;
-                const windowScrollY = window.scrollY;
 
                 const tcId = parseInt(btn.dataset.tcId);
                 const tc = Store.state.testSuites.flatMap(s => s.test_cases || []).find(t => t.id === tcId);
@@ -967,7 +959,6 @@ export const TestSuitesTab = {
                 await ApiService.updateTestCase(tcId, payload);
                 this.editingTCId = null;
                 this._lastMainScroll = mainScroll;
-                this._lastWindowScrollY = windowScrollY;
 
                 await this.reloadSuites();
                 UI.hideLoading();
@@ -1082,7 +1073,7 @@ export const TestSuitesTab = {
         document.addEventListener('paste', pasteHandler);
         this._removePasteListener = () => document.removeEventListener('paste', pasteHandler);
 
-        modal.querySelector('#gemini-tc-submit').onclick = () => this._callGemini(suiteId, container);
+        modal.querySelector('#gemini-tc-submit').onclick = () => this._callGemini(suiteId);
     },
 
     _addGeminiImages(files) {
@@ -1224,7 +1215,7 @@ REGLAS:
         throw new Error('La respuesta no es un array de test cases');
     },
 
-    async _callGemini(suiteId, tabContainer) {
+    async _callGemini(suiteId) {
         const apiKey = (document.getElementById('gemini-tc-key')?.value || '').trim();
         if (!apiKey) return this._setGeminiStatus('⚠️ Ingresá tu API Key de Gemini.', 'error');
 
@@ -1287,26 +1278,18 @@ REGLAS:
 
             UI.hideLoading();
 
-            this.selectedSuiteId = suiteId;
+            await this.reloadSuites();
 
-            const freshSuite = await ApiService.getTestSuite(suiteId);
-            if (freshSuite?.id) {
-                const suites = Store.state.testSuites;
-                const idx = suites.findIndex(s => s.id === suiteId);
-                const suitesCopy = [...suites];
-                if (idx !== -1) {
-                    suitesCopy[idx] = {
-                        ...suitesCopy[idx],
-                        inconsistencies: freshSuite.inconsistencies
-                    };
-                }
-                Store.setTestSuites(suitesCopy);
+            if (this.selectedSuiteId !== suiteId) {
+                this.selectedSuiteId = suiteId;
             }
+
+const container = document.getElementById('tab-content');
+            if (container) this.render(container);
 
             UI.toast(`🚀 ${tcData.length} tests generados`, 'ok');
             document.getElementById('modal-gemini-tc')?.remove();
             this._removePasteListener?.();
-            this.render(tabContainer);
 
         } catch (err) {
             console.error('[Gemini TC]', err);
@@ -1357,7 +1340,11 @@ REGLAS:
     },
 
     async reloadSuites() {
+        const prevSelectedId = this.selectedSuiteId;
         await this.loadSuitesForUC(Store.state.selectedUseCaseId);
+        if (prevSelectedId) {
+            this.selectedSuiteId = prevSelectedId;
+        }
     },
 
     async loadSuitesForUC(ucId) {
