@@ -166,16 +166,14 @@ export const TestSuitesTab = {
 
                         return `
                             <tr class="ts-suite-row ${isActive ? 'selected' : ''}" data-id="${suite.id}"
-                                style="border-bottom: 1px solid rgba(255,255,255,0.04); cursor: pointer; transition: background 0.15s;"
-                                onmouseover="this.style.background='rgba(99,102,241,0.08)'"
-                                onmouseout="this.style.background='${isActive ? 'rgba(99,102,241,0.12)' : 'transparent'}'">
-                                <td style="padding: 8px 10px;">
+                                style="border-bottom: 1px solid rgba(255,255,255,0.04); cursor: pointer;">
+                                <td>
                                     <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 2px;">
-                                        <span style="font-size: 0.6rem; font-weight: 800; color: var(--brand);">SUITE #${suite.id}</span>
+                                        <span class="suite-id">SUITE #${suite.id}</span>
                                         ${isExecuting ? '<span class="status-pill ok" style="font-size: 7px; padding: 1px 4px;">LIVE</span>' : ''}
                                     </div>
-                                    <div style="font-size: 0.78rem; font-weight: 600; color: var(--text-main); line-height: 1.2;">${UI.escapeHTML(suite.title)} ${incIndicator}</div>
-                                    <div style="font-size: 0.62rem; color: var(--text-muted); margin-top: 3px;">
+                                    <div class="suite-title">${UI.escapeHTML(suite.title)} ${incIndicator}</div>
+                                    <div class="suite-meta">
                                         🧪 ${testCount} tests${suite.assigned_to_name ? ` · 👤 ${UI.escapeHTML(suite.assigned_to_name)}` : ''}
                                     </div>
                                 </td>

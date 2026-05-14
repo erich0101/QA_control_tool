@@ -172,16 +172,14 @@ export const UserStories = {
 
         return `
             <tr class="us-suite-row ${isActive ? 'selected' : ''}" data-id="${us.id}"
-                style="border-bottom: 1px solid rgba(255,255,255,0.04); cursor: pointer; transition: background 0.15s;"
-                onmouseover="this.style.background='rgba(99,102,241,0.08)'"
-                onmouseout="this.style.background='${isActive ? 'rgba(99,102,241,0.12)' : 'transparent'}'">
-                <td style="padding: 8px 10px;">
+                style="border-bottom: 1px solid rgba(255,255,255,0.04); cursor: pointer;">
+                <td>
                     <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 2px;">
-                        <span style="font-size: 0.6rem; font-weight: 800; color: var(--brand);">${UI.escapeHTML(us.key_id)}</span>
+                        <span class="us-id">${UI.escapeHTML(us.key_id)}</span>
                         <span class="status-pill ${statusClass}" style="font-size: 7px; padding: 1px 4px;">${UI.escapeHTML(us.status || 'En Análisis')}</span>
                     </div>
-                    <div style="font-size: 0.78rem; font-weight: 600; color: var(--text-main); line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${UI.escapeHTML(us.title)}</div>
-                    <div style="font-size: 0.62rem; color: ${priorityColor}; margin-top: 2px;">${UI.escapeHTML(us.priority || 'Media')}</div>
+                    <div class="us-title">${UI.escapeHTML(us.title)}</div>
+                    <div class="us-priority" style="color: ${priorityColor};">${UI.escapeHTML(us.priority || 'Media')}</div>
                 </td>
             </tr>
         `;
