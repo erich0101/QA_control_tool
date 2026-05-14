@@ -17,9 +17,7 @@ export const TestSuitesTab = {
     detailTab: 'steps',
     executionOverlay: null,
     _isListening: false,
-    searchQuery: '',
     suiteSearchQuery: '',
-    filterStatus: 'all',
     _lastJiraProjectId: null,
     _lastMainScroll: 0,
     _lastSidebarScroll: 0,
@@ -169,7 +167,7 @@ export const TestSuitesTab = {
                         const rawInc = suite.inconsistencies;
                         const incList = Array.isArray(rawInc) ? rawInc : (() => { try { return JSON.parse(rawInc || '[]'); } catch { return []; } })();
                         if (incList.length > 0) {
-                            incIndicator = `<span title="Tiene inconsistencias" style="font-size: 0.65rem; color: #f59e0b;">⚠️</span>`;
+                            incIndicator = `<span title="Tiene inconsistencias" style="font-size: 0.65rem; color: #fbbf24;">⚠️</span>`;
                         }
 
                         return `
@@ -192,6 +190,51 @@ export const TestSuitesTab = {
                     }).join('')}
                 </tbody>
             </table>
+        `;
+    },
+
+    renderInconsistenciesPanel(suite) {
+        const rawInc = suite?.inconsistencies;
+        const incList = Array.isArray(rawInc) ? rawInc : (() => { try { return JSON.parse(rawInc || '[]'); } catch { return []; } })();
+
+        if (!incList.length) return '';
+
+        const sevColor = (sev) => ({ Alta: '#f87171', Media: '#fbbf24', Baja: '#4ade80' }[sev] || '#a5b4fc');
+        const sevBg = (sev) => ({ Alta: 'rgba(239,68,68,0.15)', Media: 'rgba(245,158,11,0.15)', Baja: 'rgba(34,197,94,0.15)' }[sev] || 'rgba(99,102,241,0.15)');
+
+        const altaCount = incList.filter(i => i.severity === 'Alta').length;
+        const mediaCount = incList.filter(i => i.severity === 'Media').length;
+        const bajaCount = incList.filter(i => i.severity === 'Baja').length;
+
+        const badges = [];
+        if (altaCount) badges.push(`<span style="background:rgba(239,68,68,0.2);color:#f87171;padding:2px 8px;border-radius:6px;font-size:0.62rem;font-weight:800;">${altaCount} Alta</span>`);
+        if (mediaCount) badges.push(`<span style="background:rgba(245,158,11,0.2);color:#fbbf24;padding:2px 8px;border-radius:6px;font-size:0.62rem;font-weight:800;">${mediaCount} Media</span>`);
+        if (bajaCount) badges.push(`<span style="background:rgba(34,197,94,0.2);color:#4ade80;padding:2px 8px;border-radius:6px;font-size:0.62rem;font-weight:800;">${bajaCount} Baja</span>`);
+
+        return `
+            <div class="inc-panel" style="border-bottom:1px solid var(--border);">
+                <div class="inc-panel-header" onclick="window._toggleIncPanel(this)"
+                    style="padding:8px 20px;background:rgba(0,0,0,0.15);cursor:pointer;display:flex;align-items:center;gap:10px;user-select:none;">
+                    <span class="inc-chevron" style="font-size:0.7rem;transition:transform 0.2s;">▶</span>
+                    <span style="font-size:0.75rem;">⚠️</span>
+                    <span style="font-size:0.68rem;font-weight:800;color:#f87171;text-transform:uppercase;letter-spacing:0.05em;">Inconsistencias</span>
+                    <span style="font-size:0.65rem;color:#64748b;">${incList.length} total</span>
+                    <div style="display:flex;gap:6px;">${badges.join('')}</div>
+                </div>
+                <div class="inc-panel-body" style="display:none;padding:12px 20px;background:rgba(0,0,0,0.1);">
+                    <div style="display:flex;flex-direction:column;gap:6px;">
+                        ${incList.map(inc => `
+                            <div style="display:flex;align-items:flex-start;gap:10px;padding:8px 10px;border-radius:6px;background:${sevBg(inc.severity)};border-left:3px solid ${sevColor(inc.severity)};">
+                                <span style="font-size:0.65rem;color:${sevColor(inc.severity)};font-weight:800;min-width:40px;">${inc.severity}</span>
+                                <div style="flex:1;min-width:0;">
+                                    <div style="font-size:0.78rem;font-weight:700;color:#f1f5f9;">${UI.escapeHTML(inc.title || '')}</div>
+                                    ${inc.description ? `<div style="font-size:0.7rem;color:#cbd5e1;margin-top:2px;line-height:1.4;">${UI.escapeHTML(inc.description)}</div>` : ''}
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            </div>
         `;
     },
 
@@ -224,29 +267,12 @@ export const TestSuitesTab = {
                     <button class="btn btn-sm delete-suite" data-id="${suite.id}" title="Eliminar Suite" style="padding: 4px 8px; background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.3);">🗑️</button>
                     <div style="width: 1px; height: 18px; background: var(--border);"></div>
                     <button class="btn btn-success btn-sm run-suite" data-id="${suite.id}" style="padding: 4px 10px; font-size: 0.72rem;">▶ EJECUTAR</button>
-                    <button class="btn btn-sm" id="btn-ai-gen-tc" data-suite-id="${suite.id}" style="background: linear-gradient(135deg,#a855f7,#6366f1); color: white; border: none; padding: 4px 10px; font-size: 0.72rem;">✨ AI Tool</button>
+                    <button class="btn btn-sm" id="btn-ai-gen-tc" data-suite-id="${suite.id}" style="background: linear-gradient(135deg,#2563eb,#3b82f6); color: white; border: none; padding: 4px 10px; font-size: 0.72rem;">✨ AI Tool</button>
                     <button class="btn btn-primary btn-sm" id="btn-new-tc" data-suite-id="${suite.id}" style="padding: 4px 10px; font-size: 0.72rem;">+ Nuevo TC</button>
                 </div>
             </div>
 
-            <!-- Toolbar: search + filters -->
-            <div class="ts-toolbar" style="padding: 10px 20px; background: var(--bg-surface-elevated); border-bottom: 1px solid var(--border); display: flex; gap: 10px; align-items: center; flex-shrink: 0;">
-                <div style="position: relative; flex: 1; max-width: 320px;">
-                    <input type="text" id="ts-search" placeholder="🔍 Buscar test case..." value="${UI.escapeHTML(this.searchQuery)}"
-                        style="width: 100%; padding: 7px 12px 7px 36px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-surface); color: var(--text-main); font-size: 0.82rem; outline: none;" />
-                    <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-size: 0.85rem; opacity: 0.4;">🔍</span>
-                </div>
-                <select id="ts-filter-status" style="padding: 7px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-surface); color: var(--text-main); font-size: 0.82rem; outline: none;">
-                    <option value="all" ${this.filterStatus === 'all' ? 'selected' : ''}>Todos</option>
-                    <option value="PENDING" ${this.filterStatus === 'PENDING' ? 'selected' : ''}>Pendientes</option>
-                    <option value="OK" ${this.filterStatus === 'OK' ? 'selected' : ''}>Aprobados</option>
-                    <option value="FAIL" ${this.filterStatus === 'FAIL' ? 'selected' : ''}>Fallidos</option>
-                    <option value="BLOCKED" ${this.filterStatus === 'BLOCKED' ? 'selected' : ''}>Bloqueados</option>
-                </select>
-                <div style="margin-left: auto; font-size: 0.75rem; color: var(--text-muted);">
-                    ${tcs.length} tests
-                </div>
-            </div>
+            ${this.renderInconsistenciesPanel(suite)}
 
             <!-- Grid Panel -->
             <div class="ts-grid-panel" style="flex: 1; overflow-y: auto; padding: 16px 20px;">
@@ -266,39 +292,23 @@ export const TestSuitesTab = {
         const user = Store.state.user;
         const activeRunId = suite?.active_run_id;
 
-        let filtered = tcs;
-        if (this.searchQuery) {
-            const q = this.searchQuery.toLowerCase();
-            filtered = filtered.filter(tc =>
-                (tc.title || '').toLowerCase().includes(q) ||
-                (tc.key_id || '').toLowerCase().includes(q) ||
-                (tc.assignee_name || '').toLowerCase().includes(q)
-            );
-        }
-        if (this.filterStatus !== 'all') {
-            filtered = filtered.filter(tc => tc.status === this.filterStatus);
-        }
-
-        if (filtered.length === 0) {
-            return `<div style="text-align: center; padding: 40px; opacity: 0.5; color: var(--text-muted); font-size: 0.85rem;">No hay tests que coincidan</div>`;
+        if (tcs.length === 0) {
+            return `<div style="text-align: center; padding: 40px; opacity: 0.5; color: var(--text-muted); font-size: 0.85rem;">No hay tests en esta suite</div>`;
         }
 
         return `
             <table class="ts-grid-table" style="width: 100%; border-collapse: collapse; font-size: 0.82rem;">
                 <thead>
                     <tr style="border-bottom: 1px solid var(--border); color: var(--text-muted);">
-                        <th style="padding: 8px 12px; text-align: left; font-weight: 700; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em;">Status</th>
-                        <th style="padding: 8px 12px; text-align: left; font-weight: 700; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em;">Key</th>
-                        <th style="padding: 8px 12px; text-align: left; font-weight: 700; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em;">Título</th>
-                        <th style="padding: 8px 12px; text-align: left; font-weight: 700; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em;">Prioridad</th>
-                        <th style="padding: 8px 12px; text-align: left; font-weight: 700; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em;">Asignado</th>
-                        <th style="padding: 8px 12px; text-align: left; font-weight: 700; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em;">Última Ejecución</th>
-                        <th style="padding: 8px 12px; text-align: left; font-weight: 700; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em;">Evidencia</th>
-                        <th style="padding: 8px 12px; text-align: center; font-weight: 700; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em;">Acciones</th>
+                        <th style="padding: 8px 12px; text-align: left; font-weight: 700; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; width: 90px;">Key</th>
+                        <th style="padding: 8px 12px; text-align: left; font-weight: 700; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; flex: 1;">Título</th>
+                        <th style="padding: 8px 12px; text-align: left; font-weight: 700; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; width: 120px;">Asignado</th>
+                        <th style="padding: 8px 12px; text-align: left; font-weight: 700; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; width: 100px;">Última Ejecución</th>
+                        <th style="padding: 8px 12px; text-align: center; font-weight: 700; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; width: 60px;">Acciones</th>
                     </tr>
                 </thead>
                 <tbody>
-                    ${this.renderTCGridWithDetail(filtered, suite, isAdmin, user, activeRunId)}
+                    ${this.renderTCGridWithDetail(tcs, suite, isAdmin, user, activeRunId)}
                 </tbody>
             </table>
         `;
@@ -316,41 +326,27 @@ export const TestSuitesTab = {
     },
 
     renderTCGridRow(tc, suite, isAdmin, user, activeRunId) {
-        const statusClass = (tc.status || 'pending').toLowerCase();
         const isSelected = this.selectedTCId === tc.id;
         const isAssignedToMe = tc.assigned_to === user?.id;
-        const statusLabel = tc.status === 'OK' ? 'PASS' : UI.escapeHTML(tc.status || 'PENDING');
         const lastExec = tc.last_execution_at ? this._formatDate(tc.last_execution_at) : '—';
-        const evidenceCount = (tc.executions || []).filter(e => e.attachments?.length).length;
         const assignee = (Store.state.team || []).find(u => u.id === tc.assigned_to);
 
         const typeColors = { Epic: '#a78bfa', Bug: '#f87171', Task: '#60a5fa', Story: '#34d399' };
-        const priorityColors = { Alta: '#ef4444', Media: '#f59e0b', Baja: '#22c55e' };
-
         const typeColor = typeColors['Task'] || '#60a5fa';
-        const priorityColor = priorityColors[tc.priority] || '#f59e0b';
 
         return `
             <tr class="ts-grid-row ${isSelected ? 'selected' : ''}" data-tc-id="${tc.id}"
                 style="border-bottom: 1px solid rgba(255,255,255,0.04); cursor: pointer; transition: background 0.15s;"
                 onmouseover="this.style.background='rgba(99,102,241,0.08)'"
                 onmouseout="this.style.background='${isSelected ? 'rgba(99,102,241,0.12)' : 'transparent'}'">
-                <td style="padding: 10px 12px;">
-                    <span class="status-pill ${statusClass}" style="font-size: 9px; width: 60px; text-align: center; justify-content: center; font-weight: 700; display: inline-flex; padding: 3px 6px;">
-                        ${statusLabel}
-                    </span>
-                </td>
-                <td style="padding: 10px 12px; font-weight: 800; color: var(--brand); font-size: 0.75rem;">${UI.escapeHTML(tc.key_id || 'TC')}</td>
-                <td style="padding: 10px 12px; color: var(--text-main); font-weight: 500;">
+                <td style="padding: 10px 12px; font-weight: 800; color: var(--brand); font-size: 0.75rem; width: 90px; white-space: nowrap;">${UI.escapeHTML(tc.key_id || 'TC')}</td>
+                <td style="padding: 10px 12px; color: var(--text-main); font-weight: 500; flex: 1;">
                     <div style="display: flex; align-items: center; gap: 8px;">
                         <span style="width: 8px; height: 8px; border-radius: 50%; background: ${typeColor}; flex-shrink: 0;"></span>
-                        <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 240px;">${UI.escapeHTML(tc.title)}</span>
+                        <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${UI.escapeHTML(tc.title)}</span>
                     </div>
                 </td>
-                <td style="padding: 10px 12px;">
-                    <span style="font-size: 0.72rem; font-weight: 700; color: ${priorityColor};">${UI.escapeHTML(tc.priority || 'Media')}</span>
-                </td>
-                <td style="padding: 10px 12px;">
+                <td style="padding: 10px 12px; width: 120px;">
                     ${assignee ? `
                         <div style="display: flex; align-items: center; gap: 6px;">
                             <span style="width: 22px; height: 22px; border-radius: 50%; background: var(--brand); display: inline-flex; align-items: center; justify-content: center; font-size: 0.65rem; font-weight: 800; color: white;">${assignee.name.charAt(0)}</span>
@@ -358,17 +354,14 @@ export const TestSuitesTab = {
                         </div>
                     ` : '<span style="color: var(--text-muted); opacity: 0.4;">—</span>'}
                 </td>
-                <td style="padding: 10px 12px; font-size: 0.75rem; color: var(--text-muted);">${lastExec}</td>
-                <td style="padding: 10px 12px; text-align: center;">
-                    ${evidenceCount > 0 ? `<span style="background: rgba(34,197,94,0.15); color: #22c55e; font-size: 0.72rem; font-weight: 700; padding: 2px 8px; border-radius: 10px;">${evidenceCount}</span>` : '<span style="color: var(--text-muted); opacity: 0.3;">—</span>'}
-                </td>
-                <td style="padding: 10px 12px; text-align: center;">
+                <td style="padding: 10px 12px; font-size: 0.75rem; color: var(--text-muted); width: 100px; white-space: nowrap;">${lastExec}</td>
+                <td style="padding: 10px 12px; text-align: center; width: 60px;">
                     <div style="display: flex; gap: 6px; justify-content: center;">
                         ${(isAssignedToMe || isAdmin) && !activeRunId ? `
                             <button class="btn btn-success btn-sm run-tc-grid" data-id="${tc.id}" title="Ejecutar" style="padding: 3px 10px; font-size: 0.65rem; font-weight: 800;">▶</button>
                         ` : ''}
                         ${isAdmin ? `
-                            <button class="btn btn-sm delete-tc-grid" data-tc-id="${tc.id}" title="Eliminar" style="padding: 3px 10px; font-size: 0.65rem; font-weight: 800; opacity: ${activeRunId ? '0.3' : '1'}; cursor: ${activeRunId ? 'not-allowed' : 'pointer'}; background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.3);">🗑️</button>
+                            <button class="btn btn-sm delete-tc-grid" data-tc-id="${tc.id}" title="Eliminar" style="padding: 3px 10px; font-size: 0.65rem; font-weight: 800; opacity: ${activeRunId ? '0.3' : '1'}; cursor: ${activeRunId ? 'not-allowed' : 'pointer'}; background: rgba(239,68,68,0.15); color: #f87171; border: 1px solid rgba(239,68,68,0.3);">🗑️</button>
                         ` : ''}
                     </div>
                 </td>
@@ -388,16 +381,19 @@ export const TestSuitesTab = {
 
         return `
             <tr class="ts-expanded-row" style="border-bottom: 1px solid var(--border); background: var(--bg-surface-elevated);">
-                <td colspan="8" style="padding: 0;">
+                <td colspan="5" style="padding: 0;">
                     <div style="padding: 16px 20px; display: flex; flex-direction: column; gap: 14px;">
-                        <!-- Header row: TC info + actions -->
-                        <div style="display: flex; align-items: center; gap: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--border);">
-                            <div style="flex: 1;">
-                                <span style="font-size: 0.65rem; font-weight: 800; color: var(--brand);">${UI.escapeHTML(tc.key_id || 'TC')}</span>
-                                <span style="margin: 0 8px; color: var(--text-muted);">·</span>
-                                <span style="font-size: 0.85rem; font-weight: 700; color: var(--text-main);">${UI.escapeHTML(tc.title)}</span>
+                        <!-- Tabs row with Edit button -->
+                        <div class="ts-expanded-tabs" style="display: flex; align-items: center; gap: 4px; border-bottom: 1px solid var(--border); padding-bottom: 0;">
+                            <div style="display: flex; gap: 4px;">
+                                ${tabs.map(t => `
+                                    <button class="ts-expanded-tab ${this.detailTab === t ? 'active' : ''}" data-tab="${t}" data-tc-id="${tc.id}"
+                                        style="padding: 8px 16px; background: none; border: none; color: ${this.detailTab === t ? 'var(--brand)' : 'var(--text-muted)'}; font-size: 0.78rem; font-weight: ${this.detailTab === t ? '800' : '500'}; cursor: pointer; border-bottom: 2px solid ${this.detailTab === t ? 'var(--brand)' : 'transparent'}; margin-bottom: -1px; transition: all 0.15s;">
+                                        ${tabLabels[t]}
+                                    </button>
+                                `).join('')}
                             </div>
-                            <div style="display: flex; gap: 8px; align-items: center;">
+                            <div style="margin-left: auto;">
                                 ${isEditing ? `
                                     <button class="btn btn-ghost btn-sm cancel-edit-btn" data-tc-id="${tc.id}">Cancelar</button>
                                     <button class="btn btn-primary btn-sm save-tc-btn" data-tc-id="${tc.id}">Guardar</button>
@@ -405,16 +401,6 @@ export const TestSuitesTab = {
                                     <button class="btn btn-primary btn-sm edit-tc-btn" data-tc-id="${tc.id}">✏️ EDITAR</button>
                                 `}
                             </div>
-                        </div>
-
-                        <!-- Tabs -->
-                        <div class="ts-expanded-tabs" style="display: flex; gap: 4px; border-bottom: 1px solid var(--border); padding-bottom: 0;">
-                            ${tabs.map(t => `
-                                <button class="ts-expanded-tab ${this.detailTab === t ? 'active' : ''}" data-tab="${t}" data-tc-id="${tc.id}"
-                                    style="padding: 8px 16px; background: none; border: none; color: ${this.detailTab === t ? 'var(--brand)' : 'var(--text-muted)'}; font-size: 0.78rem; font-weight: ${this.detailTab === t ? '800' : '500'}; cursor: pointer; border-bottom: 2px solid ${this.detailTab === t ? 'var(--brand)' : 'transparent'}; margin-bottom: -1px; transition: all 0.15s;">
-                                    ${tabLabels[t]}
-                                </button>
-                            `).join('')}
                         </div>
 
                         <!-- Tab Content -->
@@ -634,8 +620,8 @@ export const TestSuitesTab = {
         const { tcId, status, logs } = this.executionOverlay;
         return `
             <div id="ts-exec-overlay" style="position: fixed; bottom: 20px; right: 20px; width: 480px; background: var(--bg-surface-elevated); border: 1px solid var(--border); border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.5); z-index: 9998; overflow: hidden;">
-                <div style="padding: 14px 16px; background: linear-gradient(135deg,#6366f1,#a855f7); display: flex; align-items: center; gap: 10px;">
-                    <div style="width: 8px; height: 8px; border-radius: 50%; background: #22c55e; animation: pulse 2s infinite;"></div>
+                <div style="padding: 14px 16px; background: linear-gradient(135deg,#1d4ed8,#2563eb); display: flex; align-items: center; gap: 10px;">
+                    <div style="width: 8px; height: 8px; border-radius: 50%; background: #4ade80; animation: pulse 2s infinite;"></div>
                     <span style="font-size: 0.85rem; font-weight: 800; color: white;">Ejecución en curso</span>
                     <button id="ts-exec-close" style="margin-left: auto; background: rgba(0,0,0,0.2); border: none; color: white; width: 24px; height: 24px; border-radius: 50%; cursor: pointer; font-size: 0.9rem;">✕</button>
                 </div>
@@ -742,18 +728,6 @@ export const TestSuitesTab = {
                     backdrop.scrollTop = tx.scrollTop;
                 }
             });
-        });
-
-        // Search input
-        container.querySelector('#ts-search')?.addEventListener('input', (e) => {
-            this.searchQuery = e.target.value;
-            this.render(container);
-        });
-
-        // Status filter
-        container.querySelector('#ts-filter-status')?.addEventListener('change', (e) => {
-            this.filterStatus = e.target.value;
-            this.render(container);
         });
 
         // Detail tab switching (expanded row tabs + old panel tabs)
@@ -1053,7 +1027,7 @@ export const TestSuitesTab = {
                         <div style="font-size:0.68rem;font-weight:800;color:#818cf8;text-transform:uppercase;margin-bottom:6px;">🖼️ Imágenes <span style="font-weight:400;color:#64748b;">(opcional — Ctrl+V, drag & drop o click)</span></div>
                         <div id="gemini-tc-dropzone"
                             style="min-height:80px;border:2px dashed rgba(99,102,241,0.4);border-radius:10px;background:rgba(99,102,241,0.04);display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px;cursor:pointer;transition:border-color 0.2s;"
-                            ondragover="event.preventDefault();this.style.borderColor='#6366f1';" ondragleave="this.style.borderColor='rgba(99,102,241,0.4)';"
+                            ondragover="event.preventDefault();this.style.borderColor='#3b82f6';" ondragleave="this.style.borderColor='rgba(59,130,246,0.4)';"
                             ondrop="window._geminiTcDrop(event)">
                             <div id="gemini-tc-placeholder" style="color:#64748b;font-size:0.78rem;width:100%;text-align:center;">📎 Arrastrá imágenes aquí, hacé click o Ctrl+V</div>
                             <div id="gemini-tc-previews" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
@@ -1061,10 +1035,11 @@ export const TestSuitesTab = {
                         <input type="file" id="gemini-tc-file" accept="image/*" multiple style="display:none;" />
                     </div>
                     <div id="gemini-tc-status" style="display:none;font-size:0.8rem;padding:10px 14px;border-radius:8px;font-weight:600;"></div>
+                    <div id="gemini-tc-analysis" style="display:none;"></div>
                 </div>
                 <div style="padding:14px 24px;background:rgba(0,0,0,0.25);border-top:1px solid rgba(255,255,255,0.06);display:flex;justify-content:flex-end;gap:10px;flex-shrink:0;">
                     <button id="gemini-tc-cancel" style="padding:9px 18px;border-radius:9px;border:1px solid rgba(255,255,255,0.1);background:transparent;color:#64748b;font-weight:600;cursor:pointer;font-size:0.85rem;">Cancelar</button>
-                    <button id="gemini-tc-submit" style="padding:9px 24px;border-radius:9px;border:none;background:linear-gradient(to right,#6366f1,#a855f7);color:white;font-weight:800;cursor:pointer;font-size:0.9rem;display:flex;align-items:center;gap:8px;">
+                    <button id="gemini-tc-submit" style="padding:9px 24px;border-radius:9px;border:none;background:linear-gradient(to right,#2563eb,#3b82f6);color:white;font-weight:800;cursor:pointer;font-size:0.9rem;display:flex;align-items:center;gap:8px;">
                         <span id="gemini-tc-btn-icon">✨</span><span id="gemini-tc-btn-label">Generar Tests</span>
                     </button>
                 </div>
@@ -1144,6 +1119,111 @@ export const TestSuitesTab = {
         el.style.background = bg; el.style.color = color; el.style.border = `1px solid ${color}33`;
     },
 
+    _parseGeminiResponse(rawText) {
+        const cleaned = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+        try { return JSON.parse(cleaned); }
+        catch {
+            const start = cleaned.indexOf('{');
+            const end = cleaned.lastIndexOf('}');
+            if (start !== -1 && end !== -1 && end > start) return JSON.parse(cleaned.substring(start, end + 1));
+            const aStart = cleaned.indexOf('[');
+            const aEnd = cleaned.lastIndexOf(']');
+            if (aStart !== -1 && aEnd !== -1) return JSON.parse(cleaned.substring(aStart, aEnd + 1));
+            throw new Error('No se encontró JSON en la respuesta: ' + cleaned.substring(0, 200));
+        }
+    },
+
+    _isRetryableGemini(err) {
+        const msg = err.message || '';
+        return msg.includes('high demand') || msg.includes('timed out') || msg.includes('JSON parse error') || msg.includes('No se encontró JSON');
+    },
+
+    async _callGeminiEndpoint(apiKey, parts, systemPrompt, retries = 3) {
+        const body = JSON.stringify({
+            system_instruction: { parts: [{ text: systemPrompt }] },
+            contents: [{ role: 'user', parts }],
+            generationConfig: { temperature: 0.3, responseMimeType: 'application/json' }
+        });
+
+        for (let i = 0; i < retries; i++) {
+            try {
+                const res = await fetch(
+                    `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${apiKey}`,
+                    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body }
+                );
+
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    throw new Error(err?.error?.message || `HTTP ${res.status}`);
+                }
+
+                const data = await res.json();
+                const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+                return this._parseGeminiResponse(rawText);
+            } catch (err) {
+                if (i < retries - 1 && this._isRetryableGemini(err)) {
+                    this._setGeminiStatus(`⏳ Reintento ${i + 2}/${retries}...`, 'info');
+                    await new Promise(r => setTimeout(r, 5000 * (i + 1)));
+                } else {
+                    throw err;
+                }
+            }
+        }
+    },
+
+    async _analyzeHU(apiKey, parts) {
+        const PROMPT_ANALYSIS = `Eres un Senior QA Analyst. Analiza la Historia de Usuario y detecta inconsistencias y recomendaciones.
+
+Devuelve ÚNICAMENTE un JSON válido con esta estructura:
+{
+  "inconsistencies": [
+    { "title": "descripción corta y clara", "severity": "Alta" | "Media" | "Baja", "description": "explicación detallada" }
+  ],
+  "recommendations": [
+    { "title": "recomendación de prueba", "description": "por qué es importante" }
+  ]
+}
+
+REGLAS:
+- Máximo 5 inconsistencias (distribuye entre Alta/Media/Baja según criticidad real)
+- Máximo 3 recommendations (aspectos que requieren especial atención durante pruebas)
+- Nunca devuelvas texto fuera del JSON
+- Si no hay issues, devuelve arrays vacíos con severity "Baja"
+- severity "Alta" = bloquea flujo, "Media" = puede afectar, "Baja" = mejora sugerida`;
+
+        const result = await this._callGeminiEndpoint(apiKey, parts, PROMPT_ANALYSIS);
+        if (result && typeof result === 'object' && Array.isArray(result.inconsistencies)) {
+            return result;
+        }
+        throw new Error('Estructura inválida en análisis de HU');
+    },
+
+    async _generateTC(apiKey, parts) {
+        const PROMPT_TC = `Eres un Senior QA Analyst. Genera TODOS los test cases para la siguiente HU.
+
+Devuelve ÚNICAMENTE un array JSON válido. Cada elemento:
+{
+  "title": "título claro y conciso del test case",
+  "gherkin": "escenario en español, CADA paso en línea nueva sin indentación, empezando al inicio. Ejemplo: Dado: el usuario está en la pantalla\\nCuando: ingresa credenciales válidas\\nY: presiona el botón Ingresar\\nEntonces: el sistema muestra el dashboard principal",
+  "preconditions": ["precondición 1", "precondición 2"],
+  "testData": ["dato de prueba 1", "dato de prueba 2"],
+  "acceptanceCriteria": ["criterio de aceptación 1", "criterio 2"],
+  "expectedResult": "resultado esperado",
+  "assumption": "supuesto asumido para generar este test; vacío si no aplica"
+}
+
+REGLAS:
+- Genera TODOS los escenarios: flujo feliz, alternativos y de error
+- Nunca devuelvas texto fuera del JSON
+- No uses bloques markdown ni backticks`;
+
+        const result = await this._callGeminiEndpoint(apiKey, parts, PROMPT_TC);
+        if (Array.isArray(result)) return result;
+        if (result && Array.isArray(result.testCases)) return result.testCases;
+        if (result && Array.isArray(result.cases)) return result.cases;
+        throw new Error('La respuesta no es un array de test cases');
+    },
+
     async _callGemini(suiteId, tabContainer) {
         const apiKey = (document.getElementById('gemini-tc-key')?.value || '').trim();
         if (!apiKey) return this._setGeminiStatus('⚠️ Ingresá tu API Key de Gemini.', 'error');
@@ -1154,69 +1234,28 @@ export const TestSuitesTab = {
         const btn = document.getElementById('gemini-tc-submit');
         if (btn) { btn.disabled = true; }
         document.getElementById('gemini-tc-btn-icon').textContent = '⏳';
-        document.getElementById('gemini-tc-btn-label').textContent = 'Generando...';
-        this._setGeminiStatus('🔄 Consultando a Gemini...', 'info');
-
-        const SYSTEM_PROMPT = `Eres un Senior QA Analyst y Product Owner experto en metodologías Ágiles, análisis funcional y trazabilidad de requisitos.
-
-Tu tarea es analizar la Historia de Usuario (HU) proporcionada —incluyendo imágenes de pantallas o flujos si las hay— y generar casos de prueba exhaustivos y estructurados.
-
-### INSTRUCCIONES OBLIGATORIAS:
-1. Identifica el nombre o título de la HU analizada.
-2. Detecta inconsistencias, ambigüedades o información faltante en la HU (máximo 5).
-3. Genera todos los escenarios de prueba necesarios para cubrir los flujos feliz, alternativos y de error.
-
-### FORMATO DE RESPUESTA:
-Devuelve ÚNICAMENTE un array JSON válido. Cada elemento representa UN test case con esta estructura exacta:
-- hu_name: string (nombre o título de la HU analizada, igual para todos los tests del mismo lote)
-- inconsistencies: array de objetos { title: string } (detectadas en la HU; mismo valor para todos los tests del lote)
-- title: string (título claro y conciso del test case)
-- gherkin: string (escenario Gherkin en español; CADA paso en una línea nueva sin indentación, empezando al inicio de la línea. Ejemplo exacto del formato: "Dado: el usuario está en la pantalla de login\nCuando: ingresa credenciales válidas\nY: presiona el botón Ingresar\nEntonces: el sistema muestra el dashboard principal")
-- preconditions: array de strings
-- testData: array de strings
-- acceptanceCriteria: array de strings
-- expectedResult: string
-- assumption: string (supuesto asumido para generar este test; vacío si no aplica)
-
-### REGLAS:
-- Nunca devuelvas texto fuera del JSON.
-- No uses bloques markdown ni backticks.
-- El campo hu_name e inconsistencies deben ser idénticos en todos los objetos del array.
-- Si no detectás inconsistencias, devuelve inconsistencies: [].`;
+        document.getElementById('gemini-tc-btn-label').textContent = 'Analizando...';
 
         const parts = [];
         if (hu) parts.push({ text: hu });
         this._geminiImages.forEach(img => parts.push({ inlineData: { mimeType: img.mimeType, data: img.base64 } }));
 
         try {
-            const res = await fetch(
-                `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${apiKey}`,
-                {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
-                        contents: [{ role: 'user', parts }],
-                        generationConfig: { temperature: 0.3, responseMimeType: 'application/json' }
-                    })
-                }
-            );
+            this._setGeminiStatus('🔄 Analizando HU...', 'info');
+            const analysis = await this._analyzeHU(apiKey, parts);
 
-            if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                throw new Error(err?.error?.message || `HTTP ${res.status}`);
-            }
+            const inconsistencies = analysis?.inconsistencies || [];
+            const recommendations = analysis?.recommendations || [];
 
-            const data = await res.json();
-            const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-            const clean = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
-            const parsed = JSON.parse(clean);
-            if (!Array.isArray(parsed)) throw new Error('La respuesta no es un array JSON.');
+            this._showGeminiAnalysisResults(inconsistencies);
 
-            this._setGeminiStatus(`✅ Creando ${parsed.length} tests en la suite...`, 'ok');
+            this._setGeminiStatus('🔄 Generando casos de prueba...', 'info');
+            document.getElementById('gemini-tc-btn-label').textContent = 'Generando...';
 
-            const huName = parsed[0]?.hu_name || '';
-            const inconsistencies = parsed[0]?.inconsistencies || [];
+            const tcData = await this._generateTC(apiKey, parts);
+            if (!tcData?.length) throw new Error('No se generaron test cases');
+
+            this._setGeminiStatus(`✅ Creando ${tcData.length} tests en la suite...`, 'ok');
 
             UI.showLoading();
 
@@ -1230,7 +1269,7 @@ Devuelve ÚNICAMENTE un array JSON válido. Cada elemento representa UN test cas
                 }
             }
 
-            for (const item of parsed) {
+            for (const item of tcData) {
                 const precStr = Array.isArray(item.preconditions) ? item.preconditions.join('\n') : '';
                 const tdStr = Array.isArray(item.testData) ? item.testData.join('\n') : '';
                 const acStr = Array.isArray(item.acceptanceCriteria) ? item.acceptanceCriteria.join('\n') : '';
@@ -1246,9 +1285,25 @@ Devuelve ÚNICAMENTE un array JSON válido. Cada elemento representa UN test cas
                 });
             }
 
-            await this.reloadSuites();
             UI.hideLoading();
-            UI.toast(`🚀 ${parsed.length} tests generados${huName ? ` — HU: "${huName}"` : ''}`, 'ok');
+
+            this.selectedSuiteId = suiteId;
+
+            const freshSuite = await ApiService.getTestSuite(suiteId);
+            if (freshSuite?.id) {
+                const suites = Store.state.testSuites;
+                const idx = suites.findIndex(s => s.id === suiteId);
+                const suitesCopy = [...suites];
+                if (idx !== -1) {
+                    suitesCopy[idx] = {
+                        ...suitesCopy[idx],
+                        inconsistencies: freshSuite.inconsistencies
+                    };
+                }
+                Store.setTestSuites(suitesCopy);
+            }
+
+            UI.toast(`🚀 ${tcData.length} tests generados`, 'ok');
             document.getElementById('modal-gemini-tc')?.remove();
             this._removePasteListener?.();
             this.render(tabContainer);
@@ -1261,6 +1316,44 @@ Devuelve ÚNICAMENTE un array JSON válido. Cada elemento representa UN test cas
             document.getElementById('gemini-tc-btn-label').textContent = 'Reintentar';
             UI.hideLoading();
         }
+    },
+
+    _showGeminiAnalysisResults(inconsistencies) {
+        const analysisEl = document.getElementById('gemini-tc-analysis');
+        if (!analysisEl) return;
+
+        const sevColor = (sev) => ({ Alta: '#ef4444', Media: '#f59e0b', Baja: '#22c55e' }[sev] || '#818cf8');
+        const sevBg = (sev) => ({ Alta: 'rgba(239,68,68,0.15)', Media: 'rgba(245,158,11,0.15)', Baja: 'rgba(34,197,94,0.15)' }[sev] || 'rgba(99,102,241,0.15)');
+
+        let html = '';
+
+        if (inconsistencies.length > 0) {
+            html += `<div style="margin-top:12px;">
+                <div style="font-size:0.65rem;font-weight:800;color:#ef4448;text-transform:uppercase;margin-bottom:8px;">⚠️ Inconsistencias detectadas (${inconsistencies.length})</div>`;
+            inconsistencies.forEach(inc => {
+                html += `<div style="margin-bottom:8px;padding:10px 12px;border-radius:8px;background:${sevBg(inc.severity)};border-left:4px solid ${sevColor(inc.severity)};">
+                    <div style="font-size:0.82rem;font-weight:700;color:white;">${inc.title}</div>
+                    <div style="font-size:0.72rem;color:#94a3b8;margin-top:4px;line-height:1.5;">${inc.description || ''}</div>
+                    <div style="display:inline-block;font-size:0.62rem;color:${sevColor(inc.severity)};margin-top:5px;font-weight:800;padding:2px 8px;border-radius:4px;background:${sevColor(inc.severity)}22;">${inc.severity}</div>
+                </div>`;
+            });
+            html += `</div>`;
+        }
+
+        analysisEl.innerHTML = html;
+        analysisEl.style.display = analysisEl.innerHTML ? 'block' : 'none';
+
+        window._toggleIncPanel = function(headerEl) {
+            const body = headerEl.nextElementSibling;
+            const chevron = headerEl.querySelector('.inc-chevron');
+            if (body.style.display === 'none') {
+                body.style.display = 'block';
+                chevron.textContent = '▼';
+            } else {
+                body.style.display = 'none';
+                chevron.textContent = '▶';
+            }
+        };
     },
 
     async reloadSuites() {
@@ -1294,5 +1387,17 @@ Devuelve ÚNICAMENTE un array JSON válido. Cada elemento representa UN test cas
             }
         });
         this._isListening = true;
+    }
+};
+
+window._toggleIncPanel = function(headerEl) {
+    const body = headerEl.nextElementSibling;
+    const chevron = headerEl.querySelector('.inc-chevron');
+    if (body.style.display === 'none') {
+        body.style.display = 'block';
+        chevron.textContent = '▼';
+    } else {
+        body.style.display = 'none';
+        chevron.textContent = '▶';
     }
 };

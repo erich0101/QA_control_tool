@@ -7,11 +7,11 @@
     --bg-surface:         #161b22;
     --bg-surface-elevated:rgba(255, 255, 255, 0.03);
     --bg-hover:           rgba(255, 255, 255, 0.06);
-    --bg-active:          rgba(163, 113, 247, 0.15);
+    --bg-active:          rgba(59, 130, 246, 0.15);
 
-    /* Marca - UI Skill Purple */
-    --brand:              #a371f7;
-    --brand-hover:        #b88af7;
+    /* Marca - UI Skill Blue */
+    --brand:              #3b82f6;
+    --brand-hover:        #60a5fa;
 
     /* Estados QA - UI Skill Semantics */
     --ok:                 #3fb950;
@@ -26,7 +26,7 @@
     /* Bordes - UI Skill */
     --border:             rgba(255, 255, 255, 0.05);
     --border-strong:      rgba(255, 255, 255, 0.08);
-    --border-active:      #a371f7;
+    --border-active:      #3b82f6;
 
     /* Sombras */
     --shadow-soft:        0 1px 4px rgba(0,0,0,0.35);
@@ -1105,7 +1105,7 @@ input:checked + .slider:before {
 .flex-2 { flex: 2; }
 .no-mb { margin-bottom: 0 !important; }
 .editor-tests-section { background: var(--bg-surface-elevated); padding: 15px; border-radius: 10px; border: 1px solid var(--border); }
-.btn-ai { background: linear-gradient(135deg, #a855f7, #6366f1); color: white; border: none; padding: 4px 10px; border-radius: 6px; cursor: pointer; font-size: 0.75rem; font-weight: 700; display: flex; align-items: center; gap: 6px; box-shadow: 0 4px 10px rgba(99, 102, 241, 0.3); }
+.btn-ai { background: linear-gradient(135deg, #2563eb, #3b82f6); color: white; border: none; padding: 4px 10px; border-radius: 6px; cursor: pointer; font-size: 0.75rem; font-weight: 700; display: flex; align-items: center; gap: 6px; box-shadow: 0 4px 10px rgba(37, 99, 235, 0.3); }
 .editor-help-text { font-size: 0.75rem; color: var(--text-muted); line-height: 1.4; }
 .btn-auto-nowrap { width: auto; white-space: nowrap; padding: 0 15px; }
 .editor-tests-header { display: flex; justify-content: space-between; align-items: center; padding: 0 5px; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
@@ -1551,7 +1551,7 @@ input:checked + .slider:before {
 
 .exec-tc-row.is-open {
     border-color: var(--brand);
-    background: rgba(163, 113, 247, 0.05);
+    background: rgba(59, 130, 246, 0.05);
 }
 
 .exec-tc-header {

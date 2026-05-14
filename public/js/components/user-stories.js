@@ -329,8 +329,8 @@ export const UserStories = {
         return `
             <div style="display: flex; flex-direction: column; gap: 6px;">
                 ${items.map((item, i) => `
-                    <div style="display: flex; align-items: flex-start; gap: 12px; padding: 10px 16px; background: rgba(99,102,241,0.07); border-radius: 8px; border-left: 3px solid rgba(99,102,241,0.5);">
-                        <span style="font-size: 0.75rem; font-weight: 800; color: #6366f1; white-space: nowrap; margin-top: 1px;">💡</span>
+                    <div style="display: flex; align-items: flex-start; gap: 12px; padding: 10px 16px; background: rgba(59,130,246,0.07); border-radius: 8px; border-left: 3px solid rgba(59,130,246,0.5);">
+                        <span style="font-size: 0.75rem; font-weight: 800; color: #3b82f6; white-space: nowrap; margin-top: 1px;">💡</span>
                         <span style="font-size: 0.82rem; color: var(--text-main); flex: 1; line-height: 1.5;">${UI.escapeHTML(item.title || item.description || item)}</span>
                     </div>
                 `).join('')}

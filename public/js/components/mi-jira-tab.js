@@ -18,9 +18,9 @@ export const MiJiraTab = {
 
                 <!-- Sub-Tab Bar -->
                 <div class="sub-tab-bar" style="display: flex; gap: 4px; margin-bottom: 20px; background: #161b22; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 6px; width: fit-content;">
-                    <button class="sub-tab-btn ${this.activeSubTab === 'assigned' ? 'active' : ''}" data-filter="assigned" style="padding: 8px 20px; border-radius: 8px; border: none; background: ${this.activeSubTab === 'assigned' ? '#a371f7' : 'transparent'}; color: ${this.activeSubTab === 'assigned' ? '#fff' : '#8b949e'}; font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: all 0.15s ease;">📥 Asignados</button>
-                    <button class="sub-tab-btn ${this.activeSubTab === 'created' ? 'active' : ''}" data-filter="created" style="padding: 8px 20px; border-radius: 8px; border: none; background: ${this.activeSubTab === 'created' ? '#a371f7' : 'transparent'}; color: ${this.activeSubTab === 'created' ? '#fff' : '#8b949e'}; font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: all 0.15s ease;">✏️ Creados</button>
-                    <button class="sub-tab-btn ${this.activeSubTab === 'mentions' ? 'active' : ''}" data-filter="mentions" style="padding: 8px 20px; border-radius: 8px; border: none; background: ${this.activeSubTab === 'mentions' ? '#a371f7' : 'transparent'}; color: ${this.activeSubTab === 'mentions' ? '#fff' : '#8b949e'}; font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: all 0.15s ease;">🔖 Menciones</button>
+                    <button class="sub-tab-btn ${this.activeSubTab === 'assigned' ? 'active' : ''}" data-filter="assigned" style="padding: 8px 20px; border-radius: 8px; border: none; background: ${this.activeSubTab === 'assigned' ? '#3b82f6' : 'transparent'}; color: ${this.activeSubTab === 'assigned' ? '#fff' : '#8b949e'}; font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: all 0.15s ease;">📥 Asignados</button>
+                    <button class="sub-tab-btn ${this.activeSubTab === 'created' ? 'active' : ''}" data-filter="created" style="padding: 8px 20px; border-radius: 8px; border: none; background: ${this.activeSubTab === 'created' ? '#3b82f6' : 'transparent'}; color: ${this.activeSubTab === 'created' ? '#fff' : '#8b949e'}; font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: all 0.15s ease;">✏️ Creados</button>
+                    <button class="sub-tab-btn ${this.activeSubTab === 'mentions' ? 'active' : ''}" data-filter="mentions" style="padding: 8px 20px; border-radius: 8px; border: none; background: ${this.activeSubTab === 'mentions' ? '#3b82f6' : 'transparent'}; color: ${this.activeSubTab === 'mentions' ? '#fff' : '#8b949e'}; font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: all 0.15s ease;">🔖 Menciones</button>
                 </div>
 
                 <!-- Panel Container -->
@@ -163,7 +163,7 @@ export const MiJiraTab = {
 
             <!-- Rows -->
             ${tickets.map(ticket => {
-                const typeColors = { 'Bug': '#ff7b72', 'Task': '#58a6ff', 'Story': '#3fb950', 'Epic': '#a371f7', 'Subtask': '#79c0ff', 'Sub-task': '#79c0ff' };
+                const typeColors = { 'Bug': '#ff7b72', 'Task': '#58a6ff', 'Story': '#3fb950', 'Epic': '#3b82f6', 'Subtask': '#79c0ff', 'Sub-task': '#79c0ff' };
                 const typeColor = typeColors[ticket.issueType] || '#8b949e';
 
                 const statusColors = {
@@ -180,7 +180,7 @@ export const MiJiraTab = {
                 return `
                 <div class="ticket-row" data-key="${ticket.key}" style="display: grid; grid-template-columns: 110px 80px 1fr 100px 140px 90px; padding: 14px 20px; border-bottom: 1px solid rgba(255,255,255,0.05); cursor: pointer; transition: background 0.15s ease;" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background='transparent'">
                     <div style="display: flex; align-items: center; gap: 6px;">
-                        ${ticket.issueType === 'Epic' ? '<span style="font-size: 10px; color: #a371f7;">📋</span>' : ''}
+                        ${ticket.issueType === 'Epic' ? '<span style="font-size: 10px; color: #3b82f6;">📋</span>' : ''}
                         <span style="font-weight: 600; color: #e6edf3; font-size: 12px;">${ticket.key}</span>
                     </div>
                     <div style="display: flex; align-items: center;">
@@ -190,7 +190,7 @@ export const MiJiraTab = {
                         ${ticket.parent ? `<span style="font-size: 10px; color: #484f58; flex-shrink: 0;">└</span>` : ''}
                         <span style="font-size: 13px; color: #e6edf3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${ticket.summary || '—'}</span>
                         ${this.activeSubTab === 'mentions' && ticket.mentions && ticket.mentions.length > 0 ? `
-                            <span style="flex-shrink: 0; background: rgba(163,113,247,0.15); border: 1px solid rgba(163,113,247,0.3); color: #a371f7; border-radius: 4px; padding: 1px 6px; font-size: 10px; font-weight: 600;">${ticket.mentions.length} 🔖</span>
+                            <span style="flex-shrink: 0; background: rgba(59,130,246,0.15); border: 1px solid rgba(59,130,246,0.3); color: #3b82f6; border-radius: 4px; padding: 1px 6px; font-size: 10px; font-weight: 600;">${ticket.mentions.length} 🔖</span>
                         ` : ''}
                     </div>
                     <div style="display: flex; align-items: center;">
@@ -259,17 +259,17 @@ export const MiJiraTab = {
                 ${ticket.parent ? `
                 <div style="padding: 14px 20px; border-top: 1px solid rgba(255,255,255,0.05);">
                     <div style="font-size: 10px; font-weight: 600; color: #8b949e; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;">Epic</div>
-                    <div style="font-size: 0.85rem; color: #a371f7;">${ticket.parent}</div>
+                    <div style="font-size: 0.85rem; color: #3b82f6;">${ticket.parent}</div>
                 </div>
                 ` : ''}
 
                 ${ticket.mentions && ticket.mentions.length > 0 ? `
                 <div style="padding: 16px 20px; border-top: 1px solid rgba(255,255,255,0.05);">
-                    <div style="font-size: 11px; font-weight: 700; color: #a371f7; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px;">🔖 Donde me mencionaron</div>
+                    <div style="font-size: 11px; font-weight: 700; color: #3b82f6; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px;">🔖 Donde me mencionaron</div>
                     ${ticket.mentions.map(m => `
-                        <div style="background: rgba(163,113,247,0.08); border: 1px solid rgba(163,113,247,0.2); border-radius: 8px; padding: 12px; margin-bottom: 8px;">
+                        <div style="background: rgba(59,130,246,0.08); border: 1px solid rgba(59,130,246,0.2); border-radius: 8px; padding: 12px; margin-bottom: 8px;">
                             <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
-                                <span style="font-size: 0.8rem; font-weight: 600; color: #a371f7;">${m.author}</span>
+                                <span style="font-size: 0.8rem; font-weight: 600; color: #3b82f6;">${m.author}</span>
                                 <span style="font-size: 0.75rem; color: #8b949e;">${this.formatDate(m.created)}</span>
                             </div>
                             <p style="font-size: 0.8rem; color: #e6edf3; margin: 0;">"${m.preview}${m.preview.length >= 150 ? '...' : ''}"</p>
@@ -280,7 +280,7 @@ export const MiJiraTab = {
 
                 <!-- Actions -->
                 <div style="padding: 16px 20px; border-top: 1px solid rgba(255,255,255,0.05); display: flex; gap: 8px;">
-                    <a href="https://livewareissa.atlassian.net/browse/${ticket.key}" target="_blank" style="padding: 8px 16px; border-radius: 8px; background: #a371f7; color: #fff; font-size: 0.8rem; font-weight: 600; text-decoration: none;">🔗 Abrir en Jira</a>
+                    <a href="https://livewareissa.atlassian.net/browse/${ticket.key}" target="_blank" style="padding: 8px 16px; border-radius: 8px; background: #3b82f6; color: #fff; font-size: 0.8rem; font-weight: 600; text-decoration: none;">🔗 Abrir en Jira</a>
                     <button onclick="navigator.clipboard.writeText('${ticket.key}')" style="padding: 8px 16px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); background: transparent; color: #8b949e; font-size: 0.8rem; cursor: pointer;">📋 Copiar Key</button>
                 </div>
             </div>

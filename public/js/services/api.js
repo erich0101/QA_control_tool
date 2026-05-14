@@ -127,6 +127,9 @@ export const ApiService = {
     async updateSuiteInconsistencies(suiteId, inconsistencies) {
         return fetch(`/api/test-suites/${suiteId}/inconsistencies`, { method: 'PUT', body: JSON.stringify({ inconsistencies }), headers }).then(json);
     },
+    async getTestSuite(suiteId) {
+        return fetch(`/api/test-suites/${suiteId}`).then(json);
+    },
     async deleteTestSuite(id) {
         return fetch(`/api/test-suites/${id}`, { method: 'DELETE' }).then(json);
     },
