@@ -1501,60 +1501,47 @@ input:checked + .slider:before {
     border: 1px dashed var(--border);
 }
 
-/* Test Suite Row (Execution) - Panel Container Pattern */
+/* Test Suite Row (Execution) - Flat Table Design */
 .exec-suite-row {
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    overflow: hidden;
-    background: var(--bg-surface);
-    transition: all 0.15s ease;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    overflow: visible;
+    transition: background 0.15s;
 }
 
 .exec-suite-row.is-open {
     border-color: var(--brand);
-    border-top-color: var(--brand);
 }
 
 .exec-suite-header {
-    padding: 16px 20px;
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    cursor: pointer;
-    background: rgba(255,255,255,0.02);
-    border-bottom: 1px solid var(--border);
+    display: none;
 }
 
 .exec-toggle {
-    font-size: 10px;
-    color: var(--text-muted);
-    transition: transform 0.15s ease;
+    display: none;
 }
 
 .exec-suite-row.is-open .exec-toggle {
-    transform: rotate(90deg);
+    transform: none;
 }
 
 .exec-tc-group {
-    padding: 0 20px 20px 20px;
-    background: var(--bg-surface);
+    display: none;
 }
 
 .exec-suite-desc {
-    padding: 16px 0;
-    border-bottom: 1px solid var(--border);
-    margin-bottom: 16px;
-    font-size: 0.85rem;
-    color: var(--text-secondary);
+    display: none;
 }
 
-/* Test Case Row (Execution) */
+/* Test Case Row (Execution) - Flat Table Design */
 .exec-tc-row {
-    background: var(--bg-surface-elevated);
-    margin-bottom: 8px;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    transition: all 0.15s ease;
+    background: transparent;
+    margin-bottom: 0;
+    border: none;
+    border-radius: 0;
+    overflow: visible;
+    transition: background 0.15s;
 }
 
 .exec-tc-row:hover {
@@ -1568,18 +1555,11 @@ input:checked + .slider:before {
 }
 
 .exec-tc-header {
-    padding: 10px 16px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    cursor: pointer;
+    display: none;
 }
 
 .exec-status-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    flex-shrink: 0;
+    display: none;
 }
 
 .exec-status-dot.status-pass,
@@ -1591,156 +1571,99 @@ input:checked + .slider:before {
 .exec-status-dot.status-running { background: var(--ok); }
 
 .exec-tc-key {
-    font-weight: 700;
-    color: var(--brand);
-    font-size: 11px;
-    flex-shrink: 0;
+    display: none;
 }
 
 .exec-tc-title {
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--text-main);
-    flex: 1;
+    display: none;
 }
 
 .exec-status-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
+    display: none;
 }
 
 .exec-expand-icon {
-    font-size: 10px;
-    color: var(--text-muted);
+    display: none;
 }
 
-/* Suite Header Inner Elements */
+/* Suite Header Inner Elements - Hidden (using flat classes instead) */
 .exec-suite-key {
-    font-size: 11px;
-    font-weight: 700;
-    color: var(--brand);
-    flex-shrink: 0;
+    display: none;
 }
 
 .exec-suite-title {
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--text-main);
-    flex: 1;
+    display: none;
 }
 
 .exec-suite-meta {
-    font-size: 12px;
-    color: var(--text-secondary);
+    display: none;
 }
 
 .exec-suite-actions {
-    display: flex;
-    align-items: center;
-    gap: 16px;
+    display: none;
 }
 
 .exec-header-status {
-    display: flex;
-    align-items: center;
-    gap: 8px;
+    display: none;
 }
 
-/* Progress Bar */
+/* Progress Bar - Hidden */
 .exec-suite-progress {
-    width: 120px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
+    display: none;
 }
 
 .exec-suite-progress-bar {
-    flex: 1;
-    height: 4px;
-    background: rgba(255,255,255,0.05);
-    border-radius: 2px;
-    overflow: hidden;
+    display: none;
 }
 
 .exec-suite-progress-fill {
-    height: 100%;
-    background: var(--brand);
-    transition: width 0.3s ease;
+    display: none;
 }
 
 .exec-suite-progress-pct {
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--text-muted);
-    width: 32px;
-    text-align: right;
+    display: none;
 }
 
 .exec-suite-timer {
-    font-family: 'SF Mono', Consolas, monospace;
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--text-main);
-    min-width: 60px;
-}
+    display: none;
 }
 
 .exec-suite-actions {
-    display: flex;
-    align-items: center;
-    gap: 24px;
+    display: none;
 }
 
 .exec-status-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
+    display: none;
 }
 
 .exec-expand-icon {
-    font-size: 0.7rem;
-    color: var(--text-muted);
-}
-
-.exec-header-status {
-    display: flex;
-    align-items: center;
-    gap: 8px;
+    display: none;
 }
 
 .exec-status-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
+    display: none;
 }
 
 .exec-tc-key {
-    font-size: 0.65rem;
-    font-weight: 700;
-    color: var(--brand);
-    min-width: 45px;
+    display: none;
 }
 
 .exec-tc-title {
-    font-size: 0.85rem;
-    font-weight: 600;
-    color: var(--text-main);
-    flex: 1;
+    display: none;
 }
 
 .exec-expand-icon {
-    font-size: 0.7rem;
-    color: var(--text-muted);
+    display: none;
 }
 
-/* Test Execution Detail */
+/* Test Execution Detail - Flat */
 .test-exec-detail {
     padding: 20px;
-    background: rgba(255,255,255,0.02);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    margin-top: 4px;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    margin-top: 0;
+    border-top: 1px solid var(--border);
 }
 
 .exec-field-group {

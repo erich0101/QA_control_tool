@@ -233,12 +233,7 @@ export const ExecutionTab = {
 
         return `
             <div class="tc-detail">
-                <div class="tc-detail-header">
-                    <span class="tc-detail-key">${UI.escapeHTML(tc.key_id || 'TC')}</span>
-                    <span class="tc-detail-title">${UI.escapeHTML(tc.title)}</span>
-                    ${assignee ? `<span class="tc-detail-assignee">Asignado: ${UI.escapeHTML(assignee.name)}</span>` : ''}
-                </div>
-
+                ${assignee ? `<div class="tc-detail-assignee">Asignado: ${UI.escapeHTML(assignee.name)}</div>` : ''}
                 <div class="tc-detail-tabs">
                     <button class="tc-tab ${this.detailTab === 'steps' ? 'active' : ''}" data-tab="steps" data-tc-id="${tc.id}">Pasos</button>
                     <button class="tc-tab ${this.detailTab === 'expected' ? 'active' : ''}" data-tab="expected" data-tc-id="${tc.id}">Esperado</button>
