@@ -790,7 +790,8 @@ app.get('/api/jira/projects/:id/my-tickets', requireAuth, async (req, res) => {
             updated: i.fields?.updated,
             issueType: i.fields?.issuetype?.name,
             parent: i.fields?.parent?.key,
-            mentions: i.mentions || null
+            mentions: i.mentions || null,
+            comments: i.comments || null
         }));
 
         res.json({ total: result.length, tickets: result });
@@ -1036,7 +1037,9 @@ app.get('/api/user-stories', requireAuth, async (req, res) => {
                         'id', i.id, 'title', i.title, 'description', i.description, 'severity', COALESCE(i.severity, 'Alta')
                     ) ORDER BY i.order_index)
                     FROM qa_inconsistencias i
-                    WHERE i.us_id = us.id
+                    JOIN qa_test_suites s ON i.suite_id = s.id
+                    JOIN qa_test_cases tc ON tc.suite_id = s.id
+                    WHERE tc.us_id = us.id
                 ), '[]') as inconsistencies,
                 us.recommendations
             FROM qa_user_stories us
@@ -1104,13 +1107,14 @@ app.delete('/api/scenarios/:id', requireAuth, async (req, res) => {
 // ── INCONSISTENCIAS ──
 app.post('/api/inconsistencies', requireAuth, async (req, res) => {
     try {
-        const { us_id, title, description, severity, order_index } = req.body;
-        if (!us_id || !title) return res.status(400).json({ error: 'us_id y title requeridos' });
+        const { suite_id, us_id, title, description, severity, order_index } = req.body;
+        if (!title) return res.status(400).json({ error: 'title requerido' });
+        if (!suite_id && !us_id) return res.status(400).json({ error: 'suite_id o us_id requerido' });
 
         const result = await query(`
-            INSERT INTO qa_inconsistencias (us_id, title, description, severity, order_index)
-            VALUES (?, ?, ?, ?, ?)
-        `, [us_id, title, description || '', severity || 'Alta', order_index || 0]);
+            INSERT INTO qa_inconsistencias (suite_id, us_id, title, description, severity, order_index)
+            VALUES (?, ?, ?, ?, ?, ?)
+        `, [suite_id || null, us_id || null, title, description || '', severity || 'Alta', order_index || 0]);
 
         res.json({ ok: true, id: result.lastID });
     } catch (err) {
@@ -1373,9 +1377,19 @@ app.get('/api/test-suites', requireAuth, async (req, res) => {
             allDefects = defRes.rows;
         }
 
+        // 6. Fetch Inconsistencies for all suites
+        const incRes = await query(`
+            SELECT id, suite_id, title, description, severity, order_index
+            FROM qa_inconsistencias
+            WHERE suite_id = ANY(?)
+            ORDER BY suite_id, order_index
+        `, [suiteIds]);
+        const allInconsistencies = incRes.rows;
+
         const result = suites.map(suite => {
             const activeRun = activeRuns.find(r => r.id === suite.active_run_id) || null;
             const suiteCases = allTestCases.filter(tc => tc.suite_id === suite.id);
+            const suiteInconsistencies = allInconsistencies.filter(inc => inc.suite_id === suite.id);
             
             const processedCases = suiteCases.map(tc => {
                 let exec = null;
@@ -1419,7 +1433,7 @@ app.get('/api/test-suites', requireAuth, async (req, res) => {
                 };
             }).filter(tc => tc !== null);
 
-            return { ...suite, activeRun, test_cases: processedCases };
+            return { ...suite, activeRun, test_cases: processedCases, inconsistencies: suiteInconsistencies };
         });
 
         console.log(`GET /api/test-suites optimized: ${Date.now() - start}ms`);
@@ -2403,10 +2417,9 @@ app.post('/api/runs/:id/retest', requireAuth, async (req, res) => {
 
 app.put('/api/test-suites/:id', requireAuth, async (req, res) => {
     try {
-        const { title, description, assigned_to, jira_epic_key, inconsistencies } = req.body;
-        const incJson = inconsistencies !== undefined ? JSON.stringify(inconsistencies) : undefined;
-        await query(`UPDATE qa_test_suites SET title = COALESCE(?, title), description = COALESCE(?, description), assigned_to = COALESCE(?, assigned_to), jira_epic_key = COALESCE(?, jira_epic_key), inconsistencies = COALESCE(?, inconsistencies), updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-            [title, description, assigned_to, jira_epic_key, incJson, req.user.id, req.params.id]);
+        const { title, description, assigned_to, jira_epic_key } = req.body;
+        await query(`UPDATE qa_test_suites SET title = COALESCE(?, title), description = COALESCE(?, description), assigned_to = COALESCE(?, assigned_to), jira_epic_key = COALESCE(?, jira_epic_key), updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+            [title, description, assigned_to, jira_epic_key, req.user.id, req.params.id]);
         res.json({ ok: true });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -2416,10 +2429,22 @@ app.put('/api/test-suites/:id', requireAuth, async (req, res) => {
 // Ruta dedicada para guardar/reemplazar inconsistencias de una suite
 app.put('/api/test-suites/:id/inconsistencies', requireAuth, async (req, res) => {
     try {
-        const { inconsistencies } = req.body; // array de { title: string }
+        const { inconsistencies } = req.body; // array de { title, severity, description }
         if (!Array.isArray(inconsistencies)) return res.status(400).json({ error: 'inconsistencies debe ser un array' });
-        await query(`UPDATE qa_test_suites SET inconsistencies = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-            [JSON.stringify(inconsistencies), req.user.id, req.params.id]);
+        
+        const suiteId = req.params.id;
+        
+        // Delete existing and insert new
+        await query(`DELETE FROM qa_inconsistencias WHERE suite_id = ?`, [suiteId]);
+        
+        for (let i = 0; i < inconsistencies.length; i++) {
+            const inc = inconsistencies[i];
+            await query(`
+                INSERT INTO qa_inconsistencias (suite_id, title, description, severity, order_index)
+                VALUES (?, ?, ?, ?, ?)
+            `, [suiteId, inc.title, inc.description || '', inc.severity || 'Alta', i]);
+        }
+        
         res.json({ ok: true });
     } catch (err) {
         res.status(500).json({ error: err.message });

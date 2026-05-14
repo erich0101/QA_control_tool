@@ -9,36 +9,37 @@ export const MiJiraTab = {
 
     async render(container) {
         container.innerHTML = `
-            <div style="padding: 20px; max-width: 1400px; margin: 0 auto;">
+            <div style="display: flex; flex-direction: column; height: 100%;">
                 <!-- Header -->
-                <div style="margin-bottom: 20px;">
-                    <h1 style="font-size: 1.3rem; font-weight: 700; color: #e6edf3; margin: 0 0 4px;">Mi JIRA</h1>
-                    <p style="font-size: 0.8rem; color: #8b949e; margin: 0;">Tickets donde participás</p>
+                <div style="padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,0.06); display: flex; align-items: center; justify-content: space-between;">
+                    <div>
+                        <h1 style="font-size: 0.95rem; font-weight: 700; color: #e6edf3; margin: 0;">Mi JIRA</h1>
+                    </div>
+                    <button id="mi-jira-refresh" style="padding: 4px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.08); background: transparent; color: #8b949e; font-size: 0.72rem; cursor: pointer;">🔄</button>
                 </div>
 
                 <!-- Sub-Tab Bar -->
-                <div class="sub-tab-bar" style="display: flex; gap: 4px; margin-bottom: 20px; background: #161b22; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 6px; width: fit-content;">
-                    <button class="sub-tab-btn ${this.activeSubTab === 'assigned' ? 'active' : ''}" data-filter="assigned" style="padding: 8px 20px; border-radius: 8px; border: none; background: ${this.activeSubTab === 'assigned' ? '#3b82f6' : 'transparent'}; color: ${this.activeSubTab === 'assigned' ? '#fff' : '#8b949e'}; font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: all 0.15s ease;">📥 Asignados</button>
-                    <button class="sub-tab-btn ${this.activeSubTab === 'created' ? 'active' : ''}" data-filter="created" style="padding: 8px 20px; border-radius: 8px; border: none; background: ${this.activeSubTab === 'created' ? '#3b82f6' : 'transparent'}; color: ${this.activeSubTab === 'created' ? '#fff' : '#8b949e'}; font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: all 0.15s ease;">✏️ Creados</button>
-                    <button class="sub-tab-btn ${this.activeSubTab === 'mentions' ? 'active' : ''}" data-filter="mentions" style="padding: 8px 20px; border-radius: 8px; border: none; background: ${this.activeSubTab === 'mentions' ? '#3b82f6' : 'transparent'}; color: ${this.activeSubTab === 'mentions' ? '#fff' : '#8b949e'}; font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: all 0.15s ease;">🔖 Menciones</button>
+                <div style="display: flex; gap: 0; padding: 8px 12px; border-bottom: 1px solid rgba(255,255,255,0.06);">
+                    <button class="sub-tab-btn ${this.activeSubTab === 'assigned' ? 'active' : ''}" data-filter="assigned" style="padding: 6px 14px; border-radius: 6px; border: none; background: ${this.activeSubTab === 'assigned' ? '#3b82f6' : 'transparent'}; color: ${this.activeSubTab === 'assigned' ? '#fff' : '#8b949e'}; font-size: 0.75rem; font-weight: 600; cursor: pointer; transition: all 0.15s;">📥 Asignados</button>
+                    <button class="sub-tab-btn ${this.activeSubTab === 'created' ? 'active' : ''}" data-filter="created" style="padding: 6px 14px; border-radius: 6px; border: none; background: ${this.activeSubTab === 'created' ? '#3b82f6' : 'transparent'}; color: ${this.activeSubTab === 'created' ? '#fff' : '#8b949e'}; font-size: 0.75rem; font-weight: 600; cursor: pointer; transition: all 0.15s;">✏️ Creados</button>
+                    <button class="sub-tab-btn ${this.activeSubTab === 'mentions' ? 'active' : ''}" data-filter="mentions" style="padding: 6px 14px; border-radius: 6px; border: none; background: ${this.activeSubTab === 'mentions' ? '#3b82f6' : 'transparent'}; color: ${this.activeSubTab === 'mentions' ? '#fff' : '#8b949e'}; font-size: 0.75rem; font-weight: 600; cursor: pointer; transition: all 0.15s;">🔖 Menciones</button>
                 </div>
 
                 <!-- Panel Container -->
-                <div id="mi-jira-panel" style="background: #161b22; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; overflow: hidden;">
-                    <div style="padding: 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.05); background: rgba(255,255,255,0.02); display: flex; align-items: center; justify-content: space-between;">
-                        <div>
-                            <span id="mi-jira-title" style="font-size: 0.9rem; font-weight: 600; color: #e6edf3;">Cargando...</span>
-                            <span id="mi-jira-count" style="margin-left: 12px; font-size: 0.75rem; color: #8b949e;"></span>
+                <div id="mi-jira-panel" style="flex: 1; overflow: hidden; display: flex; flex-direction: column;">
+                    <div style="padding: 8px 16px; border-bottom: 1px solid rgba(255,255,255,0.04); display: flex; align-items: center; justify-content: space-between;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span id="mi-jira-title" style="font-size: 0.8rem; font-weight: 600; color: #d1d5db;">Cargando...</span>
+                            <span id="mi-jira-count" style="font-size: 0.7rem; color: #6b7280;"></span>
                         </div>
-                        <button id="mi-jira-refresh" style="padding: 6px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); background: transparent; color: #8b949e; font-size: 0.75rem; cursor: pointer;">🔄 Actualizar</button>
                     </div>
-                    <div id="mi-jira-grid" style="padding: 0;">
+                    <div id="mi-jira-grid" style="flex: 1; overflow-y: auto;">
                         <!-- Grid renders here -->
                     </div>
                 </div>
 
                 <!-- Detail Panel -->
-                <div id="mi-jira-detail" style="display: none; margin-top: 20px;">
+                <div id="mi-jira-detail" style="display: none; border-top: 1px solid rgba(255,255,255,0.08);">
                     <!-- Detail panel for ticket -->
                 </div>
             </div>
@@ -81,7 +82,7 @@ export const MiJiraTab = {
         this.loading = true;
         UI.showLoading();
 
-        const titles = { assigned: 'Tickets Asignados a Mí', created: 'Tickets Creados por Mí', mentions: 'Tickets donde me mencionaron' };
+        const titles = { assigned: 'Asignados a Mí', created: 'Creados por Mí', mentions: 'Donde me mencionaron' };
         title.textContent = titles[this.activeSubTab] || 'Mi JIRA';
         count.textContent = '';
         grid.innerHTML = this.renderLoading();
@@ -112,24 +113,16 @@ export const MiJiraTab = {
 
     renderLoading() {
         return `
-            <div style="display: grid; gap: 0;">
+            <div style="display: flex; flex-direction: column;">
                 ${Array(5).fill(0).map(() => `
-                    <div style="display: grid; grid-template-columns: 110px 80px 1fr 100px 140px 90px; padding: 14px 20px; border-bottom: 1px solid rgba(255,255,255,0.05);">
-                        <div style="height: 14px; width: 80px; background: rgba(255,255,255,0.05); border-radius: 4px; animation: shimmer 1.5s infinite; background-size: 200% 100%;"></div>
-                        <div style="height: 14px; width: 60px; background: rgba(255,255,255,0.05); border-radius: 4px; animation: shimmer 1.5s infinite; background-size: 200% 100%;"></div>
-                        <div style="height: 14px; width: 200px; background: rgba(255,255,255,0.05); border-radius: 4px; animation: shimmer 1.5s infinite; background-size: 200% 100%;"></div>
-                        <div style="height: 14px; width: 70px; background: rgba(255,255,255,0.05); border-radius: 4px; animation: shimmer 1.5s infinite; background-size: 200% 100%;"></div>
-                        <div style="height: 14px; width: 100px; background: rgba(255,255,255,0.05); border-radius: 4px; animation: shimmer 1.5s infinite; background-size: 200% 100%;"></div>
-                        <div style="height: 14px; width: 60px; background: rgba(255,255,255,0.05); border-radius: 4px; animation: shimmer 1.5s infinite; background-size: 200% 100%;"></div>
+                    <div style="display: grid; grid-template-columns: 100px 70px 1fr 90px; padding: 10px 16px; border-bottom: 1px solid rgba(255,255,255,0.04);">
+                        <div style="height: 12px; width: 70px; background: rgba(255,255,255,0.04); border-radius: 3px;"></div>
+                        <div style="height: 12px; width: 50px; background: rgba(255,255,255,0.04); border-radius: 3px;"></div>
+                        <div style="height: 12px; width: 160px; background: rgba(255,255,255,0.04); border-radius: 3px;"></div>
+                        <div style="height: 12px; width: 60px; background: rgba(255,255,255,0.04); border-radius: 3px;"></div>
                     </div>
                 `).join('')}
             </div>
-            <style>
-                @keyframes shimmer {
-                    0% { background-position: 200% 0; }
-                    100% { background-position: -200% 0; }
-                }
-            </style>
         `;
     },
 
@@ -137,9 +130,9 @@ export const MiJiraTab = {
         const grid = document.getElementById('mi-jira-grid');
         if (!grid) return;
         grid.innerHTML = `
-            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 24px; text-align: center;">
-                <div style="font-size: 2.5rem; margin-bottom: 12px; opacity: 0.5;">📋</div>
-                <p style="font-size: 0.85rem; color: #8b949e; max-width: 300px;">${message}</p>
+            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 24px; text-align: center;">
+                <div style="font-size: 2rem; margin-bottom: 8px; opacity: 0.4;">📋</div>
+                <p style="font-size: 0.8rem; color: #6b7280; max-width: 260px;">${message}</p>
             </div>
         `;
     },
@@ -148,17 +141,13 @@ export const MiJiraTab = {
         const grid = document.getElementById('mi-jira-grid');
         if (!grid) return;
 
-        const titles = { assigned: 'Asignados', created: 'Creados', mentions: 'Menciones' };
-
         grid.innerHTML = `
             <!-- Header -->
-            <div style="display: grid; grid-template-columns: 110px 80px 1fr 100px 140px 90px; padding: 10px 20px; border-bottom: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.01);">
-                <div style="font-size: 11px; font-weight: 600; color: #8b949e; text-transform: uppercase; letter-spacing: 0.05em;">CLAVE</div>
-                <div style="font-size: 11px; font-weight: 600; color: #8b949e; text-transform: uppercase; letter-spacing: 0.05em;">TIPO</div>
-                <div style="font-size: 11px; font-weight: 600; color: #8b949e; text-transform: uppercase; letter-spacing: 0.05em;">RESUMEN</div>
-                <div style="font-size: 11px; font-weight: 600; color: #8b949e; text-transform: uppercase; letter-spacing: 0.05em;">ESTADO</div>
-                <div style="font-size: 11px; font-weight: 600; color: #8b949e; text-transform: uppercase; letter-spacing: 0.05em;">RESPONSABLE</div>
-                <div style="font-size: 11px; font-weight: 600; color: #8b949e; text-transform: uppercase; letter-spacing: 0.05em;">ACTUALIZADO</div>
+            <div style="display: grid; grid-template-columns: 100px 70px 1fr 90px; padding: 6px 16px; border-bottom: 1px solid rgba(255,255,255,0.06); background: rgba(255,255,255,0.01); position: sticky; top: 0; z-index: 1;">
+                <div style="font-size: 10px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em;">CLAVE</div>
+                <div style="font-size: 10px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em;">TIPO</div>
+                <div style="font-size: 10px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em;">RESUMEN</div>
+                <div style="font-size: 10px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em;">ESTADO</div>
             </div>
 
             <!-- Rows -->
@@ -178,43 +167,37 @@ export const MiJiraTab = {
                 const statusColor = statusColors[ticket.statusCategory] || statusColors[ticket.status] || '#8b949e';
 
                 return `
-                <div class="ticket-row" data-key="${ticket.key}" style="display: grid; grid-template-columns: 110px 80px 1fr 100px 140px 90px; padding: 14px 20px; border-bottom: 1px solid rgba(255,255,255,0.05); cursor: pointer; transition: background 0.15s ease;" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background='transparent'">
-                    <div style="display: flex; align-items: center; gap: 6px;">
-                        ${ticket.issueType === 'Epic' ? '<span style="font-size: 10px; color: #3b82f6;">📋</span>' : ''}
-                        <span style="font-weight: 600; color: #e6edf3; font-size: 12px;">${ticket.key}</span>
+                <div class="ticket-row" data-key="${ticket.key}" style="display: grid; grid-template-columns: 100px 70px 1fr 90px; padding: 10px 16px; border-bottom: 1px solid rgba(255,255,255,0.04); cursor: pointer;">
+                    <div style="display: flex; align-items: center; gap: 5px;">
+                        ${ticket.issueType === 'Epic' ? '<span style="font-size: 9px; color: #3b82f6;">📋</span>' : ''}
+                        <span style="font-weight: 600; color: #d1d5db; font-size: 11px;">${ticket.key}</span>
                     </div>
                     <div style="display: flex; align-items: center;">
-                        <span style="font-size: 11px; font-weight: 600; color: ${typeColor};">${ticket.issueType || '—'}</span>
+                        <span style="font-size: 10px; font-weight: 600; color: ${typeColor};">${ticket.issueType || '—'}</span>
                     </div>
-                    <div style="display: flex; align-items: center; gap: 8px; overflow: hidden;">
-                        ${ticket.parent ? `<span style="font-size: 10px; color: #484f58; flex-shrink: 0;">└</span>` : ''}
-                        <span style="font-size: 13px; color: #e6edf3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${ticket.summary || '—'}</span>
+                    <div style="display: flex; align-items: center; gap: 6px; overflow: hidden;">
+                        ${ticket.parent ? `<span style="font-size: 9px; color: #484f58; flex-shrink: 0;">└</span>` : ''}
+                        <span style="font-size: 12px; color: #e6edf3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${ticket.summary || '—'}</span>
                         ${this.activeSubTab === 'mentions' && ticket.mentions && ticket.mentions.length > 0 ? `
-                            <span style="flex-shrink: 0; background: rgba(59,130,246,0.15); border: 1px solid rgba(59,130,246,0.3); color: #3b82f6; border-radius: 4px; padding: 1px 6px; font-size: 10px; font-weight: 600;">${ticket.mentions.length} 🔖</span>
+                            <span style="flex-shrink: 0; background: rgba(59,130,246,0.15); border: 1px solid rgba(59,130,246,0.3); color: #3b82f6; border-radius: 3px; padding: 1px 5px; font-size: 9px; font-weight: 600;">${ticket.mentions.length} 🔖</span>
                         ` : ''}
                     </div>
                     <div style="display: flex; align-items: center;">
-                        <span style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: ${statusColor}; letter-spacing: 0.03em;">${ticket.status || '—'}</span>
-                    </div>
-                    <div style="display: flex; align-items: center; gap: 8px; overflow: hidden;">
-                        ${ticket.assigneeAvatar ? `<img src="${ticket.assigneeAvatar}" style="width: 24px; height: 24px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.1); flex-shrink: 0;">` : `<div style="width: 24px; height: 24px; border-radius: 50%; background: #1f2335; border: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; font-size: 10px; color: #8b949e; flex-shrink: 0;">${(ticket.assignee || '?')[0]}</div>`}
-                        <span style="font-size: 12px; color: #e6edf3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${ticket.assignee || 'Sin asignar'}</span>
-                    </div>
-                    <div style="display: flex; align-items: center;">
-                        <span style="font-size: 12px; color: #8b949e;">${this.formatDate(ticket.updated)}</span>
+                        <span style="font-size: 10px; font-weight: 700; text-transform: uppercase; color: ${statusColor}; letter-spacing: 0.03em;">${ticket.status || '—'}</span>
                     </div>
                 </div>
                 `;
             }).join('')}
         `;
 
-        // Bind click events for rows
         grid.querySelectorAll('.ticket-row').forEach(row => {
             row.addEventListener('click', () => {
                 const key = row.dataset.key;
                 const ticket = this.tickets.find(t => t.key === key);
                 if (ticket) this.showDetail(ticket);
             });
+            row.addEventListener('mouseover', () => row.style.background = 'rgba(255,255,255,0.04)');
+            row.addEventListener('mouseout', () => row.style.background = 'transparent');
         });
     },
 
@@ -225,68 +208,82 @@ export const MiJiraTab = {
         const statusColors = { 'done': '#3fb950', 'new': '#8b949e', 'indeterminate': '#f59e0b' };
         const statusColor = statusColors[ticket.statusCategory] || '#8b949e';
 
+        const sortedComments = (ticket.comments || []).sort((a, b) => new Date(b.created) - new Date(a.created));
+        const mentionCount = ticket.mentions?.length || 0;
+
         detail.style.display = 'block';
         detail.innerHTML = `
-            <div style="background: #161b22; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; overflow: hidden;">
-                <!-- Header -->
-                <div style="padding: 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.05); background: rgba(255,255,255,0.02); display: flex; align-items: flex-start; justify-content: space-between;">
-                    <div>
-                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 4px;">
-                            <span style="font-size: 0.8rem; font-weight: 600; color: #e6edf3;">${ticket.key}</span>
-                            <span style="font-size: 11px; font-weight: 600; color: ${statusColor}; background: rgba(255,255,255,0.05); border: 1px solid ${statusColor}40; border-radius: 4px; padding: 2px 8px;">${ticket.status}</span>
-                        </div>
-                        <p style="font-size: 0.85rem; color: #e6edf3; margin: 0;">${ticket.summary}</p>
+            <div style="padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,0.06); display: flex; align-items: flex-start; justify-content: space-between;">
+                <div style="flex: 1; min-width: 0;">
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 3px;">
+                        <span style="font-size: 0.8rem; font-weight: 700; color: #3b82f6;">${ticket.key}</span>
+                        <span style="font-size: 10px; font-weight: 600; color: ${statusColor}; background: rgba(255,255,255,0.04); border: 1px solid ${statusColor}30; border-radius: 3px; padding: 1px 6px;">${ticket.status}</span>
+                        <span style="font-size: 10px; color: #6b7280;">${ticket.issueType || ''}</span>
                     </div>
-                    <button onclick="document.getElementById('mi-jira-detail').style.display='none'" style="padding: 6px 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); background: transparent; color: #8b949e; cursor: pointer; font-size: 0.8rem;">✕ Cerrar</button>
+                    <p style="font-size: 0.82rem; color: #e6edf3; margin: 0; line-height: 1.3;">${ticket.summary}</p>
                 </div>
+                <button onclick="document.getElementById('mi-jira-detail').style.display='none'" style="padding: 4px 8px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.08); background: transparent; color: #6b7280; cursor: pointer; font-size: 0.75rem; margin-left: 8px;">✕</button>
+            </div>
 
-                <!-- Meta info -->
-                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0;">
-                    <div style="padding: 14px 20px; border-right: 1px solid rgba(255,255,255,0.05);">
-                        <div style="font-size: 10px; font-weight: 600; color: #8b949e; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;">Tipo</div>
-                        <div style="font-size: 0.85rem; color: #e6edf3;">${ticket.issueType || '—'}</div>
-                    </div>
-                    <div style="padding: 14px 20px; border-right: 1px solid rgba(255,255,255,0.05);">
-                        <div style="font-size: 10px; font-weight: 600; color: #8b949e; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;">Reporter</div>
-                        <div style="font-size: 0.85rem; color: #e6edf3;">${ticket.reporter || '—'}</div>
-                    </div>
-                    <div style="padding: 14px 20px;">
-                        <div style="font-size: 10px; font-weight: 600; color: #8b949e; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;">Creado</div>
-                        <div style="font-size: 0.85rem; color: #e6edf3;">${this.formatDate(ticket.created)}</div>
-                    </div>
+            <!-- Meta row -->
+            <div style="display: grid; grid-template-columns: repeat(4, 1fr); padding: 8px 16px; border-bottom: 1px solid rgba(255,255,255,0.04);">
+                <div>
+                    <div style="font-size: 9px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px;">Reporter</div>
+                    <div style="font-size: 0.75rem; color: #d1d5db;">${ticket.reporter || '—'}</div>
                 </div>
-
-                ${ticket.parent ? `
-                <div style="padding: 14px 20px; border-top: 1px solid rgba(255,255,255,0.05);">
-                    <div style="font-size: 10px; font-weight: 600; color: #8b949e; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;">Epic</div>
-                    <div style="font-size: 0.85rem; color: #3b82f6;">${ticket.parent}</div>
+                <div>
+                    <div style="font-size: 9px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px;">Asignado</div>
+                    <div style="font-size: 0.75rem; color: #d1d5db;">${ticket.assignee || '—'}</div>
                 </div>
-                ` : ''}
+                <div>
+                    <div style="font-size: 9px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px;">Creado</div>
+                    <div style="font-size: 0.75rem; color: #d1d5db;">${this.formatDate(ticket.created)}</div>
+                </div>
+                <div>
+                    <div style="font-size: 9px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px;">Actualizado</div>
+                    <div style="font-size: 0.75rem; color: #d1d5db;">${this.formatDate(ticket.updated)}</div>
+                </div>
+            </div>
 
-                ${ticket.mentions && ticket.mentions.length > 0 ? `
-                <div style="padding: 16px 20px; border-top: 1px solid rgba(255,255,255,0.05);">
-                    <div style="font-size: 11px; font-weight: 700; color: #3b82f6; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px;">🔖 Donde me mencionaron</div>
-                    ${ticket.mentions.map(m => `
-                        <div style="background: rgba(59,130,246,0.08); border: 1px solid rgba(59,130,246,0.2); border-radius: 8px; padding: 12px; margin-bottom: 8px;">
-                            <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
-                                <span style="font-size: 0.8rem; font-weight: 600; color: #3b82f6;">${m.author}</span>
-                                <span style="font-size: 0.75rem; color: #8b949e;">${this.formatDate(m.created)}</span>
+            ${ticket.parent ? `
+            <div style="padding: 8px 16px; border-bottom: 1px solid rgba(255,255,255,0.04);">
+                <span style="font-size: 9px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em;">Epic: </span>
+                <span style="font-size: 0.75rem; color: #3b82f6;">${ticket.parent}</span>
+            </div>
+            ` : ''}
+
+            <!-- Comment Chain -->
+            ${sortedComments.length > 0 ? `
+            <div style="padding: 10px 0;">
+                <div style="padding: 0 16px 8px; display: flex; align-items: center; gap: 6px;">
+                    <span style="font-size: 10px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em;">💬 Comentarios</span>
+                    <span style="font-size: 10px; color: #6b7280;">(${sortedComments.length})</span>
+                    ${mentionCount > 0 ? `<span style="font-size: 10px; color: #3b82f6;">· ${mentionCount} menciones</span>` : ''}
+                </div>
+                <div style="max-height: 320px; overflow-y: auto;">
+                    ${sortedComments.map(c => `
+                        <div style="padding: 10px 16px; border-bottom: 1px solid rgba(255,255,255,0.03); ${c.isMention ? 'background: rgba(59,130,246,0.06); border-left: 3px solid #3b82f6;' : ''}">
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                                <div style="display: flex; align-items: center; gap: 6px;">
+                                    <span style="font-size: 0.75rem; font-weight: 600; color: ${c.isMention ? '#3b82f6' : '#d1d5db'};">${c.author}</span>
+                                    ${c.isMention ? '<span style="font-size: 9px; color: #3b82f6; background: rgba(59,130,246,0.1); padding: 1px 5px; border-radius: 3px;">🔖</span>' : ''}
+                                </div>
+                                <span style="font-size: 0.7rem; color: #6b7280;">${this.formatDate(c.created)}</span>
                             </div>
-                            <p style="font-size: 0.8rem; color: #e6edf3; margin: 0;">"${m.preview}${m.preview.length >= 150 ? '...' : ''}"</p>
+                            <p style="font-size: 0.78rem; color: #c9d1d9; margin: 0; line-height: 1.4; white-space: pre-wrap;">${UI.escapeHTML(c.body || '')}</p>
                         </div>
                     `).join('')}
                 </div>
-                ` : ''}
+            </div>
+            ` : ''}
 
-                <!-- Actions -->
-                <div style="padding: 16px 20px; border-top: 1px solid rgba(255,255,255,0.05); display: flex; gap: 8px;">
-                    <a href="https://livewareissa.atlassian.net/browse/${ticket.key}" target="_blank" style="padding: 8px 16px; border-radius: 8px; background: #3b82f6; color: #fff; font-size: 0.8rem; font-weight: 600; text-decoration: none;">🔗 Abrir en Jira</a>
-                    <button onclick="navigator.clipboard.writeText('${ticket.key}')" style="padding: 8px 16px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); background: transparent; color: #8b949e; font-size: 0.8rem; cursor: pointer;">📋 Copiar Key</button>
-                </div>
+            <!-- Actions -->
+            <div style="padding: 10px 16px; display: flex; gap: 8px;">
+                <a href="https://livewareissa.atlassian.net/browse/${ticket.key}" target="_blank" style="padding: 6px 12px; border-radius: 6px; background: #3b82f6; color: #fff; font-size: 0.75rem; font-weight: 600; text-decoration: none;">🔗 Jira</a>
+                <button onclick="navigator.clipboard.writeText('${ticket.key}')" style="padding: 6px 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.08); background: transparent; color: #8b949e; font-size: 0.75rem; cursor: pointer;">📋 Copiar</button>
             </div>
         `;
 
-        // Scroll to detail
         detail.scrollIntoView({ behavior: 'smooth', block: 'start' });
     },
 

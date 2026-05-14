@@ -158,8 +158,7 @@ export const TestSuitesTab = {
                         const testCount = (suite.test_cases || []).length;
 
                         let incIndicator = '';
-                        const rawInc = suite.inconsistencies;
-                        const incList = Array.isArray(rawInc) ? rawInc : (() => { try { return JSON.parse(rawInc || '[]'); } catch { return []; } })();
+                        const incList = suite.inconsistencies || [];
                         if (incList.length > 0) {
                             incIndicator = `<span title="Tiene inconsistencias" style="font-size: 0.65rem; color: #fbbf24;">⚠️</span>`;
                         }
@@ -186,10 +185,7 @@ export const TestSuitesTab = {
     },
 
     renderInconsistenciesPanel(suite) {
-        const rawInc = suite?.inconsistencies;
-        const incList = Array.isArray(rawInc) ? rawInc : (() => { try { return JSON.parse(rawInc || '[]'); } catch { return []; } })();
-
-        if (!incList.length) return '';
+        const incList = suite?.inconsistencies || [];
 
         const sevColor = (sev) => ({ Alta: '#f87171', Media: '#fbbf24', Baja: '#4ade80' }[sev] || '#a5b4fc');
         const sevBg = (sev) => ({ Alta: 'rgba(239,68,68,0.15)', Media: 'rgba(245,158,11,0.15)', Baja: 'rgba(34,197,94,0.15)' }[sev] || 'rgba(99,102,241,0.15)');
@@ -222,8 +218,10 @@ export const TestSuitesTab = {
                                     <div style="font-size:0.78rem;font-weight:700;color:#f1f5f9;">${UI.escapeHTML(inc.title || '')}</div>
                                     ${inc.description ? `<div style="font-size:0.7rem;color:#cbd5e1;margin-top:2px;line-height:1.4;">${UI.escapeHTML(inc.description)}</div>` : ''}
                                 </div>
+                                <button class="resolve-inc-btn" data-id="${inc.id}" data-suite-id="${suite.id}" title="Resolver" style="background:none;border:none;color:#22c55e;cursor:pointer;font-size:0.75rem;padding:2px 6px;">✅</button>
                             </div>
                         `).join('')}
+                        <button id="btn-add-inc-${suite.id}" data-suite-id="${suite.id}" style="margin-top:6px;padding:6px 10px;border:1px dashed rgba(255,255,255,0.2);border-radius:6px;background:none;color:#8b949e;font-size:0.72rem;cursor:pointer;">+ Agregar inconsistencia</button>
                     </div>
                 </div>
             </div>
@@ -871,6 +869,55 @@ export const TestSuitesTab = {
             });
         });
 
+        // Resolve Inconsistency
+        container.querySelectorAll('.resolve-inc-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const incId = parseInt(btn.dataset.id);
+                const suiteId = parseInt(btn.dataset.suiteId);
+                UI.showLoading();
+                try {
+                    await ApiService.deleteInconsistency(incId);
+                    await this.reloadSuites();
+                    this.selectedSuiteId = suiteId;
+                    this.render(container);
+                    UI.toast('Inconsistencia resuelta');
+                } catch (err) {
+                    UI.toast(err.message, 'error');
+                }
+                UI.hideLoading();
+            });
+        });
+
+        // Add Inconsistency
+        container.querySelectorAll('[id^="btn-add-inc-"]').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const suiteId = parseInt(btn.dataset.suiteId);
+                const title = prompt('Título de la inconsistencia:');
+                if (!title) return;
+                const severity = prompt('Severidad (Alta/Media/Baja):', 'Alta') || 'Alta';
+                const description = prompt('Descripción (opcional):') || '';
+                
+                UI.showLoading();
+                try {
+                    await ApiService.createInconsistency({
+                        suite_id: suiteId,
+                        title,
+                        severity,
+                        description
+                    });
+                    await this.reloadSuites();
+                    this.selectedSuiteId = suiteId;
+                    this.render(container);
+                    UI.toast('Inconsistencia agregada');
+                } catch (err) {
+                    UI.toast(err.message, 'error');
+                }
+                UI.hideLoading();
+            });
+        });
+
         // Nuevo Test Case
         container.querySelector('#btn-new-tc')?.addEventListener('click', async (e) => {
             const suiteId = parseInt(e.target.dataset.suiteId);
@@ -1250,11 +1297,15 @@ REGLAS:
 
             if (inconsistencies.length > 0) {
                 const currentSuite = Store.state.testSuites.find(s => s.id === suiteId);
-                const rawExisting = currentSuite?.inconsistencies;
-                const existingInconsistencies = Array.isArray(rawExisting) ? rawExisting : (() => { try { return JSON.parse(rawExisting || '[]'); } catch { return []; } })();
+                const existingInconsistencies = currentSuite?.inconsistencies || [];
                 const newInconsistencies = inconsistencies.filter(inc => !existingInconsistencies.some(e => e.title === inc.title));
                 if (newInconsistencies.length > 0) {
-                    await ApiService.updateSuiteInconsistencies(suiteId, [...existingInconsistencies, ...newInconsistencies]);
+                    const allInconsistencies = [...existingInconsistencies, ...newInconsistencies].map(inc => ({
+                        title: inc.title,
+                        severity: inc.severity || 'Alta',
+                        description: inc.description || ''
+                    }));
+                    await ApiService.updateSuiteInconsistencies(suiteId, allInconsistencies);
                 }
             }
 

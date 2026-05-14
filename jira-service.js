@@ -420,7 +420,7 @@ ${bug.actual_result || '—'}
         const me = await this.testConnection(userCredentials, domain);
         const myAccountId = me.user.accountId;
 
-        const jql = `project = "${projectKey}" AND updated >= "-${daysBack}d" ORDER BY updated DESC`;
+        const jql = `project = "${projectKey}" AND updated >= "-${daysBack}d" AND statusCategory != Done ORDER BY updated DESC`;
         const issues = await this.searchIssues(userCredentials, domain, jql, null, ['summary', 'status', 'statusCategory', 'priority', 'assignee', 'reporter', 'created', 'updated', 'issuetype', 'parent']);
 
         const mentionedIssues = [];
@@ -439,6 +439,13 @@ ${bug.actual_result || '—'}
                             author: c.author,
                             created: c.created,
                             preview: (c.body || '').substring(0, 150)
+                        })),
+                        comments: comments.map(c => ({
+                            id: c.id,
+                            author: c.author,
+                            created: c.created,
+                            body: c.body,
+                            isMention: this.extractMentionAccountIds(c.rawBody || c.body).includes(myAccountId)
                         }))
                     });
                 }

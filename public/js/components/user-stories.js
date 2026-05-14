@@ -312,6 +312,7 @@ export const UserStories = {
                     <div style="display: flex; align-items: flex-start; gap: 10px; padding: 8px 12px; background: rgba(0,0,0,0.15); border-radius: 8px;">
                         <span style="font-size: 0.65rem; font-weight: 800; color: ${color}; white-space: nowrap; margin-top: 1px;">${icon}</span>
                         <span style="font-size: 0.78rem; color: var(--text-main); font-weight: 500; flex: 1; word-break: break-word; line-height: 1.4;">${UI.escapeHTML(item.title)}</span>
+                        <button class="resolve-inc-btn-hu" data-id="${item.id}" title="Resolver inconsistencia" style="background:none;border:none;color:#22c55e;cursor:pointer;font-size:0.75rem;padding:2px 6px;">✅</button>
                     </div>`;
                 }).join('')}</div>` : ''}
             </div>
@@ -488,37 +489,18 @@ const huData = {};
                 UI.hideLoading();
             });
         });
-        // Add Inconsistency
-        container.querySelector('#btn-add-inconsistency')?.addEventListener('click', async (e) => {
-            const usId = parseInt(e.target.dataset.usId);
-            const us = Store.state.userStories.find(u => u.id === usId);
-            const nextOrder = (us?.inconsistencies?.length || 0);
-            
-            UI.showLoading();
-            try {
-                await ApiService.createInconsistency({ 
-                    us_id: usId, 
-                    title: `Nueva Inconsistencia ${nextOrder + 1}`,
-                    order_index: nextOrder 
-                });
-                await this.reloadUS();
-                this.render(container);
-            } catch (err) {
-                UI.toast(err.message, 'error');
-            }
-            UI.hideLoading();
-        });
-
-        // Delete Inconsistency
-        container.querySelectorAll('.delete-inconsistency').forEach(btn => {
+        // Resolve Inconsistency
+        container.querySelectorAll('.resolve-inc-btn-hu').forEach(btn => {
             btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
                 const id = parseInt(btn.dataset.id);
-                if (!await modalManager.confirm('¿Eliminar este análisis?')) return;
+                if (!await modalManager.confirm('¿Resolver esta inconsistencia? Se eliminará definitivamente.')) return;
                 UI.showLoading();
                 try {
                     await ApiService.deleteInconsistency(id);
                     await this.reloadUS();
                     this.render(container);
+                    UI.toast('Inconsistencia resuelta');
                 } catch (err) {
                     UI.toast(err.message, 'error');
                 }
