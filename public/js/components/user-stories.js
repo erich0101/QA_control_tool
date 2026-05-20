@@ -86,12 +86,17 @@ export const UserStories = {
                         </div>
 
                         <div style="display: flex; flex-direction: column; gap: 8px;">
-                            <select id="cu-select" class="w-full" style="height: 36px; font-size: 0.8rem;">
-                                <option value="">— Filtrar por Caso de Uso —</option>
-                                ${useCases.map(cu => `
-                                    <option value="${cu.id}" ${cu.id === selectedUseCaseId ? 'selected' : ''}>${UI.escapeHTML(cu.key_id || 'CU')} - ${UI.escapeHTML(cu.title)}</option>
-                                `).join('')}
-                            </select>
+                            <div style="display: flex; gap: 6px;">
+                                <select id="cu-select" class="w-full" style="height: 36px; font-size: 0.8rem; flex: 1;">
+                                    <option value="">— Filtrar por Caso de Uso —</option>
+                                    ${useCases.map(cu => `
+                                        <option value="${cu.id}" ${cu.id === selectedUseCaseId ? 'selected' : ''}>${UI.escapeHTML(cu.key_id || 'CU')} - ${UI.escapeHTML(cu.title)}</option>
+                                    `).join('')}
+                                </select>
+                                ${selectedUseCaseId ? `
+                                    <button class="btn btn-ghost btn-sm" id="btn-rename-cu" title="Renombrar CU" style="height: 36px; padding: 0 10px;">✏️</button>
+                                ` : ''}
+                            </div>
 
                             <div style="position: relative;">
                                 <input type="text" id="us-search" placeholder="Buscar historia..." value="${UI.escapeHTML(this.searchQuery)}"
@@ -367,6 +372,34 @@ export const UserStories = {
             const id = parseInt(e.target.value) || null;
             Store.setSelectedUseCase(id);
             await this.loadStoriesForUC(id);
+        });
+
+        // Rename CU
+        container.querySelector('#btn-rename-cu')?.addEventListener('click', async () => {
+            const cuId = Store.state.selectedUseCaseId;
+            if (!cuId) return;
+            const cu = Store.state.useCases.find(c => c.id === cuId);
+            if (!cu) return;
+
+            const newTitle = await modalManager.prompt(
+                `Nuevo título para ${cu.key_id}:`,
+                cu.title,
+                `Renombrar ${cu.key_id}`
+            );
+
+            if (newTitle && newTitle.trim()) {
+                UI.showLoading();
+                try {
+                    await ApiService.updateUseCase(cuId, { title: newTitle.trim() });
+                    const { useCases } = await ApiService.getUseCases(Store.state.activeProjectId);
+                    Store.setUseCases(useCases || []);
+                    UI.toast('CU renombrado correctamente', 'success');
+                    this.render(container);
+                } catch (err) {
+                    UI.toast(err.message, 'error');
+                }
+                UI.hideLoading();
+            }
         });
 
         // New CU

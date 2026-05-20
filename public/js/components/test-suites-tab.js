@@ -373,6 +373,16 @@ export const TestSuitesTab = {
             <tr class="ts-expanded-row" style="border-bottom: 1px solid var(--border); background: var(--bg-surface-elevated);">
                 <td colspan="5" style="padding: 0;">
                     <div style="padding: 16px 20px; display: flex; flex-direction: column; gap: 14px;">
+                        <!-- Title row -->
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <span style="font-size: 0.72rem; font-weight: 800; color: var(--brand); white-space: nowrap;">${UI.escapeHTML(tc.key_id || 'TC')}</span>
+                            ${isEditing ? `
+                                <input type="text" class="tc-title-input" data-tc-id="${tc.id}" value="${UI.escapeHTML(tc.title)}" placeholder="Título del Test Case" style="flex: 1; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--brand); background: var(--bg-surface); color: var(--text-main); font-size: 0.88rem; font-weight: 700; outline: none; box-sizing: border-box;" />
+                            ` : `
+                                <span style="font-size: 0.88rem; font-weight: 700; color: var(--text-main); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;">${UI.escapeHTML(tc.title)}</span>
+                            `}
+                        </div>
+
                         <!-- Tabs row with Edit button -->
                         <div class="ts-expanded-tabs" style="display: flex; align-items: center; gap: 4px; border-bottom: 1px solid var(--border); padding-bottom: 0;">
                             <div style="display: flex; gap: 4px;">
@@ -534,6 +544,16 @@ export const TestSuitesTab = {
                                 </select>
                             </div>
                         </div>
+                        <div class="field-group" style="border-top: 1px solid var(--border); padding-top: 12px;">
+                            <label class="field-label">Mover a Suite</label>
+                            <select class="tc-move-select" data-tc-id="${tc.id}" ${tc.us_id ? 'disabled title="TC tiene HU vinculada"' : ''}>
+                                <option value="">— Suite actual: ${UI.escapeHTML(suite.title)} —</option>
+                                ${(Store.state.testSuites || []).filter(s => s.id !== suite.id).map(s => `
+                                    <option value="${s.id}">${UI.escapeHTML(s.title)}</option>
+                                `).join('')}
+                            </select>
+                            ${tc.us_id ? `<p style="font-size: 0.65rem; color: #f59e0b; margin-top: 4px;">⚠️ Desvinculá la HU antes de mover</p>` : ''}
+                        </div>
                         <div style="padding: 12px; display: flex; flex-direction: column; gap: 10px;">
                             <label style="display: flex; align-items: center; gap: 10px; font-size: 0.78rem; cursor: pointer;">
                                 <div class="switch">
@@ -686,6 +706,7 @@ export const TestSuitesTab = {
 
                 this.editingTCId = parseInt(btn.dataset.tcId);
                 this.render(container);
+                setTimeout(() => container.querySelector('.tc-title-input')?.focus(), 50);
             });
         });
 
@@ -977,7 +998,7 @@ export const TestSuitesTab = {
                 const tc = Store.state.testSuites.flatMap(s => s.test_cases || []).find(t => t.id === tcId);
                 if (!tc) return;
 
-                const title = tc.title;
+                const title = container.querySelector(`.tc-title-input[data-tc-id="${tcId}"]`)?.value || tc.title;
                 const us_id = container.querySelector(`.tc-us-select-detail[data-tc-id="${tcId}"]`)?.value;
                 const assigned_to = container.querySelector(`.tc-assign-select-detail[data-tc-id="${tcId}"]`)?.value;
                 const steps = container.querySelector(`textarea[data-field="steps"]`)?.value;
@@ -1008,6 +1029,47 @@ export const TestSuitesTab = {
                 await this.reloadSuites();
                 UI.hideLoading();
                 UI.toast('Test Case guardado exitosamente');
+            });
+        });
+
+        // Move TC to another suite
+        container.querySelectorAll('.tc-move-select').forEach(sel => {
+            sel.addEventListener('change', async (e) => {
+                const newSuiteId = parseInt(e.target.value);
+                if (!newSuiteId) {
+                    e.target.value = '';
+                    return;
+                }
+
+                const tcId = parseInt(sel.dataset.tcId);
+                const tc = Store.state.testSuites.flatMap(s => s.test_cases || []).find(t => t.id === tcId);
+                if (!tc) return;
+
+                const currentSuite = Store.state.testSuites.find(s => s.id === tc.suite_id);
+                const destSuite = Store.state.testSuites.find(s => s.id === newSuiteId);
+
+                const confirmed = await modalManager.confirm(
+                    `Mover "${tc.key_id} - ${tc.title}" de "${currentSuite?.title}" a "${destSuite?.title}"?`,
+                    'Confirmar movimiento de Test Case'
+                );
+
+                if (!confirmed) {
+                    e.target.value = '';
+                    return;
+                }
+
+                UI.showLoading();
+                try {
+                    await ApiService.moveTestCase(tcId, newSuiteId);
+                    await this.reloadSuites();
+                    this.selectedTCId = null;
+                    this.render(container);
+                    UI.toast('TC movido correctamente', 'success');
+                } catch (err) {
+                    UI.toast(err.message, 'error');
+                    e.target.value = '';
+                }
+                UI.hideLoading();
             });
         });
 

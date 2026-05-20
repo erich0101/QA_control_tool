@@ -240,6 +240,13 @@ export const ApiService = {
     async deleteTestCase(id) {
         return fetch(`/api/test-cases/${id}`, { method: 'DELETE' }).then(json);
     },
+    async moveTestCase(tcId, newSuiteId) {
+        return fetch(`/api/test-cases/${tcId}/move`, { method: 'PUT', body: JSON.stringify({ new_suite_id: newSuiteId }), headers }).then(json);
+    },
+    async moveTestSuite(suiteId, newUseCaseId) {
+        console.log(`[API] moveTestSuite called: suiteId=${suiteId}, newUseCaseId=${newUseCaseId}`);
+        return fetch(`/api/test-suites/${suiteId}/move`, { method: 'PUT', body: JSON.stringify({ new_use_case_id: newUseCaseId }), headers }).then(json);
+    },
 
     // ── Legacy ──
     async saveIssue(formData) {
@@ -276,6 +283,9 @@ export const ApiService = {
     },
     async exportUseCaseMatrix(useCaseId) {
         window.location.href = `/api/use-cases/${useCaseId}/export-excel`;
+    },
+    async exportProjectMatrix(projectId) {
+        window.location.href = `/api/projects/${projectId}/export-excel`;
     },
 
     async startAllCU(cuId) {

@@ -1,6 +1,7 @@
 import { Store } from '../store/state.js';
 import { ApiService } from '../services/api.js';
 import { UI } from '../utils/ui-utils.js';
+import { modalManager } from '../utils/modal-manager.js';
 
 /**
  * MODALS.JS - Sistema de modales reutilizable.
@@ -485,6 +486,13 @@ getStartRunWizardContent({ suite, suites, cuTitle }) {
                     <label class="field-label">Descripción</label>
                     <textarea id="edit-suite-desc" placeholder="Descripción de las pruebas..." style="min-height: 80px;">${UI.escapeHTML(suite.description || '')}</textarea>
                 </div>
+                <div class="field-group" style="border-top: 1px solid var(--border); padding-top: 12px;">
+                    <label class="field-label">Mover a Caso de Uso</label>
+                    <select id="edit-suite-move-cu">
+                        <option value="">— CU actual: cargando... —</option>
+                    </select>
+                    <p style="font-size: 0.65rem; color: var(--text-muted); margin-top: 4px;">Solo suites sin HU vinculadas y sin ejecución activa pueden moverse.</p>
+                </div>
             </div>
             <div style="display: flex; gap: 12px; margin-top: 32px; justify-content: flex-end;">
                 <button class="btn btn-ghost btn-sm" id="modal-cancel">Cancelar</button>
@@ -495,6 +503,7 @@ getStartRunWizardContent({ suite, suites, cuTitle }) {
 
     bindEditSuiteEvents(overlay, { suite }) {
         const epicSelect = overlay.querySelector('#edit-suite-epic');
+        const moveCuSelect = overlay.querySelector('#edit-suite-move-cu');
         const close = () => { overlay.close(); overlay.remove(); };
         overlay.querySelector('#modal-cancel').onclick = close;
 
@@ -515,20 +524,48 @@ getStartRunWizardContent({ suite, suites, cuTitle }) {
             } catch (e) { epicSelect.innerHTML = '<option value="">Error al cargar</option>'; }
         })();
 
+        (async () => {
+            try {
+                const { useCases } = await ApiService.getUseCases(Store.state.activeProjectId);
+                const currentCU = useCases?.find(cu => cu.id === suite.use_case_id);
+                moveCuSelect.innerHTML = `<option value="">— CU actual: ${currentCU ? UI.escapeHTML(currentCU.key_id + ' - ' + currentCU.title) : 'N/A'} —</option>` +
+                    (useCases || []).filter(cu => cu.id !== suite.use_case_id).map(cu =>
+                        `<option value="${cu.id}">${UI.escapeHTML(cu.key_id)} - ${UI.escapeHTML(cu.title)}</option>`
+                    ).join('');
+            } catch (e) { moveCuSelect.innerHTML = '<option value="">Error al cargar CU</option>'; }
+        })();
+
         overlay.querySelector('#modal-edit-save').onclick = async () => {
             const title = overlay.querySelector('#edit-suite-title').value.trim();
             const jira_epic_key = epicSelect.value;
             const description = overlay.querySelector('#edit-suite-desc').value;
+            const newCuId = parseInt(moveCuSelect.value) || null;
 
             UI.showLoading();
-            await ApiService.updateTestSuite(suite.id, { title, description, jira_epic_key });
-            const { testSuites } = await ApiService.getTestSuites(Store.state.selectedUseCaseId);
-            Store.setTestSuites(testSuites || []);
-            UI.hideLoading();
-            close();
-            UI.toast("Suite actualizada");
-            // Disparar evento para que TestSuitesTab refresque el render
-            window.dispatchEvent(new Event('realtime-refresh'));
+            try {
+                await ApiService.updateTestSuite(suite.id, { title, description, jira_epic_key });
+
+                if (newCuId && newCuId !== suite.use_case_id) {
+                    overlay.close(); // Cerrar dialog de edición para que el confirm sea visible
+                    const confirmed = await modalManager.confirm(
+                        `Mover la suite "${title}" al Caso de Uso seleccionado?`,
+                        'Confirmar movimiento de Suite'
+                    );
+                    if (confirmed) {
+                        await ApiService.moveTestSuite(suite.id, newCuId);
+                    }
+                }
+
+                const { testSuites } = await ApiService.getTestSuites(Store.state.selectedUseCaseId);
+                Store.setTestSuites(testSuites || []);
+                UI.hideLoading();
+                close();
+                UI.toast("Suite actualizada");
+                window.dispatchEvent(new Event('realtime-refresh'));
+            } catch (err) {
+                UI.hideLoading();
+                UI.toast(err.message, 'error');
+            }
         };
     },
 
@@ -1410,11 +1447,12 @@ getStartRunWizardContent({ suite, suites, cuTitle }) {
             </div>
 
             <div style="background: rgba(59, 130, 246, 0.05); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: 12px; padding: 16px; margin-bottom: 24px;">
-                <div style="font-size: 0.75rem; color: var(--brand); font-weight: 800; margin-bottom: 8px;">REQUISITOS DEL ARCHIVO:</div>
+                <div style="font-size: 0.75rem; color: var(--brand); font-weight: 800; margin-bottom: 8px;">FORMATOS SOPORTADOS:</div>
                 <ul style="font-size: 0.75rem; color: var(--text-secondary); padding-left: 16px; margin: 0;">
-                    <li><b>XLSX:</b> Hojas "historia de usuario" y "Casos de Prueba".</li>
+                    <li><b>Unificado (recomendado):</b> 1 hoja con columnas: CU Vinculado, Suite, HU, Escenario, Pasos, Resultado Esperado, etc.</li>
+                    <li><b>Dual (legacy):</b> XLSX con 2 hojas: "historia de usuario" y "Casos de Prueba".</li>
                     <li><b>CSV:</b> Un solo archivo con columnas de HU y Tests.</li>
-                    <li><b>Seguridad:</b> No se permiten scripts HTML ni fórmulas.</li>
+                    <li><b>Nota:</b> Los ID (CU, HU, TC) se generan automáticamente al importar.</li>
                 </ul>
             </div>
 

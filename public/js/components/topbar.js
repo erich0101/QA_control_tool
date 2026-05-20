@@ -35,6 +35,7 @@ export const TopBar = {
                 </select>
                 ${activeProjectId && (Store.state.user?.role === 'Admin' || Store.state.user?.role === 'Analista QA') ? `<button class="btn-icon" id="btn-edit-project" title="Editar Nombre Proyecto" style="font-size: 0.8rem; border: 1px solid var(--border); padding: 4px;">✏️</button>` : ''}
                 ${activeProjectId && (Store.state.user?.role === 'Admin' || Store.state.user?.role === 'Analista QA') ? `<button class="btn-icon" id="btn-jira-config" title="Configurar Jira" style="font-size: 0.8rem; border: 1px solid var(--border); padding: 4px;">🏢</button>` : ''}
+                ${activeProjectId ? `<button class="btn-icon" id="btn-export-project" title="Exportar Todo el Proyecto" style="font-size: 0.8rem; border: 1px solid var(--border); padding: 4px;">📦</button>` : ''}
                 ${Store.state.user?.role === 'Admin' || Store.state.user?.role === 'Analista QA' ? `<button class="btn btn-primary btn-sm" id="btn-new-project">+ Proyecto</button>` : ''}
             </div>
         `;
@@ -96,6 +97,13 @@ export const TopBar = {
                 UI.toast("Error al obtener configuración de Jira", "error");
             }
             UI.hideLoading();
+        });
+
+        container.querySelector('#btn-export-project')?.addEventListener('click', () => {
+            const projectId = Store.state.activeProjectId;
+            if (!projectId) return UI.toast('Selecciona un proyecto primero', 'error');
+            UI.toast('Generando Matriz del Proyecto...', 'ok');
+            ApiService.exportProjectMatrix(projectId);
         });
 
         container.querySelector('#btn-logout')?.addEventListener('click', async () => {

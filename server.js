@@ -1177,6 +1177,18 @@ app.post('/api/user-stories', requireAuth, async (req, res) => {
     }
 });
 
+app.put('/api/user-stories/:id/recommendations', requireAuth, async (req, res) => {
+    try {
+        const { recommendations } = req.body;
+        if (!Array.isArray(recommendations)) return res.status(400).json({ error: 'recommendations debe ser un array' });
+        await query(`UPDATE qa_user_stories SET recommendations = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+            [JSON.stringify(recommendations), req.params.id]);
+        res.json({ ok: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 app.put('/api/user-stories/:id', requireAuth, async (req, res) => {
     try {
         const usId = req.params.id;
@@ -1205,18 +1217,6 @@ app.put('/api/user-stories/:id', requireAuth, async (req, res) => {
         params.push(usId);
 
         await query(`UPDATE qa_user_stories SET ${fields.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, params);
-        res.json({ ok: true });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-app.put('/api/user-stories/:id/recommendations', requireAuth, async (req, res) => {
-    try {
-        const { recommendations } = req.body;
-        if (!Array.isArray(recommendations)) return res.status(400).json({ error: 'recommendations debe ser un array' });
-        await query(`UPDATE qa_user_stories SET recommendations = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-            [JSON.stringify(recommendations), req.params.id]);
         res.json({ ok: true });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -1469,103 +1469,56 @@ app.post(['/api/test-suites/:id/import-dual', '/api/use-cases/:id/import-dual'],
         const file = req.file;
         if (!file) return res.status(400).json({ error: 'Archivo no recibido' });
 
-        // Soporte tanto para XLSX como para CSV (SheetJS lo detecta)
         let workbook;
         try {
             workbook = XLSX.read(file.buffer, { type: 'buffer' });
         } catch (e) {
-            // Fallback para CSV puros que podrían fallar como buffer
             const content = file.buffer.toString('utf-8');
             workbook = XLSX.read(content, { type: 'string' });
         }
-        
-        // 1. Validar Hojas
-        const isCSV = file.originalname.toLowerCase().endsWith('.csv');
-        let sheetUSName, sheetTCName;
-
-        if (isCSV) {
-            sheetUSName = workbook.SheetNames[0];
-            sheetTCName = workbook.SheetNames[0];
-        } else {
-            sheetUSName = 'historia de usuario';
-            sheetTCName = 'Casos de Prueba';
-            // Búsqueda insensible a mayúsculas para hojas
-            const realUS = workbook.SheetNames.find(n => n.toLowerCase() === sheetUSName);
-            const realTC = workbook.SheetNames.find(n => n.toLowerCase() === sheetTCName);
-            if (realUS) sheetUSName = realUS;
-            if (realTC) sheetTCName = realTC;
-
-            if (!workbook.SheetNames.includes(sheetUSName) || !workbook.SheetNames.includes(sheetTCName)) {
-                return res.status(400).json({ error: `El archivo XLSX debe contener las hojas "${sheetUSName}" y "${sheetTCName}"` });
-            }
-        }
-
-        let dataUS = XLSX.utils.sheet_to_json(workbook.Sheets[sheetUSName], { header: 1 });
-        let dataTC = XLSX.utils.sheet_to_json(workbook.Sheets[sheetTCName], { header: 1 });
-
-        if (dataUS.length < 2) return res.status(400).json({ error: 'El archivo está vacío o no tiene datos suficientes' });
 
         const normalize = (str) => {
             if (!str) return '';
             return String(str).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
         };
 
-        const tryFindCol = (data, keywords) => {
-            if (!data || data.length === 0) return null;
-            let headers = data[0].map(h => normalize(h));
-            
-            let found = data[0].find(h => {
-                const nh = normalize(h);
-                return keywords.every(k => nh.includes(k));
-            });
-            if (found) return found;
-
-            if (isCSV && data[0].length === 1) {
-                const line = String(data[0][0]);
-                const delims = [',', ';'];
-                for (let d of delims) {
-                    if (line.includes(d)) {
-                        const parts = line.split(d);
-                        const nhParts = parts.map(p => normalize(p));
-                        if (keywords.every(k => nhParts.some(p => p.includes(k)))) {
-                            // SI ENCONTRAMOS LAS COLUMNAS, ACTUALIZAMOS TODO EL DATASET ORIGINAL
-                            if (data === dataUS) {
-                                dataUS.forEach((r, idx) => {
-                                    if (r.length === 1) dataUS[idx] = String(r[0]).split(d);
-                                });
-                            }
-                            if (data === dataTC) {
-                                dataTC.forEach((r, idx) => {
-                                    if (r.length === 1) dataTC[idx] = String(r[0]).split(d);
-                                });
-                            }
-                            return parts.find(p => keywords.every(k => normalize(p).includes(k)));
-                        }
-                    }
-                }
+        const tryFindColIndex = (headers, keywords) => {
+            if (!headers || headers.length === 0) return -1;
+            for (let i = 0; i < headers.length; i++) {
+                const nh = normalize(headers[i]);
+                if (keywords.every(k => nh.includes(k))) return i;
             }
-            return null;
+            return -1;
         };
 
-        const colUS_Title = tryFindCol(dataUS, ['titulo', 'historia']);
-        
-        // Re-extraemos los headers porque tryFindCol pudo haber hecho split del dataset original
-        const headersUS = dataUS[0].map(h => String(h || '').trim());
-        const headersTC = dataTC[0].map(h => String(h || '').trim());
+        // Detectar formato: hoja plana (unificada) vs dual (2 hojas)
+        const isCSV = file.originalname.toLowerCase().endsWith('.csv');
+        let isFlatFormat = false;
+        let dataFlat = null;
+        let headersFlat = null;
 
-        if (!colUS_Title) {
-            return res.status(400).json({ 
-                error: 'Faltan columnas obligatorias (Título de la HU)',
-                detalle: `Columnas detectadas: [${headersUS.join(' | ')}]`
-            });
+        if (!isCSV && workbook.SheetNames.length === 1) {
+            const sheet = workbook.Sheets[workbook.SheetNames[0]];
+            const data = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+            if (data.length > 0) {
+                const headers = data[0].map(h => normalize(h));
+                const hasCU = headers.some(h => h.includes('cu') && h.includes('vinculad'));
+                const hasHU = headers.some(h => h.includes('hu') || h.includes('requerimiento'));
+                const hasEscenario = headers.some(h => h.includes('escenario'));
+                const hasPasos = headers.some(h => h.includes('paso'));
+                if (hasCU && hasHU && hasEscenario && hasPasos) {
+                    isFlatFormat = true;
+                    dataFlat = data;
+                    headersFlat = data[0].map(h => String(h || '').trim());
+                }
+            }
         }
 
-        // 1. Obtener Info del Proyecto y Use Case
+        // Obtener contexto del UC
         let ucId = req.params.id;
         const isUseCasePath = req.url.includes('/use-cases/');
 
         if (!isUseCasePath) {
-            // Si venimos de la ruta de suite, resolvemos el ucId
             const sRes = await query(`SELECT use_case_id FROM qa_test_suites WHERE id = ?`, [ucId]);
             if (sRes.rows.length > 0) ucId = sRes.rows[0].use_case_id;
             else return res.status(404).json({ error: 'Suite no encontrada' });
@@ -1575,130 +1528,311 @@ app.post(['/api/test-suites/:id/import-dual', '/api/use-cases/:id/import-dual'],
         if (ucRes.rows.length === 0) return res.status(404).json({ error: 'Caso de Uso no encontrado' });
         const projectId = ucRes.rows[0].project_id;
 
-
-
-        // 3. Mapear Columnas
-        const tcColMap = {
-            us_title: headersTC.indexOf(colUS_Title),
-            title: tryFindCol(dataTC, ['escenario']),
-            pre: tryFindCol(dataTC, ['precondicion']),
-            data: tryFindCol(dataTC, ['datos de prueba']),
-            steps: tryFindCol(dataTC, ['paso']),
-            criteria: tryFindCol(dataTC, ['criterio']),
-            expected: tryFindCol(dataTC, ['resultado esperado']),
-            assumptions: tryFindCol(dataTC, ['suposicion']),
-            us_desc: headersUS.find(h => normalize(h).includes('descripcion')),
-            us_br: headersUS.find(h => normalize(h).includes('reglas de negocio')),
-            us_pre: headersUS.find(h => normalize(h).includes('precondiciones'))
-        };
-
-        // Convertir nombres a índices
-        Object.keys(tcColMap).forEach(k => {
-            if (typeof tcColMap[k] === 'string') tcColMap[k] = headersTC.indexOf(tcColMap[k]);
-        });
-
-        if (tcColMap.title === -1 || tcColMap.steps === -1 || tcColMap.expected === -1) {
-            return res.status(400).json({ error: 'Faltan columnas obligatorias (Escenario, Pasos, Resultado Esperado)' });
+        if (isFlatFormat) {
+            // FORMATO UNIFICADO (hoja plana)
+            return await processFlatImport(req, res, dataFlat, headersFlat, ucId, projectId, normalize, tryFindColIndex, sanitizeInput, generateKey, query);
         }
 
-        // 4. Agrupar Tests por Historia de Usuario
-        const groups = {};
-        for (let i = 1; i < dataTC.length; i++) {
-            const row = dataTC[i];
-            const usTitle = sanitizeInput(row[tcColMap.us_title]);
-            if (!usTitle) continue;
-            if (!groups[usTitle]) groups[usTitle] = [];
-            groups[usTitle].push(row);
-        }
-
-        let totalImported = 0;
-        let usCount = 0;
-
-        for (const usTitle in groups) {
-            const rows = groups[usTitle];
-            const firstRow = rows[0];
-
-            // 3. Crear NUEVA Suite para esta HU (ST-XXXX)
-            const suiteKey = await generateKey(projectId, 'ST');
-            const suiteResNew = await query(`
-                INSERT INTO qa_test_suites (use_case_id, title, description, key_id, created_by)
-                VALUES (?, ?, ?, ?, ?)
-                RETURNING id
-            `, [ucId, `Suite: ${usTitle}`, `Importación automática ${suiteKey}`, suiteKey, req.user.id]);
-            const suiteId = suiteResNew.rows[0].id;
-
-            // A. Crear US (US-XXXX)
-            const usKey = await generateKey(projectId, 'US');
-            const usDesc = sanitizeInput(firstRow[tcColMap.us_desc]) || '';
-            const usBR = sanitizeInput(firstRow[tcColMap.us_br]) || '';
-            const usPre = sanitizeInput(firstRow[tcColMap.us_pre]) || '';
-
-            const usRes = await query(`
-                INSERT INTO qa_user_stories (use_case_id, project_id, key_id, title, hu_detallada, reglas_negocio, precondiciones, created_by)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT (key_id) DO UPDATE SET title = EXCLUDED.title
-                RETURNING id
-            `, [ucId, projectId, usKey, usTitle, usDesc, usBR, usPre, req.user.id]);
-            const usId = usRes.rows[0].id;
-            usCount++;
-
-            let escenariosText = [];
-            // B. Crear Tests para esta US
-            for (const row of rows) {
-                const getVal = (idx) => idx !== -1 && row[idx] !== undefined ? sanitizeInput(row[idx]) : '';
-                
-                const title = getVal(tcColMap.title);
-                if (!title) continue;
-
-                const steps = getVal(tcColMap.steps);
-                const pre = getVal(tcColMap.pre);
-                const expected = getVal(tcColMap.expected);
-                const assumptions = getVal(tcColMap.assumptions);
-                const testData = getVal(tcColMap.data);
-                const criteria = getVal(tcColMap.criteria);
-
-                // Escenario
-                const scenarioRes = await query(
-                    `INSERT INTO qa_scenarios (us_id, title, order_index) VALUES (?, ?, ?) RETURNING id`,
-                    [usId, title, totalImported]
-                );
-                const scenarioId = scenarioRes.rows[0].id;
-                escenariosText.push(title);
-
-                // Test Case
-                const tcKey = await generateKey(projectId, 'TC');
-                await query(`
-                    INSERT INTO qa_test_cases (suite_id, us_id, scenario_id, key_id, title, steps, preconditions, expected_result, assumptions, test_data, acceptance_criteria, created_by)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                `, [suiteId, usId, scenarioId, tcKey, title, steps, pre, expected, assumptions, testData, criteria, req.user.id]);
-
-                totalImported++;
-            }
-
-            // Actualizar consolidados de la US
-            if (escenariosText.length > 0) {
-                await query(`UPDATE qa_user_stories SET escenarios_prueba = ? WHERE id = ?`, [escenariosText.join('\n'), usId]);
-            }
-        }
-
-        res.json({ 
-            ok: true, 
-            message: `Importación exitosa. Se creó la suite "${file.originalname}" con ${usCount} historias de usuario y ${totalImported} tests.` 
-        });
+        // FORMATO DUAL (2 hojas) - compatibilidad hacia atras
+        return await processDualImport(req, res, workbook, isCSV, ucId, projectId, normalize, tryFindColIndex, sanitizeInput, generateKey, query);
     } catch (err) {
         console.error('Error crítico en importación:', err);
-        res.status(500).json({ 
-            error: 'Error al procesar el archivo.', 
+        res.status(500).json({
+            error: 'Error al procesar el archivo.',
             detalle: err.message,
-            stack: process.env.NODE_ENV === 'development' ? err.stack : undefined 
+            stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
         });
     }
 });
-// Exportar Matriz de Pruebas Completa (Todas las suites del CU) a Excel Profesional
+
+async function processFlatImport(req, res, data, headers, ucId, projectId, normalize, tryFindColIndex, sanitizeInput, generateKey, query) {
+    const colMap = {
+        uc_title: tryFindColIndex(headers, ['cu', 'vinculad']),
+        suite: tryFindColIndex(headers, ['suite', 'grupo']),
+        key_id: tryFindColIndex(headers, ['id test']),
+        us_title: tryFindColIndex(headers, ['hu', 'requerimiento']),
+        title: tryFindColIndex(headers, ['escenario']),
+        pre: tryFindColIndex(headers, ['precondicion']),
+        steps: tryFindColIndex(headers, ['paso']),
+        data: tryFindColIndex(headers, ['datos de prueba']),
+        expected: tryFindColIndex(headers, ['resultado esperado']),
+        criteria: tryFindColIndex(headers, ['criterio', 'aceptacion']),
+        assumptions: tryFindColIndex(headers, ['assumption', 'suposicion']),
+        status: tryFindColIndex(headers, ['estado']),
+        obtained: tryFindColIndex(headers, ['resultado obtenid']),
+        obs: tryFindColIndex(headers, ['observacion', 'hallazgo']),
+        tester: tryFindColIndex(headers, ['tester']),
+        date: tryFindColIndex(headers, ['fecha ejecucion'])
+    };
+
+    if (colMap.title === -1 || colMap.steps === -1 || colMap.expected === -1 || colMap.us_title === -1) {
+        return res.status(400).json({
+            error: 'Faltan columnas obligatorias en formato unificado',
+            detalle: 'Se requieren: CU Vinculado, HU/Requerimiento, Escenario, Pasos, Resultado Esperado'
+        });
+    }
+
+    // Agrupar por HU
+    const groups = {};
+    for (let i = 1; i < data.length; i++) {
+        const row = data[i];
+        let usTitle = String(row[colMap.us_title] || '').trim();
+        if (!usTitle || usTitle === 'Sin HU vinculada') continue;
+        // Limpiar prefijo [US-XXX] si existe
+        usTitle = usTitle.replace(/^\[.*?\]\s*/, '');
+        if (!groups[usTitle]) groups[usTitle] = [];
+        groups[usTitle].push(row);
+    }
+
+    let totalImported = 0;
+    let usCount = 0;
+
+    for (const usTitle in groups) {
+        const rows = groups[usTitle];
+        const firstRow = rows[0];
+
+        const getVal = (row, idx) => idx !== -1 && row[idx] !== undefined ? sanitizeInput(row[idx]) : '';
+
+        // Crear Suite para esta HU
+        const suiteKey = await generateKey(projectId, 'ST');
+        const suiteRes = await query(`
+            INSERT INTO qa_test_suites (use_case_id, title, description, key_id, created_by)
+            VALUES (?, ?, ?, ?, ?)
+            RETURNING id
+        `, [ucId, `Suite: ${usTitle}`, `Importación automática ${suiteKey}`, suiteKey, req.user.id]);
+        const suiteId = suiteRes.rows[0].id;
+
+        // Crear HU
+        const usKey = await generateKey(projectId, 'US');
+        const usDesc = getVal(firstRow, colMap.data) || '';
+        const usBR = '';
+        const usPre = getVal(firstRow, colMap.pre) || '';
+
+        const usRes = await query(`
+            INSERT INTO qa_user_stories (use_case_id, project_id, key_id, title, hu_detallada, reglas_negocio, precondiciones, created_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT (key_id) DO UPDATE SET title = EXCLUDED.title
+            RETURNING id
+        `, [ucId, projectId, usKey, usTitle, usDesc, usBR, usPre, req.user.id]);
+        const usId = usRes.rows[0].id;
+        usCount++;
+
+        let escenariosText = [];
+        for (const row of rows) {
+            const title = getVal(row, colMap.title);
+            if (!title) continue;
+
+            const steps = getVal(row, colMap.steps);
+            const pre = getVal(row, colMap.pre);
+            const expected = getVal(row, colMap.expected);
+            const assumptions = getVal(row, colMap.assumptions);
+            const testData = getVal(row, colMap.data);
+            const criteria = getVal(row, colMap.criteria);
+
+            const scenarioRes = await query(
+                `INSERT INTO qa_scenarios (us_id, title, order_index) VALUES (?, ?, ?) RETURNING id`,
+                [usId, title, totalImported]
+            );
+            const scenarioId = scenarioRes.rows[0].id;
+            escenariosText.push(title);
+
+            const tcKey = await generateKey(projectId, 'TC');
+            await query(`
+                INSERT INTO qa_test_cases (suite_id, us_id, scenario_id, key_id, title, steps, preconditions, expected_result, assumptions, test_data, acceptance_criteria, created_by)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `, [suiteId, usId, scenarioId, tcKey, title, steps, pre, expected, assumptions, testData, criteria, req.user.id]);
+
+            totalImported++;
+        }
+
+        if (escenariosText.length > 0) {
+            await query(`UPDATE qa_user_stories SET escenarios_prueba = ? WHERE id = ?`, [escenariosText.join('\n'), usId]);
+        }
+    }
+
+    return res.json({
+        ok: true,
+        message: `Importación exitosa (formato unificado). ${usCount} historias de usuario y ${totalImported} tests importados.`
+    });
+}
+
+async function processDualImport(req, res, workbook, isCSV, ucId, projectId, normalize, tryFindColIndex, sanitizeInput, generateKey, query) {
+    let sheetUSName, sheetTCName;
+
+    if (isCSV) {
+        sheetUSName = workbook.SheetNames[0];
+        sheetTCName = workbook.SheetNames[0];
+    } else {
+        sheetUSName = 'historia de usuario';
+        sheetTCName = 'Casos de Prueba';
+        const realUS = workbook.SheetNames.find(n => n.toLowerCase() === sheetUSName);
+        const realTC = workbook.SheetNames.find(n => n.toLowerCase() === sheetTCName);
+        if (realUS) sheetUSName = realUS;
+        if (realTC) sheetTCName = realTC;
+
+        if (!workbook.SheetNames.includes(sheetUSName) || !workbook.SheetNames.includes(sheetTCName)) {
+            return res.status(400).json({ error: `El archivo XLSX debe contener las hojas "${sheetUSName}" y "${sheetTCName}"` });
+        }
+    }
+
+    let dataUS = XLSX.utils.sheet_to_json(workbook.Sheets[sheetUSName], { header: 1 });
+    let dataTC = XLSX.utils.sheet_to_json(workbook.Sheets[sheetTCName], { header: 1 });
+
+    if (dataUS.length < 2) return res.status(400).json({ error: 'El archivo está vacío o no tiene datos suficientes' });
+
+    const tryFindCol = (data, keywords) => {
+        if (!data || data.length === 0) return null;
+        let headers = data[0].map(h => normalize(h));
+
+        let found = data[0].find(h => {
+            const nh = normalize(h);
+            return keywords.every(k => nh.includes(k));
+        });
+        if (found) return found;
+
+        if (isCSV && data[0].length === 1) {
+            const line = String(data[0][0]);
+            const delims = [',', ';'];
+            for (let d of delims) {
+                if (line.includes(d)) {
+                    const parts = line.split(d);
+                    const nhParts = parts.map(p => normalize(p));
+                    if (keywords.every(k => nhParts.some(p => p.includes(k)))) {
+                        if (data === dataUS) {
+                            dataUS.forEach((r, idx) => {
+                                if (r.length === 1) dataUS[idx] = String(r[0]).split(d);
+                            });
+                        }
+                        if (data === dataTC) {
+                            dataTC.forEach((r, idx) => {
+                                if (r.length === 1) dataTC[idx] = String(r[0]).split(d);
+                            });
+                        }
+                        return parts.find(p => keywords.every(k => normalize(p).includes(k)));
+                    }
+                }
+            }
+        }
+        return null;
+    };
+
+    const colUS_Title = tryFindCol(dataUS, ['titulo', 'historia']);
+
+    const headersUS = dataUS[0].map(h => String(h || '').trim());
+    const headersTC = dataTC[0].map(h => String(h || '').trim());
+
+    if (!colUS_Title) {
+        return res.status(400).json({
+            error: 'Faltan columnas obligatorias (Título de la HU)',
+            detalle: `Columnas detectadas: [${headersUS.join(' | ')}]`
+        });
+    }
+
+    const tcColMap = {
+        us_title: headersTC.indexOf(colUS_Title),
+        title: tryFindCol(dataTC, ['escenario']),
+        pre: tryFindCol(dataTC, ['precondicion']),
+        data: tryFindCol(dataTC, ['datos de prueba']),
+        steps: tryFindCol(dataTC, ['paso']),
+        criteria: tryFindCol(dataTC, ['criterio']),
+        expected: tryFindCol(dataTC, ['resultado esperado']),
+        assumptions: tryFindCol(dataTC, ['suposicion']),
+        us_desc: headersUS.find(h => normalize(h).includes('descripcion')),
+        us_br: headersUS.find(h => normalize(h).includes('reglas de negocio')),
+        us_pre: headersUS.find(h => normalize(h).includes('precondiciones'))
+    };
+
+    Object.keys(tcColMap).forEach(k => {
+        if (typeof tcColMap[k] === 'string') tcColMap[k] = headersTC.indexOf(tcColMap[k]);
+    });
+
+    if (tcColMap.title === -1 || tcColMap.steps === -1 || tcColMap.expected === -1) {
+        return res.status(400).json({ error: 'Faltan columnas obligatorias (Escenario, Pasos, Resultado Esperado)' });
+    }
+
+    const groups = {};
+    for (let i = 1; i < dataTC.length; i++) {
+        const row = dataTC[i];
+        const usTitle = sanitizeInput(row[tcColMap.us_title]);
+        if (!usTitle) continue;
+        if (!groups[usTitle]) groups[usTitle] = [];
+        groups[usTitle].push(row);
+    }
+
+    let totalImported = 0;
+    let usCount = 0;
+
+    for (const usTitle in groups) {
+        const rows = groups[usTitle];
+        const firstRow = rows[0];
+
+        const suiteKey = await generateKey(projectId, 'ST');
+        const suiteResNew = await query(`
+            INSERT INTO qa_test_suites (use_case_id, title, description, key_id, created_by)
+            VALUES (?, ?, ?, ?, ?)
+            RETURNING id
+        `, [ucId, `Suite: ${usTitle}`, `Importación automática ${suiteKey}`, suiteKey, req.user.id]);
+        const suiteId = suiteResNew.rows[0].id;
+
+        const usKey = await generateKey(projectId, 'US');
+        const usDesc = sanitizeInput(firstRow[tcColMap.us_desc]) || '';
+        const usBR = sanitizeInput(firstRow[tcColMap.us_br]) || '';
+        const usPre = sanitizeInput(firstRow[tcColMap.us_pre]) || '';
+
+        const usRes = await query(`
+            INSERT INTO qa_user_stories (use_case_id, project_id, key_id, title, hu_detallada, reglas_negocio, precondiciones, created_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT (key_id) DO UPDATE SET title = EXCLUDED.title
+            RETURNING id
+        `, [ucId, projectId, usKey, usTitle, usDesc, usBR, usPre, req.user.id]);
+        const usId = usRes.rows[0].id;
+        usCount++;
+
+        let escenariosText = [];
+        for (const row of rows) {
+            const getVal = (idx) => idx !== -1 && row[idx] !== undefined ? sanitizeInput(row[idx]) : '';
+
+            const title = getVal(tcColMap.title);
+            if (!title) continue;
+
+            const steps = getVal(tcColMap.steps);
+            const pre = getVal(tcColMap.pre);
+            const expected = getVal(tcColMap.expected);
+            const assumptions = getVal(tcColMap.assumptions);
+            const testData = getVal(tcColMap.data);
+            const criteria = getVal(tcColMap.criteria);
+
+            const scenarioRes = await query(
+                `INSERT INTO qa_scenarios (us_id, title, order_index) VALUES (?, ?, ?) RETURNING id`,
+                [usId, title, totalImported]
+            );
+            const scenarioId = scenarioRes.rows[0].id;
+            escenariosText.push(title);
+
+            const tcKey = await generateKey(projectId, 'TC');
+            await query(`
+                INSERT INTO qa_test_cases (suite_id, us_id, scenario_id, key_id, title, steps, preconditions, expected_result, assumptions, test_data, acceptance_criteria, created_by)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `, [suiteId, usId, scenarioId, tcKey, title, steps, pre, expected, assumptions, testData, criteria, req.user.id]);
+
+            totalImported++;
+        }
+
+        if (escenariosText.length > 0) {
+            await query(`UPDATE qa_user_stories SET escenarios_prueba = ? WHERE id = ?`, [escenariosText.join('\n'), usId]);
+        }
+    }
+
+    return res.json({
+        ok: true,
+        message: `Importación exitosa. Se creó la suite "${file.originalname}" con ${usCount} historias de usuario y ${totalImported} tests.`
+    });
+}
+// Exportar Matriz de Pruebas Completa (Todas las suites del CU) a Excel unificado
 app.get('/api/use-cases/:id/export-excel', requireAuth, async (req, res) => {
     try {
         const useCaseId = req.params.id;
-        
+
         // 1. Obtener datos del Caso de Uso y Proyecto
         const ucRes = await query(`
             SELECT uc.*, p.name as project_name
@@ -1706,17 +1840,19 @@ app.get('/api/use-cases/:id/export-excel', requireAuth, async (req, res) => {
             JOIN qa_projects p ON uc.project_id = p.id
             WHERE uc.id = ?
         `, [useCaseId]);
-        
+
         if (ucRes.rows.length === 0) return res.status(404).json({ error: 'Caso de Uso no encontrado' });
         const useCase = ucRes.rows[0];
 
         // 2. Obtener Test Cases de TODAS las suites de este CU y sus ejecuciones más recientes
         const casesRes = await query(`
             SELECT tc.*, us.title as us_title, us.key_id as us_key, s.title as suite_title,
+                   uc.title as uc_title,
                    e.status as last_status, e.observations, e.obtained_result, e.tester, e.executed_at
             FROM qa_test_cases tc
             JOIN qa_test_suites s ON tc.suite_id = s.id
             LEFT JOIN qa_user_stories us ON tc.us_id = us.id
+            LEFT JOIN qa_use_cases uc ON s.use_case_id = uc.id
             LEFT JOIN LATERAL (
                 SELECT status, observations, obtained_result, tester, executed_at
                 FROM qa_executions
@@ -1728,113 +1864,195 @@ app.get('/api/use-cases/:id/export-excel', requireAuth, async (req, res) => {
             ORDER BY s.id, us.id, tc.id
         `, [useCaseId]);
 
-        const workbook = new ExcelJS.Workbook();
-        workbook.creator = 'Manual QA Tool';
-        workbook.lastModifiedBy = req.user.name;
-        workbook.created = new Date();
+        // 3. Construir workbook con SheetJS (compatible con import)
+        const wb = XLSX.utils.book_new();
 
-        const sheet = workbook.addWorksheet('Matriz de Pruebas');
-
-        // Configuración de columnas (Añadimos Suite)
-        sheet.columns = [
-            { header: 'Suite / Grupo', key: 'suite_title', width: 25 },
-            { header: 'ID Test', key: 'key_id', width: 15 },
-            { header: 'HU / Requerimiento', key: 'us_title', width: 35 },
-            { header: 'Escenario / Título', key: 'title', width: 45 },
-            { header: 'Pasos de Reproducción', key: 'steps', width: 55 },
-            { header: 'Resultado Esperado', key: 'expected', width: 45 },
-            { header: 'Estado', key: 'status', width: 15 },
-            { header: 'Resultado Obtenido', key: 'obtained', width: 45 },
-            { header: 'Observaciones / Hallazgos', key: 'obs', width: 45 },
-            { header: 'Tester', key: 'tester', width: 15 },
-            { header: 'Fecha Ejecución', key: 'date', width: 22 }
+        // Encabezados unificados
+        const headers = [
+            'CU Vinculado',
+            'Suite / Grupo',
+            'ID Test',
+            'HU / Requerimiento',
+            'Escenario / Título',
+            'Precondiciones',
+            'Pasos de Reproducción',
+            'Datos de Prueba',
+            'Resultado Esperado',
+            'Criterios Aceptación',
+            'Assumptions',
+            'Estado',
+            'Resultado Obtenido',
+            'Observaciones / Hallazgos',
+            'Tester',
+            'Fecha Ejecución'
         ];
 
-        // Formato Profesional para el Encabezado
-        const headerRow = sheet.getRow(1);
-        headerRow.height = 35;
-        headerRow.eachCell((cell) => {
-            cell.fill = {
-                type: 'pattern',
-                pattern: 'solid',
-                fgColor: { argb: 'FF2D4154' } // Azul Grisáceo Profesional
-            };
-            cell.font = {
-                color: { argb: 'FFFFFFFF' },
-                bold: true,
-                size: 11
-            };
-            cell.alignment = { vertical: 'middle', horizontal: 'center' };
-            cell.border = {
-                top: { style: 'thin', color: { argb: 'FF000000' } },
-                left: { style: 'thin', color: { argb: 'FF000000' } },
-                bottom: { style: 'thin', color: { argb: 'FF000000' } },
-                right: { style: 'thin', color: { argb: 'FF000000' } }
-            };
-        });
-
-        // Cargar datos
+        // Construir array de datos
+        const data = [headers];
         casesRes.rows.forEach((tc) => {
-            const row = sheet.addRow({
-                suite_title: tc.suite_title,
-                key_id: tc.key_id || `TC-${tc.id}`,
-                us_title: tc.us_title ? `[${tc.us_key || 'N/A'}] ${tc.us_title}` : 'Sin HU vinculada',
-                title: tc.title,
-                steps: tc.steps || tc.description || '',
-                expected: tc.expected_result || '',
-                status: tc.last_status || 'PENDIENTE',
-                obtained: tc.obtained_result || '',
-                obs: tc.observations || '',
-                tester: tc.tester || '',
-                date: tc.executed_at ? new Date(tc.executed_at).toLocaleString() : '-'
-            });
-
-            row.height = 30;
-
-            row.eachCell((cell, colNumber) => {
-                cell.alignment = { vertical: 'top', horizontal: 'left', wrapText: true };
-                cell.border = {
-                    top: { style: 'thin', color: { argb: 'FFCCCCCC' } },
-                    left: { style: 'thin', color: { argb: 'FFCCCCCC' } },
-                    bottom: { style: 'thin', color: { argb: 'FFCCCCCC' } },
-                    right: { style: 'thin', color: { argb: 'FFCCCCCC' } }
-                };
-
-                // Colorear celda de Estado (Columna 7 ahora por la nueva de Suite)
-                if (colNumber === 7) { 
-                    cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: false };
-                    let bgColor = 'FFF2F2F2';
-                    let fontColor = 'FF333333';
-
-                    const status = String(cell.value).toUpperCase();
-                    if (status === 'OK' || status === 'PASS' || status === 'PASSED') {
-                        bgColor = 'FFC6EFCE'; fontColor = 'FF006100';
-                    } else if (status === 'FAIL' || status === 'FALLO' || status === 'FAILED') {
-                        bgColor = 'FFFFC7CE'; fontColor = 'FF9C0006';
-                    } else if (status === 'WARNING') {
-                        bgColor = 'FFFFEB9C'; fontColor = 'FF9C6500';
-                    } else if (status === 'PENDIENTE' || status === 'PENDING') {
-                        bgColor = 'FFE2E2E2'; fontColor = 'FF666666';
-                    }
-
-                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgColor } };
-                    cell.font = { bold: true, color: { argb: fontColor } };
-                }
-            });
+            data.push([
+                tc.uc_title || useCase.title || '',
+                tc.suite_title || '',
+                tc.key_id || `TC-${tc.id}`,
+                tc.us_title ? `[${tc.us_key || 'N/A'}] ${tc.us_title}` : 'Sin HU vinculada',
+                tc.title || '',
+                tc.preconditions || '',
+                tc.steps || tc.description || '',
+                tc.test_data || '',
+                tc.expected_result || '',
+                tc.acceptance_criteria || '',
+                tc.assumptions || '',
+                tc.last_status || 'PENDIENTE',
+                tc.obtained_result || '',
+                tc.observations || '',
+                tc.tester || '',
+                tc.executed_at ? new Date(tc.executed_at).toLocaleString() : '-'
+            ]);
         });
 
-        sheet.views = [{ state: 'frozen', xSplit: 0, ySplit: 1 }];
-        sheet.autoFilter = { from: 'A1', to: 'K1' };
+        const ws = XLSX.utils.aoa_to_sheet(data);
+
+        // Ajustar ancho de columnas
+        ws['!cols'] = [
+            { wch: 30 }, // CU Vinculado
+            { wch: 25 }, // Suite / Grupo
+            { wch: 15 }, // ID Test
+            { wch: 35 }, // HU / Requerimiento
+            { wch: 45 }, // Escenario / Título
+            { wch: 40 }, // Precondiciones
+            { wch: 55 }, // Pasos de Reproducción
+            { wch: 40 }, // Datos de Prueba
+            { wch: 45 }, // Resultado Esperado
+            { wch: 40 }, // Criterios Aceptación
+            { wch: 40 }, // Assumptions
+            { wch: 15 }, // Estado
+            { wch: 45 }, // Resultado Obtenido
+            { wch: 45 }, // Observaciones / Hallazgos
+            { wch: 15 }, // Tester
+            { wch: 22 }  // Fecha Ejecución
+        ];
+
+        XLSX.utils.book_append_sheet(wb, ws, 'Matriz de Pruebas');
+
+        // Generar buffer xlsx
+        const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
 
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         res.setHeader('Content-Disposition', `attachment; filename="Matriz_${useCase.key_id || 'CU'}_${new Date().toISOString().split('T')[0]}.xlsx"`);
-
-        await workbook.xlsx.write(res);
-        res.end();
+        res.send(buf);
 
     } catch (err) {
         console.error('❌ Error en exportación Excel:', err);
         res.status(500).json({ error: 'Error interno al generar el reporte Excel.', detalle: err.message });
+    }
+});
+
+// Exportar Matriz de Pruebas de TODO el Proyecto (todos los CU) a Excel unificado
+app.get('/api/projects/:id/export-excel', requireAuth, async (req, res) => {
+    try {
+        const projectId = req.params.id;
+
+        // 1. Obtener datos del Proyecto
+        const projRes = await query(`SELECT * FROM qa_projects WHERE id = ?`, [projectId]);
+        if (projRes.rows.length === 0) return res.status(404).json({ error: 'Proyecto no encontrado' });
+        const project = projRes.rows[0];
+
+        // 2. Obtener TODOS los Test Cases de TODOS los CU del proyecto
+        const casesRes = await query(`
+            SELECT tc.*, us.title as us_title, us.key_id as us_key, s.title as suite_title,
+                   uc.title as uc_title, uc.key_id as uc_key,
+                   e.status as last_status, e.observations, e.obtained_result, e.tester, e.executed_at
+            FROM qa_test_cases tc
+            JOIN qa_test_suites s ON tc.suite_id = s.id
+            JOIN qa_use_cases uc ON s.use_case_id = uc.id
+            LEFT JOIN qa_user_stories us ON tc.us_id = us.id
+            LEFT JOIN LATERAL (
+                SELECT status, observations, obtained_result, tester, executed_at
+                FROM qa_executions
+                WHERE tc_id = tc.id
+                ORDER BY executed_at DESC
+                LIMIT 1
+            ) e ON true
+            WHERE uc.project_id = ?
+            ORDER BY uc.id, s.id, us.id, tc.id
+        `, [projectId]);
+
+        // 3. Construir workbook con SheetJS
+        const wb = XLSX.utils.book_new();
+
+        const headers = [
+            'CU Vinculado',
+            'Suite / Grupo',
+            'ID Test',
+            'HU / Requerimiento',
+            'Escenario / Título',
+            'Precondiciones',
+            'Pasos de Reproducción',
+            'Datos de Prueba',
+            'Resultado Esperado',
+            'Criterios Aceptación',
+            'Assumptions',
+            'Estado',
+            'Resultado Obtenido',
+            'Observaciones / Hallazgos',
+            'Tester',
+            'Fecha Ejecución'
+        ];
+
+        const data = [headers];
+        casesRes.rows.forEach((tc) => {
+            data.push([
+                tc.uc_title || '',
+                tc.suite_title || '',
+                tc.key_id || `TC-${tc.id}`,
+                tc.us_title ? `[${tc.us_key || 'N/A'}] ${tc.us_title}` : 'Sin HU vinculada',
+                tc.title || '',
+                tc.preconditions || '',
+                tc.steps || tc.description || '',
+                tc.test_data || '',
+                tc.expected_result || '',
+                tc.acceptance_criteria || '',
+                tc.assumptions || '',
+                tc.last_status || 'PENDIENTE',
+                tc.obtained_result || '',
+                tc.observations || '',
+                tc.tester || '',
+                tc.executed_at ? new Date(tc.executed_at).toLocaleString() : '-'
+            ]);
+        });
+
+        const ws = XLSX.utils.aoa_to_sheet(data);
+
+        ws['!cols'] = [
+            { wch: 30 },
+            { wch: 25 },
+            { wch: 15 },
+            { wch: 35 },
+            { wch: 45 },
+            { wch: 40 },
+            { wch: 55 },
+            { wch: 40 },
+            { wch: 45 },
+            { wch: 40 },
+            { wch: 40 },
+            { wch: 15 },
+            { wch: 45 },
+            { wch: 45 },
+            { wch: 15 },
+            { wch: 22 }
+        ];
+
+        XLSX.utils.book_append_sheet(wb, ws, 'Matriz de Pruebas');
+
+        const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', `attachment; filename="Matriz_Proyecto_${project.key_id || project.name.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.xlsx"`);
+        res.send(buf);
+
+    } catch (err) {
+        console.error('❌ Error en exportación de proyecto:', err);
+        res.status(500).json({ error: 'Error interno al generar el reporte del proyecto.', detalle: err.message });
     }
 });
 
@@ -2415,17 +2633,6 @@ app.post('/api/runs/:id/retest', requireAuth, async (req, res) => {
     }
 });
 
-app.put('/api/test-suites/:id', requireAuth, async (req, res) => {
-    try {
-        const { title, description, assigned_to, jira_epic_key } = req.body;
-        await query(`UPDATE qa_test_suites SET title = COALESCE(?, title), description = COALESCE(?, description), assigned_to = COALESCE(?, assigned_to), jira_epic_key = COALESCE(?, jira_epic_key), updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-            [title, description, assigned_to, jira_epic_key, req.user.id, req.params.id]);
-        res.json({ ok: true });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
 // Ruta dedicada para guardar/reemplazar inconsistencias de una suite
 app.put('/api/test-suites/:id/inconsistencies', requireAuth, async (req, res) => {
     try {
@@ -2592,6 +2799,50 @@ app.post('/api/test-cases', requireAuth, async (req, res) => {
     }
 });
 
+app.put('/api/test-cases/:id/move', requireAuth, async (req, res) => {
+    try {
+        const tcId = req.params.id;
+        const { new_suite_id } = req.body;
+
+        if (!new_suite_id) return res.status(400).json({ error: 'new_suite_id requerido' });
+
+        const tcRes = await query(`SELECT id, suite_id, us_id FROM qa_test_cases WHERE id = ?`, [tcId]);
+        if (!tcRes.rows.length) return res.status(404).json({ error: 'Test Case no encontrado' });
+        const tc = tcRes.rows[0];
+
+        if (tc.us_id) {
+            return res.status(400).json({ error: 'El TC tiene una HU vinculada. Desvinculá la HU antes de mover.' });
+        }
+
+        const sourceSuiteRes = await query(`SELECT id, use_case_id, active_run_id FROM qa_test_suites WHERE id = ?`, [tc.suite_id]);
+        if (!sourceSuiteRes.rows.length) return res.status(404).json({ error: 'Suite origen no encontrada' });
+        const sourceSuite = sourceSuiteRes.rows[0];
+
+        if (sourceSuite.active_run_id) {
+            return res.status(400).json({ error: 'El TC está en una suite en ejecución. No se puede mover.' });
+        }
+
+        const destSuiteRes = await query(`SELECT id, use_case_id FROM qa_test_suites WHERE id = ?`, [new_suite_id]);
+        if (!destSuiteRes.rows.length) return res.status(404).json({ error: 'Suite destino no encontrada' });
+        const destSuite = destSuiteRes.rows[0];
+
+        if (sourceSuite.use_case_id !== destSuite.use_case_id) {
+            return res.status(400).json({ error: 'Solo se pueden mover TC entre suites del mismo Caso de Uso.' });
+        }
+
+        const updateRes = await query(`UPDATE qa_test_cases SET suite_id = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+            [new_suite_id, req.user.id, tcId]);
+
+        if (updateRes.changes === 0) {
+            return res.status(500).json({ error: 'El Test Case no pudo ser movido. El UPDATE no afectó ninguna fila.' });
+        }
+
+        res.json({ ok: true, moved: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 app.put('/api/test-cases/:id', requireAuth, async (req, res) => {
     try {
         const tcId = req.params.id;
@@ -2701,6 +2952,71 @@ app.put('/api/test-cases/:id', requireAuth, async (req, res) => {
 app.delete('/api/test-cases/:id', requireAuth, requireAdmin, async (req, res) => {
     try {
         await query(`DELETE FROM qa_test_cases WHERE id = ?`, [req.params.id]);
+        res.json({ ok: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.put('/api/test-suites/:id/move', requireAuth, async (req, res) => {
+    try {
+        const suiteId = req.params.id;
+        const { new_use_case_id } = req.body;
+
+        console.log(`[MOVE SUITE] Request received: suiteId=${suiteId}, new_use_case_id=${new_use_case_id}, user=${req.user.id}`);
+
+        if (!new_use_case_id) return res.status(400).json({ error: 'new_use_case_id requerido' });
+
+        const suiteRes = await query(`SELECT id, use_case_id, active_run_id FROM qa_test_suites WHERE id = ?`, [suiteId]);
+        if (!suiteRes.rows.length) return res.status(404).json({ error: 'Suite no encontrada' });
+        const suite = suiteRes.rows[0];
+
+        console.log(`[MOVE SUITE] Suite found: id=${suite.id}, current_uc=${suite.use_case_id}, active_run_id=${suite.active_run_id}`);
+
+        if (suite.active_run_id) {
+            return res.status(400).json({ error: 'La suite está en ejecución. No se puede mover.' });
+        }
+
+        const linkedRes = await query(`SELECT COUNT(*) as cnt FROM qa_test_cases WHERE suite_id = ? AND us_id IS NOT NULL`, [suiteId]);
+        const linkedCount = linkedRes.rows[0].cnt;
+        if (linkedCount > 0) {
+            return res.status(400).json({ error: `La suite tiene ${linkedCount} TC(s) vinculados a HU. Desvinculá las HU antes de mover.` });
+        }
+
+        const sourceCURRes = await query(`SELECT id, project_id FROM qa_use_cases WHERE id = ?`, [suite.use_case_id]);
+        if (!sourceCURRes.rows.length) return res.status(404).json({ error: 'CU origen no encontrado' });
+        const sourceCU = sourceCURRes.rows[0];
+
+        const destCURRes = await query(`SELECT id, project_id FROM qa_use_cases WHERE id = ?`, [new_use_case_id]);
+        if (!destCURRes.rows.length) return res.status(404).json({ error: 'CU destino no encontrado' });
+        const destCU = destCURRes.rows[0];
+
+        if (sourceCU.project_id !== destCU.project_id) {
+            return res.status(400).json({ error: 'Solo se pueden mover suites entre CU del mismo proyecto.' });
+        }
+
+        const updateRes = await query(`UPDATE qa_test_suites SET use_case_id = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+            [new_use_case_id, req.user.id, suiteId]);
+
+        console.log(`[MOVE SUITE] UPDATE result: rowCount=${updateRes.changes}, suiteId=${suiteId}, new_uc=${new_use_case_id}`);
+
+        if (updateRes.changes === 0) {
+            console.error(`[MOVE SUITE] CRITICAL: UPDATE affected 0 rows for suiteId=${suiteId}`);
+            return res.status(500).json({ error: 'La suite no pudo ser movida. El UPDATE no afectó ninguna fila.' });
+        }
+
+        res.json({ ok: true, moved: true, new_use_case_id });
+    } catch (err) {
+        console.error(`[MOVE SUITE] Error:`, err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.put('/api/test-suites/:id', requireAuth, async (req, res) => {
+    try {
+        const { title, description, assigned_to, jira_epic_key } = req.body;
+        await query(`UPDATE qa_test_suites SET title = COALESCE(?, title), description = COALESCE(?, description), assigned_to = COALESCE(?, assigned_to), jira_epic_key = COALESCE(?, jira_epic_key), updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+            [title, description, assigned_to, jira_epic_key, req.user.id, req.params.id]);
         res.json({ ok: true });
     } catch (err) {
         res.status(500).json({ error: err.message });

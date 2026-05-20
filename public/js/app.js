@@ -12,6 +12,7 @@ import { JiraTrackingTab } from './components/jira-tracking-tab.js';
 import { MiJiraTab } from './components/mi-jira-tab.js';
 import { UI } from './utils/ui-utils.js';
 import { RealtimeService } from './services/realtime.js';
+import { Modals } from './components/modals.js';
 
 /**
  * APP.JS - Entry point de la aplicación.

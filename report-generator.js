@@ -164,6 +164,7 @@ async function generateReport(runId) {
         .media-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
         .media-card { background: #000; border-radius: 12px; overflow: hidden; border: 1px solid var(--border); box-shadow: var(--shadow); }
         .media-card img, .media-card video { width: 100%; display: block; }
+        .media-card video { background: #000; }
 
         .right-index { width: 300px; padding: 48px 24px; border-left: 1px solid var(--border); background: rgba(255,255,255,0.3); overflow-y: auto; flex-shrink: 0; }
         .index-title { font-size: 0.7rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 24px; }
@@ -377,11 +378,24 @@ async function generateReport(runId) {
                                     <div class="media-section">
                                         <div class="media-title">📷 EVIDENCIA MULTIMEDIA (CLICK PARA ZOOM)</div>
                                         <div class="media-grid">
-                                            ${tc.attachments.map(a => `
-                                                <div class="media-card">
-                                                    <img src="data:${a.mime_type};base64,${a.data}" onclick="zoomImage(this.src)" style="cursor: zoom-in;">
-                                                </div>
-                                            `).join('')}
+                                            ${tc.attachments.map(a => {
+                                                const isVideo = a.mime_type.startsWith('video/');
+                                                if (isVideo) {
+                                                    return `
+                                                        <div class="media-card">
+                                                            <video controls preload="metadata" onclick="zoomVideo(this.querySelector('source').src, '${a.mime_type}')" style="cursor: zoom-in;">
+                                                                <source src="data:${a.mime_type};base64,${a.data}" type="${a.mime_type}">
+                                                                Tu navegador no soporta video HTML5.
+                                                            </video>
+                                                        </div>
+                                                    `;
+                                                }
+                                                return `
+                                                    <div class="media-card">
+                                                        <img src="data:${a.mime_type};base64,${a.data}" onclick="zoomImage(this.src)" style="cursor: zoom-in;">
+                                                    </div>
+                                                `;
+                                            }).join('')}
                                         </div>
                                     </div>
                                 ` : ''}
@@ -403,6 +417,12 @@ async function generateReport(runId) {
         <img id="lightbox-img" src="">
     </div>
 
+    <div class="lightbox" id="lightbox-video" onclick="this.classList.remove('active')">
+        <video id="lightbox-video-player" controls style="max-width: 95%; max-height: 95%; border-radius: 8px; box-shadow: 0 20px 50px rgba(0,0,0,0.5);">
+            <source src="" id="lightbox-video-source">
+        </video>
+    </div>
+
     <script>
         const testsData = ${JSON.stringify(huStats.map(hu => ({
             id: hu.id,
@@ -416,8 +436,25 @@ async function generateReport(runId) {
             lb.classList.add('active');
         }
 
+        function zoomVideo(src, type) {
+            const lb = document.getElementById('lightbox-video');
+            const player = document.getElementById('lightbox-video-player');
+            const source = document.getElementById('lightbox-video-source');
+            player.pause();
+            source.src = src;
+            source.type = type;
+            player.load();
+            player.play();
+            lb.classList.add('active');
+        }
+
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') document.getElementById('lightbox').classList.remove('active');
+            if (e.key === 'Escape') {
+                document.getElementById('lightbox').classList.remove('active');
+                const videoLb = document.getElementById('lightbox-video');
+                videoLb.classList.remove('active');
+                document.getElementById('lightbox-video-player').pause();
+            }
         });
 
         function switchView(viewId) {
