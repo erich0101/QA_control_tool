@@ -352,7 +352,18 @@ async function generateReport(runId) {
                                             <div style="margin-bottom: 20px;">
                                                 <label style="font-size: 0.65rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; display: block; margin-bottom: 6px;">Pasos para Reproducir</label>
                                                 <div style="font-size: 0.85rem; line-height: 1.6; color: #475569; background: #f8fafc; padding: 12px; border-radius: 6px; border: 1px solid #e2e8f0;">
-                                                    ${tc.defects[0].steps || 'No se proporcionaron pasos específicos.'}
+                                                    ${tc.defects[0].steps_to_reproduce || 'No se proporcionaron pasos específicos.'}
+                                                </div>
+                                            </div>
+
+                                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px;">
+                                                <div style="background: rgba(82, 196, 26, 0.05); border: 1px solid rgba(82, 196, 26, 0.2); padding: 12px; border-radius: 8px;">
+                                                    <label style="font-size: 0.6rem; font-weight: 800; color: #52c41a; text-transform: uppercase; display: block; margin-bottom: 4px;">Resultado Esperado</label>
+                                                    <div style="font-size: 0.85rem; line-height: 1.4;">${tc.defects[0].expected_result || '—'}</div>
+                                                </div>
+                                                <div style="background: rgba(255, 77, 79, 0.05); border: 1px solid rgba(255, 77, 79, 0.2); padding: 12px; border-radius: 8px;">
+                                                    <label style="font-size: 0.6rem; font-weight: 800; color: #ff4d4f; text-transform: uppercase; display: block; margin-bottom: 4px;">Resultado Real</label>
+                                                    <div style="font-size: 0.85rem; line-height: 1.4;">${tc.defects[0].actual_result || '—'}</div>
                                                 </div>
                                             </div>
 
@@ -367,7 +378,7 @@ async function generateReport(runId) {
                                                 </div>
                                                 <div>
                                                     <label style="font-size: 0.65rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; display: block; margin-bottom: 4px;">Impacto Negocio</label>
-                                                    <span style="font-size: 0.9rem; font-weight: 700; color: #1e293b;">${tc.defects[0].impact || 'No especificado'}</span>
+                                                    <span style="font-size: 0.9rem; font-weight: 700; color: #1e293b;">${tc.defects[0].business_impact || 'No especificado'}</span>
                                                 </div>
                                             </div>
                                         </div>

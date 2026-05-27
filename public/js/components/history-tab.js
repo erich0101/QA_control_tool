@@ -290,7 +290,7 @@ export const HistoryTab = {
             container.style.display = 'block';
             
             // 1. Cargar Contexto Completo
-            const { epics, users, priorities, error } = await ApiService.getJiraContext(projectId);
+            const { epics, users, priorities, customFields, error } = await ApiService.getJiraContext(projectId);
             
             if (error) {
                 UI.toast(error, 'warn');
@@ -312,16 +312,54 @@ export const HistoryTab = {
                     `<option value="${p.id}" ${p.name === 'Medium' ? 'selected' : ''}>${UI.escapeHTML(p.name)}</option>`
                 ).join('');
             }
+
+            const customFieldsContainer = document.getElementById('jira-custom-fields-container');
+            if (customFields && customFields.length > 0) {
+                let html = '';
+                for (const field of customFields) {
+                    html += `<div class="field-group" style="margin-bottom: 16px;">
+                        <label class="field-label" style="font-size: 0.65rem;">${UI.escapeHTML(field.name)}${field.required ? ' *' : ''}</label>`;
+                    if (field.options && field.options.length > 0) {
+                        html += `<select id="jira-cf-${field.fieldId}" style="width: 100%; font-size: 0.8rem; padding: 10px; border-radius: 8px; background: var(--bg-surface); border: 1px solid var(--border); color: var(--text-main);">
+                            <option value="">— Seleccionar —</option>`;
+                        for (const opt of field.options) {
+                            html += `<option value="${opt.id}">${UI.escapeHTML(opt.name)}</option>`;
+                        }
+                        html += `</select>`;
+                    } else {
+                        html += `<input type="text" id="jira-cf-${field.fieldId}" style="width: 100%; font-size: 0.8rem; padding: 10px; border-radius: 8px; background: var(--bg-surface); border: 1px solid var(--border); color: var(--text-main);" placeholder="Ingresar valor...">`;
+                    }
+                    html += `</div>`;
+                }
+                customFieldsContainer.innerHTML = html;
+                customFieldsContainer.style.display = 'block';
+            } else {
+                customFieldsContainer.style.display = 'none';
+            }
+
             btnCreate.onclick = async () => {
                 const epicId = epicSelect.value;
                 const assigneeId = assigneeSelect.value;
                 const priorityId = prioritySelect.value;
 
+                const customFieldValues = {};
+                if (customFields && customFields.length > 0) {
+                    for (const field of customFields) {
+                        const el = document.getElementById(`jira-cf-${field.fieldId}`);
+                        if (el && el.value) {
+                            const val = el.value;
+                            customFieldValues[field.fieldId] = field.options?.length > 0 ? { id: val } : val;
+                        }
+                    }
+                }
+
                 btnCreate.disabled = true;
                 btnCreate.innerText = '⌛ CREANDO TICKET...';
 
                 try {
-                    const result = await ApiService.createJiraBug(bug.id, epicId, assigneeId, priorityId);
+                    const result = await ApiService.createJiraBug(bug.id, epicId, assigneeId, priorityId, customFieldValues);
+                    bug.jira_key = result.jira.key;
+                    bug.jira_url = result.jira.browser_url;
                     container.style.display = 'none';
                     successContainer.style.display = 'block';
                     
@@ -414,6 +452,8 @@ export const HistoryTab = {
                 </div>
 
                 <!-- Sección Jira Integration (Persistida o Nueva) -->
+                <div id="jira-custom-fields-container" style="margin-top: 16px; display: none;"></div>
+
                 <div id="jira-integration-container" style="margin-top: 24px; padding: 20px; background: rgba(0, 82, 204, 0.05); border: 1px solid rgba(0, 82, 204, 0.2); border-radius: 16px; display: ${bug.jira_key ? 'none' : 'block'};">
                     <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 16px;">
                         <img src="https://wac-cdn.atlassian.com/assets/img/favicons/atlassian/favicon.png" style="width: 16px; height: 16px;">

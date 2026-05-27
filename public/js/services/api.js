@@ -222,10 +222,10 @@ export const ApiService = {
             headers
         }).then(json);
     },
-    async createJiraBug(defectId, epicId, assigneeId, priorityId) {
+    async createJiraBug(defectId, epicId, assigneeId, priorityId, customFields) {
         return fetch(`/api/jira/defects/${defectId}/create-ticket`, { 
             method: 'POST', 
-            body: JSON.stringify({ epicId, assigneeId, priorityId }), 
+            body: JSON.stringify({ epicId, assigneeId, priorityId, customFields }), 
             headers 
         }).then(json);
     },

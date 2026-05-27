@@ -196,7 +196,58 @@ ${bug.actual_result || '—'}
         return await res.json();
     },
 
-    async createIssue(userCredentials, projectKey, domain, bugData, epicId = null, assigneeId = null, priorityId = null) {
+    async getCreateMetadata(userCredentials, projectKey, domain) {
+        const auth = Buffer.from(`${userCredentials.jira_user_email}:${decrypt(userCredentials.encrypted_token)}`).toString('base64');
+        const baseUrl = domain.replace(/\/$/, '');
+        const url = `${baseUrl}/rest/api/3/issue/createmeta?projectKeys=${projectKey}&issuetypeNames=Bug&expand=projects.issuetypes.fields`;
+
+        try {
+            const res = await fetch(url, {
+                headers: { 'Authorization': `Basic ${auth}`, 'Accept': 'application/json' }
+            });
+
+            if (!res.ok) { console.warn('Jira createmeta failed:', res.status); return []; }
+
+            const data = await res.json();
+            const projects = data.projects || [];
+            const fields = [];
+
+            for (const project of projects) {
+                for (const issuetype of (project.issuetypes || [])) {
+                    const issueFields = issuetype.fields || {};
+                    for (const [fieldId, fieldMeta] of Object.entries(issueFields)) {
+                        if (!fieldId.startsWith('customfield_')) continue;
+                        if (!fieldMeta.required) continue;
+
+                        const fieldInfo = {
+                            fieldId,
+                            name: fieldMeta.name,
+                            required: true,
+                            schemaType: fieldMeta.schema?.type,
+                            options: []
+                        };
+
+                        if (fieldMeta.allowedValues && Array.isArray(fieldMeta.allowedValues)) {
+                            fieldInfo.options = fieldMeta.allowedValues.map(opt => ({
+                                id: opt.id,
+                                value: opt.value || opt.name,
+                                name: opt.name || opt.value
+                            }));
+                        }
+
+                        fields.push(fieldInfo);
+                    }
+                }
+            }
+
+            return fields;
+        } catch (e) {
+            console.warn('Jira createmeta error:', e.message);
+            return [];
+        }
+    },
+
+    async createIssue(userCredentials, projectKey, domain, bugData, epicId = null, assigneeId = null, priorityId = null, customFields = {}) {
         const auth = Buffer.from(`${userCredentials.jira_user_email}:${decrypt(userCredentials.encrypted_token)}`).toString('base64');
         const baseUrl = domain.replace(/\/$/, '');
         
@@ -215,6 +266,11 @@ ${bug.actual_result || '—'}
         if (epicId) payload.fields.parent = { id: epicId };
         if (assigneeId) payload.fields.assignee = { accountId: assigneeId };
         if (priorityId) payload.fields.priority = { id: priorityId };
+        if (customFields && Object.keys(customFields).length > 0) {
+            for (const [fieldId, value] of Object.entries(customFields)) {
+                payload.fields[fieldId] = value;
+            }
+        }
 
         const url = `${baseUrl}/rest/api/3/issue`;
         const res = await fetch(url, {

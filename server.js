@@ -820,15 +820,16 @@ app.get('/api/debug/jira-test', requireAuth, async (req, res) => {
 app.get('/api/jira/projects/:id/context', requireAuth, async (req, res) => {
     try {
         const creds = await getJiraUserCredentials(req.params.id, req.user.id);
-        if (creds.error) return res.status(creds.code === 'NO_PROJECT_CONFIG' ? 404 : 403).json({ error: creds.error, epics: [], users: [], priorities: [] });
+        if (creds.error) return res.status(creds.code === 'NO_PROJECT_CONFIG' ? 404 : 403).json({ error: creds.error, epics: [], users: [], priorities: [], customFields: [] });
         
-        const [epics, users, priorities] = await Promise.all([
+        const [epics, users, priorities, customFields] = await Promise.all([
             JiraService.getEpics(creds.userCredentials, creds.projectKey, creds.domain),
             JiraService.getAssignableUsers(creds.userCredentials, creds.projectKey, creds.domain),
-            JiraService.getPriorities(creds.userCredentials, creds.domain)
+            JiraService.getPriorities(creds.userCredentials, creds.domain),
+            JiraService.getCreateMetadata(creds.userCredentials, creds.projectKey, creds.domain)
         ]);
 
-        res.json({ epics, users, priorities });
+        res.json({ epics, users, priorities, customFields });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -907,7 +908,7 @@ app.post('/api/jira/issues/:key/comments', requireAuth, async (req, res) => {
 app.post('/api/jira/defects/:id/create-ticket', requireAuth, async (req, res) => {
     try {
         const defectId = req.params.id;
-        const { epicId, assigneeId, priorityId } = req.body;
+        const { epicId, assigneeId, priorityId, customFields } = req.body;
 
         // 1. Obtener datos del defecto y su proyecto
         const bugRes = await query(`
@@ -931,7 +932,7 @@ app.post('/api/jira/defects/:id/create-ticket', requireAuth, async (req, res) =>
         if (creds.error) return res.status(creds.code === 'NO_PROJECT_CONFIG' ? 404 : 403).json({ error: creds.error });
 
         // 4. Crear Ticket
-        const jiraResult = await JiraService.createIssue(creds.userCredentials, creds.projectKey, creds.domain, bug, epicId, assigneeId, priorityId);
+        const jiraResult = await JiraService.createIssue(creds.userCredentials, creds.projectKey, creds.domain, bug, epicId, assigneeId, priorityId, customFields);
         
         // Generar URL del ticket
         const jiraUrl = `${jiraResult.self.split('/rest/')[0]}/browse/${jiraResult.key}`;
