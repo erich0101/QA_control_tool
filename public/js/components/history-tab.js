@@ -406,6 +406,15 @@ export const HistoryTab = {
                     </div>
                 </div>
 
+                ${bug.description ? `
+                <div class="field-group">
+                    <label class="field-label" style="font-size: 0.65rem;">DESCRIPCIÓN GENERAL</label>
+                    <div style="padding: 16px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 12px; white-space: pre-wrap; font-size: 0.8rem; line-height: 1.6; color: var(--text-main);">
+                        ${UI.escapeHTML(bug.description)}
+                    </div>
+                </div>
+                ` : ''}
+
                 <div class="field-group">
                     <label class="field-label" style="font-size: 0.65rem;">PASOS PARA REPRODUCIR</label>
                     <div style="padding: 16px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 12px; white-space: pre-wrap; font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; line-height: 1.6; color: var(--text-secondary);">

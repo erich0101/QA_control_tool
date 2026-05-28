@@ -3119,6 +3119,16 @@ app.post('/api/evidence', requireAuth, upload.single('evidence'), async (req, re
     }
 });
 
+app.delete('/api/evidence/:id', requireAuth, async (req, res) => {
+    try {
+        const result = await query(`DELETE FROM qa_attachments WHERE id = ?`, [req.params.id]);
+        if (result.changes === 0) return res.status(404).json({ error: 'Evidencia no encontrada' });
+        res.json({ ok: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // ══════════════════════════════════════════════════════════════
 // ── ISSUE SAVE (Legacy — Guardado Multipart Atómico) ──
 // ══════════════════════════════════════════════════════════════

@@ -349,6 +349,15 @@ async function generateReport(runId) {
                                                 <div style="font-size: 0.95rem; font-weight: 700; color: #b91c1c;">${tc.defects[0].title}</div>
                                             </div>
 
+                                            ${tc.defects[0].description ? `
+                                            <div style="margin-bottom: 20px;">
+                                                <label style="font-size: 0.65rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; display: block; margin-bottom: 6px;">Descripción General</label>
+                                                <div style="font-size: 0.85rem; line-height: 1.6; color: #475569; background: #f8fafc; padding: 12px; border-radius: 6px; border: 1px solid #e2e8f0;">
+                                                    ${tc.defects[0].description}
+                                                </div>
+                                            </div>
+                                            ` : ''}
+
                                             <div style="margin-bottom: 20px;">
                                                 <label style="font-size: 0.65rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; display: block; margin-bottom: 6px;">Pasos para Reproducir</label>
                                                 <div style="font-size: 0.85rem; line-height: 1.6; color: #475569; background: #f8fafc; padding: 12px; border-radius: 6px; border: 1px solid #e2e8f0;">

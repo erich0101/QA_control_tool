@@ -13,7 +13,7 @@ const JiraService = {
 # 🐞 BUG-${bug.id} - ${bug.title}
 
 ## 📄 Descripción
-Reportado en el Test Case: **${bug.tc_key} - ${bug.tc_title}**
+${bug.description ? bug.description + '\n\n' : ''}Reportado en el Test Case: **${bug.tc_key} - ${bug.tc_title}**
 
 ---
 
