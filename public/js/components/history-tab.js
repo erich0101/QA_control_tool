@@ -366,7 +366,15 @@ export const HistoryTab = {
                     ticketLink.innerText = result.jira.key;
                     ticketLink.href = result.jira.browser_url;
                     
-                    UI.toast('Ticket de Jira creado exitosamente');
+                    let toastMsg = 'Ticket de Jira creado exitosamente';
+                    if (result.attachment_count > 0) {
+                        toastMsg += ` — ${result.attachment_count} evidencia(s) adjuntada(s)`;
+                    }
+                    if (result.attachment_errors && result.attachment_errors.length > 0) {
+                        toastMsg += ` (${result.attachment_errors.length} error(es) al adjuntar)`;
+                        console.warn('Errores al adjuntar evidencias:', result.attachment_errors);
+                    }
+                    UI.toast(toastMsg);
                 } catch (err) {
                     UI.toast(err.message, 'error');
                     btnCreate.disabled = false;

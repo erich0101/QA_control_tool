@@ -927,24 +927,44 @@ app.post('/api/jira/defects/:id/create-ticket', requireAuth, async (req, res) =>
         const ucRes = await query(`SELECT project_id FROM qa_use_cases WHERE id = ?`, [bug.use_case_id]);
         const projectId = ucRes.rows[0].project_id;
 
-        // 3. Obtener credenciales del usuario
+        // 3. Obtener evidencias del defecto
+        const evidenceRes = await query(`SELECT file_name, mime_type, file_data FROM qa_attachments WHERE execution_id = ?`, [bug.execution_id]);
+        if (evidenceRes.rows.length > 0) {
+            bug.evidences = evidenceRes.rows.map(r => r.file_name);
+        }
+
+        // 4. Obtener credenciales del usuario
         const creds = await getJiraUserCredentials(projectId, req.user.id);
         if (creds.error) return res.status(creds.code === 'NO_PROJECT_CONFIG' ? 404 : 403).json({ error: creds.error });
 
-        // 4. Crear Ticket
+        // 5. Crear Ticket
         const jiraResult = await JiraService.createIssue(creds.userCredentials, creds.projectKey, creds.domain, bug, epicId, assigneeId, priorityId, customFields);
         
         // Generar URL del ticket
         const jiraUrl = `${jiraResult.self.split('/rest/')[0]}/browse/${jiraResult.key}`;
 
-        // 5. Persistir en BBDD
+        // 6. Adjuntar evidencias
+        let attachmentCount = 0;
+        const attachmentErrors = [];
+        if (evidenceRes.rows.length > 0) {
+            for (const ev of evidenceRes.rows) {
+                try {
+                    await JiraService.attachFile(creds.userCredentials, creds.domain, jiraResult.key, ev.file_name, ev.file_data, ev.mime_type);
+                    attachmentCount++;
+                } catch (attachErr) {
+                    attachmentErrors.push({ file: ev.file_name, error: attachErr.message });
+                }
+            }
+        }
+
+        // 7. Persistir en BBDD
         await query(`
             UPDATE qa_defects 
             SET jira_key = ?, jira_url = ?, root_cause = ? 
             WHERE id = ?
         `, [jiraResult.key, jiraUrl, `JIRA: ${jiraResult.key}`, defectId]);
 
-        res.json({ ok: true, jira: { ...jiraResult, browser_url: jiraUrl } });
+        res.json({ ok: true, jira: { ...jiraResult, browser_url: jiraUrl }, attachment_count: attachmentCount, attachment_errors: attachmentErrors });
     } catch (err) {
         console.error("Error al crear ticket en Jira:", err);
         res.status(500).json({ error: err.message });

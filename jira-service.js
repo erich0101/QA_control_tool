@@ -43,6 +43,11 @@ ${bug.actual_result || '—'}
 - **Tester:** ${bug.tester_name || 'Desconocido'}
 - **Fecha de reporte:** ${new Date(bug.created_at).toLocaleString()}
 - **ID Interno:** ${bug.id}
+
+${bug.evidences && bug.evidences.length > 0 ? `
+## 📎 Evidencias Adjuntas
+${bug.evidences.map(f => `- ${f}`).join('\n')}
+` : ''}
         `.trim();
     },
 
@@ -286,6 +291,39 @@ ${bug.actual_result || '—'}
         if (!res.ok) {
             const error = await res.json();
             throw new Error(error.errors ? JSON.stringify(error.errors) : 'Error desconocido al crear ticket');
+        }
+
+        return await res.json();
+    },
+
+    async attachFile(userCredentials, domain, issueKey, fileName, fileBuffer, mimeType) {
+        const auth = Buffer.from(`${userCredentials.jira_user_email}:${decrypt(userCredentials.encrypted_token)}`).toString('base64');
+        const baseUrl = domain.replace(/\/$/, '');
+        const boundary = `----JiraAttachment${Date.now()}`;
+
+        const header = Buffer.from(
+            `--${boundary}\r\n` +
+            `Content-Disposition: form-data; name="file"; filename="${fileName}"\r\n` +
+            `Content-Type: ${mimeType || 'application/octet-stream'}\r\n\r\n`
+        );
+        const footer = Buffer.from(`\r\n--${boundary}--\r\n`);
+        const body = Buffer.concat([header, fileBuffer, footer]);
+
+        const url = `${baseUrl}/rest/api/3/issue/${issueKey}/attachments`;
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Basic ${auth}`,
+                'Content-Type': `multipart/form-data; boundary=${boundary}`,
+                'Accept': 'application/json',
+                'X-Atlassian-Token': 'no-check'
+            },
+            body
+        });
+
+        if (!res.ok) {
+            const error = await res.json();
+            throw new Error(error.message || `Error al adjuntar archivo ${fileName}`);
         }
 
         return await res.json();
