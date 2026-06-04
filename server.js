@@ -3097,6 +3097,18 @@ app.put('/api/test-suites/:id', requireAuth, async (req, res) => {
     }
 });
 
+app.put('/api/test-suites/:id/assign-all', requireAuth, async (req, res) => {
+    try {
+        const { assigned_to } = req.body;
+        const suiteId = parseInt(req.params.id);
+        const userId = assigned_to ? parseInt(assigned_to) : null;
+        await query('UPDATE qa_test_cases SET assigned_to = ? WHERE suite_id = ?', [userId, suiteId]);
+        res.json({ ok: true, updated_suite_id: suiteId });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // ══════════════════════════════════════════════════════════════
 // ── DEFECTOS & BUGS (Avanzado) ──
 // ══════════════════════════════════════════════════════════════

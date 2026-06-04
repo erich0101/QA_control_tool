@@ -247,6 +247,9 @@ export const ApiService = {
         console.log(`[API] moveTestSuite called: suiteId=${suiteId}, newUseCaseId=${newUseCaseId}`);
         return fetch(`/api/test-suites/${suiteId}/move`, { method: 'PUT', body: JSON.stringify({ new_use_case_id: newUseCaseId }), headers }).then(json);
     },
+    async assignTestSuiteTests(suiteId, userId) {
+        return fetch(`/api/test-suites/${suiteId}/assign-all`, { method: 'PUT', body: JSON.stringify({ assigned_to: userId }), headers }).then(json);
+    },
 
     // ── Legacy ──
     async saveIssue(formData) {

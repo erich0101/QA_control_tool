@@ -237,7 +237,6 @@ export const ExecutionTab = {
                 <div class="tc-detail-tabs">
                     <button class="tc-tab ${this.detailTab === 'steps' ? 'active' : ''}" data-tab="steps" data-tc-id="${tc.id}">Pasos</button>
                     <button class="tc-tab ${this.detailTab === 'expected' ? 'active' : ''}" data-tab="expected" data-tc-id="${tc.id}">Esperado</button>
-                    <button class="tc-tab ${this.detailTab === 'evidencia' ? 'active' : ''}" data-tab="evidencia" data-tc-id="${tc.id}">Evidencia</button>
                 </div>
 
                 <div class="tc-detail-body">
@@ -334,22 +333,12 @@ export const ExecutionTab = {
     renderDetailContent(tc) {
         switch (this.detailTab) {
             case 'steps':
+                const attachments = tc.attachments || [];
                 return `
                     <div class="field-group">
                         <label class="field-label">Instrucciones / Pasos</label>
                         <div class="result-box">${UI.highlightSteps(tc.steps || 'Sin pasos.')}</div>
                     </div>
-                `;
-            case 'expected':
-                return `
-                    <div class="field-group">
-                        <label class="field-label">Resultado Esperado</label>
-                        <div class="result-box">${UI.escapeHTML(tc.expected_result || 'Sin resultado.')}</div>
-                    </div>
-                `;
-            case 'evidencia':
-                const attachments = tc.attachments || [];
-                return `
                     <div class="exec-evidence-section">
                         <div class="exec-evidence-header">
                             <label class="field-label">EVIDENCIAS (${attachments.length})</label>
@@ -370,6 +359,13 @@ export const ExecutionTab = {
                         <div class="evidence-grid-mini">
                             ${this.renderAttachments(tc)}
                         </div>
+                    </div>
+                `;
+            case 'expected':
+                return `
+                    <div class="field-group">
+                        <label class="field-label">Resultado Esperado</label>
+                        <div class="result-box">${UI.escapeHTML(tc.expected_result || 'Sin resultado.')}</div>
                     </div>
                 `;
             default:

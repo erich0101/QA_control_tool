@@ -259,6 +259,12 @@ export const TestSuitesTab = {
                     <button class="btn btn-success btn-sm run-suite" data-id="${suite.id}" style="padding: 4px 10px; font-size: 0.72rem;">▶ EJECUTAR</button>
                     <button class="btn btn-sm" id="btn-ai-gen-tc" data-suite-id="${suite.id}" style="background: linear-gradient(135deg,#2563eb,#3b82f6); color: white; border: none; padding: 4px 10px; font-size: 0.72rem;">✨ AI Tool</button>
                     <button class="btn btn-primary btn-sm" id="btn-new-tc" data-suite-id="${suite.id}" style="padding: 4px 10px; font-size: 0.72rem;">+ Nuevo TC</button>
+                    <div style="width: 1px; height: 18px; background: var(--border);"></div>
+                    <select class="suite-assign-all-select" data-suite-id="${suite.id}" style="padding: 4px 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-surface); color: var(--text-main); font-size: 0.72rem; max-width: 170px;">
+                        <option value="">👤 Asignar todos...</option>
+                        <option value="0">— Sin asignar —</option>
+                        ${(Store.state.team || []).map(u => `<option value="${u.id}">${UI.escapeHTML(u.name)}</option>`).join('')}
+                    </select>
                 </div>
             </div>
 
@@ -772,6 +778,20 @@ export const TestSuitesTab = {
                 this.render(container);
                 UI.hideLoading();
                 UI.toast('Responsable de suite actualizado');
+            });
+        });
+
+        // Assign all tests in suite to a user
+        container.querySelectorAll('.suite-assign-all-select').forEach(sel => {
+            sel.addEventListener('change', async (e) => {
+                if (!e.target.value) return;
+                const suiteId = parseInt(sel.dataset.suiteId);
+                const userId = parseInt(e.target.value) || null;
+                UI.showLoading();
+                await ApiService.assignTestSuiteTests(suiteId, userId);
+                await this.reloadSuites();
+                UI.hideLoading();
+                UI.toast(userId ? 'Todos los tests asignados' : 'Todos los tests desasignados');
             });
         });
 
