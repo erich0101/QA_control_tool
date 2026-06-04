@@ -33,10 +33,10 @@ export const TopBar = {
                         `).join('')
                     }
                 </select>
-                ${activeProjectId && (Store.state.user?.role === 'Admin' || Store.state.user?.role === 'Analista QA') ? `<button class="btn-icon" id="btn-edit-project" title="Editar Nombre Proyecto" style="font-size: 0.8rem; border: 1px solid var(--border); padding: 4px;">✏️</button>` : ''}
-                ${activeProjectId && (Store.state.user?.role === 'Admin' || Store.state.user?.role === 'Analista QA') ? `<button class="btn-icon" id="btn-jira-config" title="Configurar Jira" style="font-size: 0.8rem; border: 1px solid var(--border); padding: 4px;">🏢</button>` : ''}
+                ${activeProjectId && Store.state.user?.perfil === 'admin' ? `<button class="btn-icon" id="btn-edit-project" title="Editar Nombre Proyecto" style="font-size: 0.8rem; border: 1px solid var(--border); padding: 4px;">✏️</button>` : ''}
+                ${activeProjectId && Store.state.user?.perfil === 'admin' ? `<button class="btn-icon" id="btn-jira-config" title="Configurar Jira" style="font-size: 0.8rem; border: 1px solid var(--border); padding: 4px;">🏢</button>` : ''}
                 ${activeProjectId ? `<button class="btn-icon" id="btn-export-project" title="Exportar Todo el Proyecto" style="font-size: 0.8rem; border: 1px solid var(--border); padding: 4px;">📦</button>` : ''}
-                ${Store.state.user?.role === 'Admin' || Store.state.user?.role === 'Analista QA' ? `<button class="btn btn-primary btn-sm" id="btn-new-project">+ Proyecto</button>` : ''}
+                ${Store.state.user?.perfil === 'admin' ? `<button class="btn btn-primary btn-sm" id="btn-new-project">+ Proyecto</button>` : ''}
             </div>
         `;
 

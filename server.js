@@ -21,6 +21,28 @@ const ExcelJS = require('exceljs');
     try {
         await query(`ALTER TABLE qa_defects ADD COLUMN IF NOT EXISTS jira_key VARCHAR(50)`);
         await query(`ALTER TABLE qa_defects ADD COLUMN IF NOT EXISTS jira_url TEXT`);
+
+        // Crear tablas de configuración Jira (proyecto + usuario por proyecto)
+        await query(`
+            CREATE TABLE IF NOT EXISTS qa_jira_configs (
+                project_id INTEGER PRIMARY KEY REFERENCES qa_projects(id) ON DELETE CASCADE,
+                jira_domain VARCHAR(255) NOT NULL,
+                jira_project_key VARCHAR(50) NOT NULL,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+        await query(`
+            CREATE TABLE IF NOT EXISTS qa_jira_user_configs (
+                id SERIAL PRIMARY KEY,
+                project_id INTEGER NOT NULL REFERENCES qa_projects(id) ON DELETE CASCADE,
+                user_id INTEGER NOT NULL REFERENCES qa_users(id) ON DELETE CASCADE,
+                jira_user_email VARCHAR(255) NOT NULL,
+                encrypted_token TEXT NOT NULL,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(project_id, user_id)
+            )
+        `);
+
         await query(`ALTER TABLE qa_jira_configs ADD COLUMN IF NOT EXISTS jira_project_key TEXT`);
         await query(`ALTER TABLE qa_defects ADD COLUMN IF NOT EXISTS jira_epic_key TEXT`);
         await query(`ALTER TABLE qa_test_cases ADD COLUMN IF NOT EXISTS jira_epic_key TEXT`);
@@ -78,6 +100,9 @@ const ExcelJS = require('exceljs');
         await query(`ALTER TABLE qa_user_permissions ADD COLUMN IF NOT EXISTS can_manage_users INTEGER DEFAULT 0`);
         await query(`ALTER TABLE qa_user_permissions ADD COLUMN IF NOT EXISTS can_configure_jira INTEGER DEFAULT 0`);
 
+        // Campo perfil para clasificación simple de usuarios (admin / user)
+        await query(`ALTER TABLE qa_users ADD COLUMN IF NOT EXISTS perfil VARCHAR(20) DEFAULT 'user'`);
+
         // ── Índices de Performance (PostgreSQL estándar — seguros con IF NOT EXISTS) ──
         await query(`CREATE INDEX IF NOT EXISTS idx_tc_suite_id       ON qa_test_cases (suite_id)`);
         await query(`CREATE INDEX IF NOT EXISTS idx_tc_us_id          ON qa_test_cases (us_id)`);
@@ -100,6 +125,26 @@ const ExcelJS = require('exceljs');
         await query(`CREATE INDEX IF NOT EXISTS idx_runs_status       ON qa_test_runs (id, status)`);
         await query(`CREATE INDEX IF NOT EXISTS idx_tc_prec_tc_id     ON qa_tc_preconditions (tc_id)`);
         await query(`CREATE INDEX IF NOT EXISTS idx_tc_prec_prc_id    ON qa_tc_preconditions (prc_id)`);
+
+        // ── Seed del usuario admin por defecto ──
+        const bcrypt = require('bcryptjs');
+        const adminExists = await query(`SELECT id, perfil FROM qa_users WHERE email = ?`, ['erich@qa.local']);
+        if (adminExists.rows.length === 0) {
+            const adminHash = bcrypt.hashSync('admin123', 10);
+            const adminRes = await query(
+                `INSERT INTO qa_users (email, password_hash, name, role, perfil) VALUES (?, ?, ?, ?, ?)`,
+                ['erich@qa.local', adminHash, 'Erich Petrocelli', 'Admin', 'admin']
+            );
+            const adminId = adminRes.lastID;
+            await query(
+                `INSERT INTO qa_user_permissions (user_id, can_create_cu, can_create_hu, can_create_suite, can_create_test, can_assign_cu, can_assign_hu, can_assign_suite, can_execute_test, can_manage_projects, can_manage_users, can_configure_jira) VALUES (?, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)`,
+                [adminId]
+            );
+            console.log('✅ Usuario admin Erich Petrocelli (erich@qa.local / admin123) creado.');
+        } else if (!adminExists.rows[0].perfil || adminExists.rows[0].perfil !== 'admin') {
+            await query(`UPDATE qa_users SET role = 'Admin', perfil = 'admin' WHERE email = ?`, ['erich@qa.local']);
+            console.log('✅ Perfil de Erich Petrocelli actualizado a admin.');
+        }
 
         console.log("✅ Esquema de base de datos verificado y actualizado.");
     } catch (e) {
@@ -166,9 +211,9 @@ app.post('/api/auth/login', async (req, res) => {
         if (!user || !bcrypt.compareSync(password, user.password_hash)) {
             return res.status(401).json({ error: 'Credenciales inválidas' });
         }
-        const token = jwt.sign({ id: user.id, role: user.role, name: user.name, email: user.email }, JWT_SECRET, { expiresIn: '24h' });
+        const token = jwt.sign({ id: user.id, role: user.role, name: user.name, email: user.email, perfil: user.perfil || 'user' }, JWT_SECRET, { expiresIn: '24h' });
         res.cookie('token', token, { httpOnly: true });
-        res.json({ ok: true, user: { id: user.id, name: user.name, role: user.role } });
+        res.json({ ok: true, user: { id: user.id, name: user.name, role: user.role, perfil: user.perfil || 'user' } });
     } catch(err) {
         res.status(500).json({ error: err.message });
     }
@@ -191,7 +236,7 @@ app.post('/api/auth/logout', (req, res) => {
 app.get('/api/users', requireAuth, async (req, res) => {
     try {
         const users = await query(`
-            SELECT u.id, u.email, u.name, u.role, p.can_create_cu, p.can_create_hu, p.can_create_suite, p.can_create_test, p.can_assign_cu, p.can_assign_hu, p.can_assign_suite, p.can_execute_test, p.can_manage_projects, p.can_manage_users, p.can_configure_jira
+            SELECT u.id, u.email, u.name, u.role, u.perfil, p.can_create_cu, p.can_create_hu, p.can_create_suite, p.can_create_test, p.can_assign_cu, p.can_assign_hu, p.can_assign_suite, p.can_execute_test, p.can_manage_projects, p.can_manage_users, p.can_configure_jira
             FROM qa_users u 
             LEFT JOIN qa_user_permissions p ON u.id = p.user_id
         `);
@@ -211,9 +256,9 @@ app.get('/api/users', requireAuth, async (req, res) => {
 
 app.post('/api/users', requireAuth, requireAdmin, async (req, res) => {
     try {
-        const { email, password, name, role, permissions, projects } = req.body;
+        const { email, password, name, role, perfil, permissions, projects } = req.body;
         const hash = bcrypt.hashSync(password, 10);
-        const result = await query(`INSERT INTO qa_users (email, password_hash, name, role) VALUES (?, ?, ?, ?)`, [email, hash, name, role]);
+        const result = await query(`INSERT INTO qa_users (email, password_hash, name, role, perfil) VALUES (?, ?, ?, ?, ?)`, [email, hash, name, role, perfil || 'user']);
         const userId = result.lastID;
         
         await query(`INSERT INTO qa_user_permissions (user_id, can_create_cu, can_create_hu, can_create_suite, can_create_test, can_assign_cu, can_assign_hu, can_assign_suite, can_execute_test, can_manage_projects, can_manage_users, can_configure_jira) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -233,16 +278,16 @@ app.post('/api/users', requireAuth, requireAdmin, async (req, res) => {
 
 app.put('/api/users/:id', requireAuth, requireAdmin, async (req, res) => {
     try {
-        const { email, password, name, role, permissions, projects } = req.body;
+        const { email, password, name, role, perfil, permissions, projects } = req.body;
         const userId = req.params.id;
         
-        let updateQuery = `UPDATE qa_users SET email = ?, name = ?, role = ? WHERE id = ?`;
-        let updateParams = [email, name, role, userId];
+        let updateQuery = `UPDATE qa_users SET email = ?, name = ?, role = ?, perfil = ? WHERE id = ?`;
+        let updateParams = [email, name, role, perfil || 'user', userId];
         
         if (password) {
             const hash = bcrypt.hashSync(password, 10);
-            updateQuery = `UPDATE qa_users SET email = ?, name = ?, role = ?, password_hash = ? WHERE id = ?`;
-            updateParams = [email, name, role, hash, userId];
+            updateQuery = `UPDATE qa_users SET email = ?, name = ?, role = ?, perfil = ?, password_hash = ? WHERE id = ?`;
+            updateParams = [email, name, role, perfil || 'user', hash, userId];
         }
         
         await query(updateQuery, updateParams);
@@ -430,13 +475,21 @@ app.post('/api/projects/:id/jira-user-config', requireAuth, async (req, res) => 
         const userId = req.user.id;
         const { jira_user_email, jira_api_token } = req.body;
 
-        if (!jira_user_email || !jira_api_token) {
-            return res.status(400).json({ error: 'Faltan campos requeridos' });
+        if (!jira_user_email) {
+            return res.status(400).json({ error: 'El email de Jira es obligatorio' });
         }
 
-        const encToken = encrypt(jira_api_token);
+        const existing = await query(`SELECT id, encrypted_token FROM qa_jira_user_configs WHERE project_id = ? AND user_id = ?`, [projectId, userId]);
 
-        const existing = await query(`SELECT id FROM qa_jira_user_configs WHERE project_id = ? AND user_id = ?`, [projectId, userId]);
+        let encToken;
+        if (jira_api_token) {
+            encToken = encrypt(jira_api_token);
+        } else if (existing.rows.length > 0) {
+            encToken = existing.rows[0].encrypted_token;
+        } else {
+            return res.status(400).json({ error: 'El API Token es obligatorio para una nueva configuración' });
+        }
+
         if (existing.rows.length > 0) {
             await query(`
                 UPDATE qa_jira_user_configs 

@@ -962,8 +962,14 @@ getStartRunWizardContent({ suite, suites, cuTitle }) {
         content.querySelector('#btn-config-user-jira')?.addEventListener('click', async () => {
             close();
             const { config } = options;
-            const { hasConfig, email } = await ApiService.getJiraUserConfig(Store.state.activeProjectId);
-            Modals.render('jira-user-config', { config, hasConfig, savedEmail: email });
+            UI.showLoading();
+            try {
+                const { hasConfig, email } = await ApiService.getJiraUserConfig(Store.state.activeProjectId);
+                Modals.render('jira-user-config', { config, hasConfig, savedEmail: email });
+            } catch (err) {
+                UI.toast(err.message || 'Error al cargar tu configuración de Jira', 'error');
+            }
+            UI.hideLoading();
         });
 
         content.querySelector('#save-jira').addEventListener('click', async () => {
@@ -992,12 +998,13 @@ getStartRunWizardContent({ suite, suites, cuTitle }) {
     },
 
     getJiraUserConfigContent(options) {
-        const { hasConfig, savedEmail } = options;
+        const { hasConfig, savedEmail, config } = options;
         return `
             <div style="text-align: center; margin-bottom: 24px;">
                 <div style="font-size: 2.5rem; margin-bottom: 12px;">🔑</div>
-                <h2 style="font-size: 1.5rem; font-weight: 800; color: var(--text-main);">Tu Token de Jira</h2>
-                <p style="color: var(--text-muted); font-size: 0.9rem;">Configura tu email y token para conectar con Jira.</p>
+                <h2 style="font-size: 1.5rem; font-weight: 800; color: var(--text-main);">${hasConfig ? 'Actualizar mi Token' : 'Tu Token de Jira'}</h2>
+                <p style="color: var(--text-muted); font-size: 0.9rem;">${hasConfig ? 'Modifica tu email y token de Jira.' : 'Configura tu email y token para conectar con Jira.'}</p>
+                ${hasConfig ? `<p style="color: var(--ok); font-size: 0.75rem; font-weight: 600;">✓ Ya tienes un token configurado para este proyecto</p>` : ''}
             </div>
             <div style="display: flex; flex-direction: column; gap: 20px;">
                 <div class="field-group">
@@ -1006,17 +1013,19 @@ getStartRunWizardContent({ suite, suites, cuTitle }) {
                 </div>
                 <div class="field-group">
                     <label class="field-label">Jira API Token</label>
-                    <input type="password" id="jira-api-token" placeholder="Ingresa tu API Token de Jira" style="width: 100%; padding: 12px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 12px; color: var(--text-main);">
+                    <input type="password" id="jira-api-token" placeholder="${hasConfig ? 'Dejar vacío para conservar el actual' : 'Ingresa tu API Token de Jira'}" style="width: 100%; padding: 12px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 12px; color: var(--text-main);">
                     <p style="font-size: 0.65rem; color: var(--text-muted); margin-top: 4px;">
                         Genera tu token en: <a href="https://id.atlassian.com/manage-profile/security/api-tokens" target="_blank" style="color: var(--brand);">Atlassian Account → API Tokens</a>
                     </p>
                 </div>
                 <div style="display: flex; gap: 8px;">
                     <button class="btn btn-ghost" id="btn-test-jira" style="flex: 1; padding: 12px; font-size: 0.8rem;">🧪 Probar Conexión</button>
+                    ${hasConfig ? `<button class="btn btn-ghost" id="btn-volver-jira-config" style="flex: 1; padding: 12px; font-size: 0.8rem;">← Volver</button>` : ''}
                 </div>
                 <div style="display: flex; gap: 12px;">
                     <button class="btn btn-ghost" id="cancel-jira-user" style="flex: 1; padding: 14px;">Cancelar</button>
-                    <button class="btn btn-primary" id="save-jira-user" style="flex: 2; padding: 14px;">Guardar</button>
+                    ${hasConfig ? `<button class="btn btn-ghost" id="btn-delete-jira-user" style="flex: 1; padding: 14px; color: var(--error);">🗑 Eliminar</button>` : ''}
+                    <button class="btn btn-primary" id="save-jira-user" style="flex: 2; padding: 14px;">${hasConfig ? 'Actualizar' : 'Guardar'}</button>
                 </div>
             </div>
         `;
@@ -1042,36 +1051,67 @@ getStartRunWizardContent({ suite, suites, cuTitle }) {
             try {
                 await ApiService.saveJiraUserConfig(Store.state.activeProjectId, { jira_user_email: email, jira_api_token: token });
                 const { config } = options;
-                await fetch(`${window.location.origin}/api/jira/projects/${Store.state.activeProjectId}/context?force_test=1`, {
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-                }).then(async res => {
-                    if (!res.ok) {
-                        const err = await res.json();
-                        throw new Error(err.error || 'Token inválido');
-                    }
-                    UI.toast('✅ Conexión exitosa con Jira');
-                });
+                const res = await fetch(`/api/jira/projects/${Store.state.activeProjectId}/context?force_test=1`);
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.error || 'Token inválido');
+                }
+                UI.toast('✅ Conexión exitosa con Jira');
             } catch (err) {
                 UI.toast(`❌ ${err.message}`, 'error');
             }
             UI.hideLoading();
         });
 
-        content.querySelector('#save-jira-user').addEventListener('click', async () => {
-            const data = {
-                jira_user_email: content.querySelector('#jira-user-email').value.trim(),
-                jira_api_token: content.querySelector('#jira-api-token').value.trim()
-            };
+        content.querySelector('#btn-volver-jira-config')?.addEventListener('click', async () => {
+            close();
+            const { config } = options;
+            UI.showLoading();
+            try {
+                const { userHasToken } = await ApiService.getJiraConfig(Store.state.activeProjectId);
+                Modals.render('jira-config', { config: config || {}, userHasToken: !!userHasToken });
+            } catch (err) {
+                UI.toast(err.message || 'Error al volver a configuración', 'error');
+            }
+            UI.hideLoading();
+        });
 
-            if (!data.jira_user_email || !data.jira_api_token) {
-                UI.toast('Email y token son obligatorios', 'error');
+        content.querySelector('#btn-delete-jira-user')?.addEventListener('click', async () => {
+            if (!confirm('¿Eliminar tu token de Jira para este proyecto? Esta acción no se puede deshacer.')) return;
+            UI.showLoading();
+            try {
+                await ApiService.deleteJiraUserConfig(Store.state.activeProjectId);
+                UI.toast('✅ Token eliminado correctamente');
+                close();
+            } catch (err) {
+                UI.toast(err.message, 'error');
+            }
+            UI.hideLoading();
+        });
+
+        content.querySelector('#save-jira-user').addEventListener('click', async () => {
+            const email = content.querySelector('#jira-user-email').value.trim();
+            const token = content.querySelector('#jira-api-token').value.trim();
+
+            if (!email) {
+                UI.toast('Email es obligatorio', 'error');
                 return;
             }
+
+            if (!token && !options.hasConfig) {
+                UI.toast('API Token es obligatorio', 'error');
+                return;
+            }
+
+            const data = {
+                jira_user_email: email,
+                jira_api_token: token
+            };
 
             UI.showLoading();
             try {
                 await ApiService.saveJiraUserConfig(Store.state.activeProjectId, data);
-                UI.toast('✅ Token guardado correctamente');
+                UI.toast(options.hasConfig ? '✅ Token actualizado correctamente' : '✅ Token guardado correctamente');
                 close();
             } catch (err) {
                 UI.toast(err.message, 'error');
@@ -1109,6 +1149,14 @@ getStartRunWizardContent({ suite, suites, cuTitle }) {
                         </select>
                     </div>
                     <div class="field-group">
+                        <label class="field-label">Perfil</label>
+                        <select id="nu-perfil">
+                            <option value="user" ${user.perfil === 'user' || !user.perfil ? 'selected' : ''}>User</option>
+                            <option value="admin" ${user.perfil === 'admin' ? 'selected' : ''}>Admin</option>
+                        </select>
+                        <p style="font-size: 0.6rem; color: var(--text-muted); margin-top: 4px;">Admin puede gestionar el equipo y ver todos los permisos.</p>
+                    </div>
+                    <div class="field-group">
                         <label class="field-label">Contraseña ${isEditing ? '<span style="font-size: 0.6rem; opacity: 0.6;">(Opcional)</span>' : ''}</label>
                         <input type="password" id="nu-pass" placeholder="••••••••">
                     </div>
@@ -1118,44 +1166,68 @@ getStartRunWizardContent({ suite, suites, cuTitle }) {
                     <span class="field-label" style="display: block; margin-bottom: 12px; color: var(--brand); font-weight: 800; font-size: 0.7rem; text-transform: uppercase;">Permisos Granulares</span>
                     <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; background: rgba(255,255,255,0.02); padding: 16px; border-radius: 12px; border: 1px solid var(--border);">
                         <div>
-                            <label style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; font-size: 0.8rem; cursor: pointer;">
+                            <span style="display:block; font-size:0.6rem; color:var(--text-muted); text-transform:uppercase; margin-bottom:8px; letter-spacing:0.5px;">Crear</span>
+                            <label class="toggle-row" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; font-size: 0.8rem; cursor: pointer;">
                                 <span>Casos de Uso</span>
-                                <input type="checkbox" id="nu-p-cu" ${user.permissions?.can_create_cu ? 'checked' : ''}>
+                                <span class="toggle-switch"><input type="checkbox" id="nu-p-cu" ${user.can_create_cu ? 'checked' : ''}><span class="toggle-slider"></span></span>
                             </label>
-                            <label style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; font-size: 0.8rem; cursor: pointer;">
+                            <label class="toggle-row" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; font-size: 0.8rem; cursor: pointer;">
                                 <span>Historias de Usuario</span>
-                                <input type="checkbox" id="nu-p-hu" ${user.permissions?.can_create_hu ? 'checked' : ''}>
+                                <span class="toggle-switch"><input type="checkbox" id="nu-p-hu" ${user.can_create_hu ? 'checked' : ''}><span class="toggle-slider"></span></span>
                             </label>
-                        </div>
-                        <div>
-                            <label style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; font-size: 0.8rem; cursor: pointer;">
+                            <label class="toggle-row" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; font-size: 0.8rem; cursor: pointer;">
                                 <span>Test Suites</span>
-                                <input type="checkbox" id="nu-p-suite" ${user.permissions?.can_create_suite ? 'checked' : ''}>
+                                <span class="toggle-switch"><input type="checkbox" id="nu-p-suite" ${user.can_create_suite ? 'checked' : ''}><span class="toggle-slider"></span></span>
                             </label>
-                            <label style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; font-size: 0.8rem; cursor: pointer;">
+                            <label class="toggle-row" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; font-size: 0.8rem; cursor: pointer;">
                                 <span>Test Cases</span>
-                                <input type="checkbox" id="nu-p-test" ${user.permissions?.can_create_test ? 'checked' : ''}>
+                                <span class="toggle-switch"><input type="checkbox" id="nu-p-test" ${user.can_create_test ? 'checked' : ''}><span class="toggle-slider"></span></span>
                             </label>
                         </div>
                         <div>
-                            <label style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; font-size: 0.8rem; cursor: pointer;">
+                            <span style="display:block; font-size:0.6rem; color:var(--text-muted); text-transform:uppercase; margin-bottom:8px; letter-spacing:0.5px;">Asignar</span>
+                            <label class="toggle-row" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; font-size: 0.8rem; cursor: pointer;">
+                                <span>Casos de Uso</span>
+                                <span class="toggle-switch"><input type="checkbox" id="nu-p-assign-cu" ${user.can_assign_cu ? 'checked' : ''}><span class="toggle-slider"></span></span>
+                            </label>
+                            <label class="toggle-row" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; font-size: 0.8rem; cursor: pointer;">
+                                <span>Historias de Usuario</span>
+                                <span class="toggle-switch"><input type="checkbox" id="nu-p-assign-hu" ${user.can_assign_hu ? 'checked' : ''}><span class="toggle-slider"></span></span>
+                            </label>
+                            <label class="toggle-row" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; font-size: 0.8rem; cursor: pointer;">
+                                <span>Test Suites</span>
+                                <span class="toggle-switch"><input type="checkbox" id="nu-p-assign-suite" ${user.can_assign_suite ? 'checked' : ''}><span class="toggle-slider"></span></span>
+                            </label>
+                        </div>
+                        <div>
+                            <span style="display:block; font-size:0.6rem; color:var(--text-muted); text-transform:uppercase; margin-bottom:8px; letter-spacing:0.5px;">Gestión</span>
+                            <label class="toggle-row" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; font-size: 0.8rem; cursor: pointer;">
                                 <span>Ejecutar Pruebas</span>
-                                <input type="checkbox" id="nu-p-exec" ${user.permissions?.can_execute_test ? 'checked' : ''}>
+                                <span class="toggle-switch"><input type="checkbox" id="nu-p-exec" ${user.can_execute_test ? 'checked' : ''}><span class="toggle-slider"></span></span>
                             </label>
-                            <label style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; font-size: 0.8rem; cursor: pointer;">
+                            <label class="toggle-row" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; font-size: 0.8rem; cursor: pointer;">
                                 <span>Gestionar Proyectos</span>
-                                <input type="checkbox" id="nu-p-manage-proj" ${user.permissions?.can_manage_projects ? 'checked' : ''}>
+                                <span class="toggle-switch"><input type="checkbox" id="nu-p-manage-proj" ${user.can_manage_projects ? 'checked' : ''}><span class="toggle-slider"></span></span>
                             </label>
-                            <label style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; font-size: 0.8rem; cursor: pointer;">
+                            <label class="toggle-row" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; font-size: 0.8rem; cursor: pointer;">
                                 <span>Gestionar Usuarios</span>
-                                <input type="checkbox" id="nu-p-manage-users" ${user.permissions?.can_manage_users ? 'checked' : ''}>
+                                <span class="toggle-switch"><input type="checkbox" id="nu-p-manage-users" ${user.can_manage_users ? 'checked' : ''}><span class="toggle-slider"></span></span>
                             </label>
-                            <label style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; font-size: 0.8rem; cursor: pointer;">
+                            <label class="toggle-row" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; font-size: 0.8rem; cursor: pointer;">
                                 <span>Configurar Jira</span>
-                                <input type="checkbox" id="nu-p-config-jira" ${user.permissions?.can_configure_jira ? 'checked' : ''}>
+                                <span class="toggle-switch"><input type="checkbox" id="nu-p-config-jira" ${user.can_configure_jira ? 'checked' : ''}><span class="toggle-slider"></span></span>
                             </label>
                         </div>
                     </div>
+                    <style>
+                        .toggle-switch { position: relative; display: inline-block; width: 42px; height: 24px; flex-shrink: 0; }
+                        .toggle-switch input { display: none; }
+                        .toggle-slider { position: absolute; inset: 0; background: var(--bg-input); border: 1px solid var(--border); border-radius: 24px; cursor: pointer; transition: 0.25s ease; }
+                        .toggle-slider::before { content: ''; position: absolute; height: 18px; width: 18px; left: 2px; bottom: 2px; background: #6b7280; border-radius: 50%; transition: 0.25s ease; }
+                        .toggle-switch input:checked + .toggle-slider { background: var(--brand); border-color: var(--brand); }
+                        .toggle-switch input:checked + .toggle-slider::before { transform: translateX(18px); background: #fff; }
+                        .toggle-row:hover .toggle-slider { border-color: var(--brand); }
+                    </style>
                 </div>
 
                 <div style="margin-bottom: 24px;">
@@ -1194,12 +1266,16 @@ getStartRunWizardContent({ suite, suites, cuTitle }) {
                 name: overlay.querySelector('#nu-name').value.trim(),
                 email: overlay.querySelector('#nu-email').value.trim(),
                 role: overlay.querySelector('#nu-role').value,
+                perfil: overlay.querySelector('#nu-perfil').value,
                 projects,
                 permissions: {
                     can_create_cu: overlay.querySelector('#nu-p-cu').checked,
                     can_create_hu: overlay.querySelector('#nu-p-hu').checked,
                     can_create_suite: overlay.querySelector('#nu-p-suite').checked,
                     can_create_test: overlay.querySelector('#nu-p-test').checked,
+                    can_assign_cu: overlay.querySelector('#nu-p-assign-cu').checked,
+                    can_assign_hu: overlay.querySelector('#nu-p-assign-hu').checked,
+                    can_assign_suite: overlay.querySelector('#nu-p-assign-suite').checked,
                     can_execute_test: overlay.querySelector('#nu-p-exec').checked,
                     can_manage_projects: overlay.querySelector('#nu-p-manage-proj').checked,
                     can_manage_users: overlay.querySelector('#nu-p-manage-users').checked,
