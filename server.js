@@ -8,7 +8,7 @@ const multer = require('multer');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const cookieParser = require('cookie-parser');
-const { query, pool } = require('./db');
+const { query, pool, getClient } = require('./db');
 const { encrypt, decrypt } = require('./utils/crypto-utils');
 const http = require('http');
 const WebSocket = require('ws');
@@ -316,12 +316,28 @@ app.use('/api', requireAuth);
 // ── HELPERS DE SECUENCIAS Y PROYECTOS (ISTQB) ──
 // ══════════════════════════════════════════════════════════════
 
-const generateKey = async (projectId, prefix) => {
-    await query(`INSERT INTO qa_project_sequences (project_id, prefix, last_number) VALUES (?, ?, 0) ON CONFLICT (project_id, prefix) DO NOTHING`, [projectId, prefix]);
-    await query(`UPDATE qa_project_sequences SET last_number = last_number + 1 WHERE project_id = ? AND prefix = ?`, [projectId, prefix]);
-    const res = await query(`SELECT last_number FROM qa_project_sequences WHERE project_id = ? AND prefix = ?`, [projectId, prefix]);
+const generateKey = async (projectId, prefix, queryFn) => {
+    const q = queryFn || query;
+    const res = await q(
+        `INSERT INTO qa_project_sequences (project_id, prefix, last_number) VALUES (?, ?, 1)
+         ON CONFLICT (project_id, prefix) DO UPDATE SET last_number = qa_project_sequences.last_number + 1
+         RETURNING last_number`,
+        [projectId, prefix]
+    );
     const num = res.rows[0].last_number;
     return `${prefix}-${num.toString().padStart(4, '0')}`;
+};
+
+const generateKeyBatch = async (projectId, prefix, count, queryFn) => {
+    const q = queryFn || query;
+    const res = await q(
+        `INSERT INTO qa_project_sequences (project_id, prefix, last_number) VALUES (?, ?, ?)
+         ON CONFLICT (project_id, prefix) DO UPDATE SET last_number = qa_project_sequences.last_number + ?
+         RETURNING last_number`,
+        [projectId, prefix, count, count]
+    );
+    const endNum = res.rows[0].last_number;
+    return endNum - count + 1;
 };
 
 const getProjectIdFromUC = async (ucId) => {
@@ -1661,73 +1677,91 @@ async function processFlatImport(req, res, data, headers, ucId, projectId, norma
     let totalImported = 0;
     let usCount = 0;
 
-    for (const usTitle in groups) {
-        const rows = groups[usTitle];
-        const firstRow = rows[0];
+    const client = await getClient();
+    const q = client.query;
+    try {
+        await q('BEGIN');
+        for (const usTitle in groups) {
+            const rows = groups[usTitle];
+            const firstRow = rows[0];
 
-        const getVal = (row, idx) => idx !== -1 && row[idx] !== undefined ? sanitizeInput(row[idx]) : '';
+            const getVal = (row, idx) => idx !== -1 && row[idx] !== undefined ? sanitizeInput(row[idx]) : '';
 
-        // Crear Suite para esta HU
-        const suiteKey = await generateKey(projectId, 'ST');
-        const suiteRes = await query(`
-            INSERT INTO qa_test_suites (use_case_id, title, description, key_id, created_by)
-            VALUES (?, ?, ?, ?, ?)
-            RETURNING id
-        `, [ucId, `Suite: ${usTitle}`, `Importación automática ${suiteKey}`, suiteKey, req.user.id]);
-        const suiteId = suiteRes.rows[0].id;
+            // Crear Suite para esta HU
+            const suiteKey = await generateKey(projectId, 'ST', q);
+            const suiteRes = await q(`
+                INSERT INTO qa_test_suites (use_case_id, title, description, key_id, created_by)
+                VALUES (?, ?, ?, ?, ?)
+                RETURNING id
+            `, [ucId, `Suite: ${usTitle}`, `Importación automática ${suiteKey}`, suiteKey, req.user.id]);
+            const suiteId = suiteRes.rows[0].id;
 
-        // Crear HU
-        const usKey = await generateKey(projectId, 'US');
-        const usDesc = getVal(firstRow, colMap.data) || '';
-        const usBR = '';
-        const usPre = getVal(firstRow, colMap.pre) || '';
+            // Crear HU
+            const usKey = await generateKey(projectId, 'US', q);
+            const usDesc = getVal(firstRow, colMap.data) || '';
+            const usBR = '';
+            const usPre = getVal(firstRow, colMap.pre) || '';
 
-        const usRes = await query(`
-            INSERT INTO qa_user_stories (use_case_id, project_id, key_id, title, hu_detallada, reglas_negocio, precondiciones, created_by)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT (key_id) DO UPDATE SET title = EXCLUDED.title
-            RETURNING id
-        `, [ucId, projectId, usKey, usTitle, usDesc, usBR, usPre, req.user.id]);
-        const usId = usRes.rows[0].id;
-        usCount++;
+            const usRes = await q(`
+                INSERT INTO qa_user_stories (use_case_id, project_id, key_id, title, hu_detallada, reglas_negocio, precondiciones, created_by)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT (key_id) DO UPDATE SET title = EXCLUDED.title
+                RETURNING id
+            `, [ucId, projectId, usKey, usTitle, usDesc, usBR, usPre, req.user.id]);
+            const usId = usRes.rows[0].id;
+            usCount++;
 
-        let escenariosText = [];
-        for (const row of rows) {
-            const title = getVal(row, colMap.title);
-            if (!title) continue;
+            let escenariosText = [];
+            const validRows = rows.filter(row => getVal(row, colMap.title));
+            let tcKeyStart = null;
+            if (validRows.length > 0) {
+                tcKeyStart = await generateKeyBatch(projectId, 'TC', validRows.length, q);
+            }
+            let tcIdx = 0;
+            for (const row of rows) {
+                const title = getVal(row, colMap.title);
+                if (!title) continue;
 
-            const steps = getVal(row, colMap.steps);
-            const pre = getVal(row, colMap.pre);
-            const expected = getVal(row, colMap.expected);
-            const assumptions = getVal(row, colMap.assumptions);
-            const testData = getVal(row, colMap.data);
-            const criteria = getVal(row, colMap.criteria);
+                const steps = getVal(row, colMap.steps);
+                const pre = getVal(row, colMap.pre);
+                const expected = getVal(row, colMap.expected);
+                const assumptions = getVal(row, colMap.assumptions);
+                const testData = getVal(row, colMap.data);
+                const criteria = getVal(row, colMap.criteria);
 
-            const scenarioRes = await query(
-                `INSERT INTO qa_scenarios (us_id, title, order_index) VALUES (?, ?, ?) RETURNING id`,
-                [usId, title, totalImported]
-            );
-            const scenarioId = scenarioRes.rows[0].id;
-            escenariosText.push(title);
+                const scenarioRes = await q(
+                    `INSERT INTO qa_scenarios (us_id, title, order_index) VALUES (?, ?, ?) RETURNING id`,
+                    [usId, title, totalImported]
+                );
+                const scenarioId = scenarioRes.rows[0].id;
 
-            const tcKey = await generateKey(projectId, 'TC');
-            await query(`
-                INSERT INTO qa_test_cases (suite_id, us_id, scenario_id, key_id, title, steps, preconditions, expected_result, assumptions, test_data, acceptance_criteria, created_by)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            `, [suiteId, usId, scenarioId, tcKey, title, steps, pre, expected, assumptions, testData, criteria, req.user.id]);
+                const tcNum = tcKeyStart + tcIdx;
+                const tcKey = `TC-${tcNum.toString().padStart(4, '0')}`;
+                tcIdx++;
+                await q(`
+                    INSERT INTO qa_test_cases (suite_id, us_id, scenario_id, key_id, title, steps, preconditions, expected_result, assumptions, test_data, acceptance_criteria, created_by)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                `, [suiteId, usId, scenarioId, tcKey, title, steps, pre, expected, assumptions, testData, criteria, req.user.id]);
 
-            totalImported++;
+                totalImported++;
+            }
+
+            if (escenariosText.length > 0) {
+                await q(`UPDATE qa_user_stories SET escenarios_prueba = ? WHERE id = ?`, [escenariosText.join('\n'), usId]);
+            }
         }
 
-        if (escenariosText.length > 0) {
-            await query(`UPDATE qa_user_stories SET escenarios_prueba = ? WHERE id = ?`, [escenariosText.join('\n'), usId]);
-        }
+        await q('COMMIT');
+        client.release();
+        return res.json({
+            ok: true,
+            message: `Importación exitosa (formato unificado). ${usCount} historias de usuario y ${totalImported} tests importados.`
+        });
+    } catch (err) {
+        await q('ROLLBACK');
+        client.release();
+        throw err;
     }
-
-    return res.json({
-        ok: true,
-        message: `Importación exitosa (formato unificado). ${usCount} historias de usuario y ${totalImported} tests importados.`
-    });
 }
 
 async function processDualImport(req, res, workbook, isCSV, ucId, projectId, normalize, tryFindColIndex, sanitizeInput, generateKey, query) {
@@ -1836,71 +1870,93 @@ async function processDualImport(req, res, workbook, isCSV, ucId, projectId, nor
     let totalImported = 0;
     let usCount = 0;
 
-    for (const usTitle in groups) {
-        const rows = groups[usTitle];
-        const firstRow = rows[0];
+    const client = await getClient();
+    const q = client.query;
+    try {
+        await q('BEGIN');
+        for (const usTitle in groups) {
+            const rows = groups[usTitle];
+            const firstRow = rows[0];
 
-        const suiteKey = await generateKey(projectId, 'ST');
-        const suiteResNew = await query(`
-            INSERT INTO qa_test_suites (use_case_id, title, description, key_id, created_by)
-            VALUES (?, ?, ?, ?, ?)
-            RETURNING id
-        `, [ucId, `Suite: ${usTitle}`, `Importación automática ${suiteKey}`, suiteKey, req.user.id]);
-        const suiteId = suiteResNew.rows[0].id;
+            const suiteKey = await generateKey(projectId, 'ST', q);
+            const suiteResNew = await q(`
+                INSERT INTO qa_test_suites (use_case_id, title, description, key_id, created_by)
+                VALUES (?, ?, ?, ?, ?)
+                RETURNING id
+            `, [ucId, `Suite: ${usTitle}`, `Importación automática ${suiteKey}`, suiteKey, req.user.id]);
+            const suiteId = suiteResNew.rows[0].id;
 
-        const usKey = await generateKey(projectId, 'US');
-        const usDesc = sanitizeInput(firstRow[tcColMap.us_desc]) || '';
-        const usBR = sanitizeInput(firstRow[tcColMap.us_br]) || '';
-        const usPre = sanitizeInput(firstRow[tcColMap.us_pre]) || '';
+            const usKey = await generateKey(projectId, 'US', q);
+            const usDesc = sanitizeInput(firstRow[tcColMap.us_desc]) || '';
+            const usBR = sanitizeInput(firstRow[tcColMap.us_br]) || '';
+            const usPre = sanitizeInput(firstRow[tcColMap.us_pre]) || '';
 
-        const usRes = await query(`
-            INSERT INTO qa_user_stories (use_case_id, project_id, key_id, title, hu_detallada, reglas_negocio, precondiciones, created_by)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT (key_id) DO UPDATE SET title = EXCLUDED.title
-            RETURNING id
-        `, [ucId, projectId, usKey, usTitle, usDesc, usBR, usPre, req.user.id]);
-        const usId = usRes.rows[0].id;
-        usCount++;
+            const usRes = await q(`
+                INSERT INTO qa_user_stories (use_case_id, project_id, key_id, title, hu_detallada, reglas_negocio, precondiciones, created_by)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT (key_id) DO UPDATE SET title = EXCLUDED.title
+                RETURNING id
+            `, [ucId, projectId, usKey, usTitle, usDesc, usBR, usPre, req.user.id]);
+            const usId = usRes.rows[0].id;
+            usCount++;
 
-        let escenariosText = [];
-        for (const row of rows) {
-            const getVal = (idx) => idx !== -1 && row[idx] !== undefined ? sanitizeInput(row[idx]) : '';
+            let escenariosText = [];
+            const validRows = rows.filter(row => {
+                const getVal = (idx) => idx !== -1 && row[idx] !== undefined ? sanitizeInput(row[idx]) : '';
+                return getVal(tcColMap.title);
+            });
+            let tcKeyStart = null;
+            if (validRows.length > 0) {
+                tcKeyStart = await generateKeyBatch(projectId, 'TC', validRows.length, q);
+            }
+            let tcIdx = 0;
+            for (const row of rows) {
+                const getVal = (idx) => idx !== -1 && row[idx] !== undefined ? sanitizeInput(row[idx]) : '';
 
-            const title = getVal(tcColMap.title);
-            if (!title) continue;
+                const title = getVal(tcColMap.title);
+                if (!title) continue;
 
-            const steps = getVal(tcColMap.steps);
-            const pre = getVal(tcColMap.pre);
-            const expected = getVal(tcColMap.expected);
-            const assumptions = getVal(tcColMap.assumptions);
-            const testData = getVal(tcColMap.data);
-            const criteria = getVal(tcColMap.criteria);
+                const steps = getVal(tcColMap.steps);
+                const pre = getVal(tcColMap.pre);
+                const expected = getVal(tcColMap.expected);
+                const assumptions = getVal(tcColMap.assumptions);
+                const testData = getVal(tcColMap.data);
+                const criteria = getVal(tcColMap.criteria);
 
-            const scenarioRes = await query(
-                `INSERT INTO qa_scenarios (us_id, title, order_index) VALUES (?, ?, ?) RETURNING id`,
-                [usId, title, totalImported]
-            );
-            const scenarioId = scenarioRes.rows[0].id;
-            escenariosText.push(title);
+                const scenarioRes = await q(
+                    `INSERT INTO qa_scenarios (us_id, title, order_index) VALUES (?, ?, ?) RETURNING id`,
+                    [usId, title, totalImported]
+                );
+                const scenarioId = scenarioRes.rows[0].id;
+                escenariosText.push(title);
 
-            const tcKey = await generateKey(projectId, 'TC');
-            await query(`
-                INSERT INTO qa_test_cases (suite_id, us_id, scenario_id, key_id, title, steps, preconditions, expected_result, assumptions, test_data, acceptance_criteria, created_by)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            `, [suiteId, usId, scenarioId, tcKey, title, steps, pre, expected, assumptions, testData, criteria, req.user.id]);
+                const tcNum = tcKeyStart + tcIdx;
+                const tcKey = `TC-${tcNum.toString().padStart(4, '0')}`;
+                tcIdx++;
+                await q(`
+                    INSERT INTO qa_test_cases (suite_id, us_id, scenario_id, key_id, title, steps, preconditions, expected_result, assumptions, test_data, acceptance_criteria, created_by)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                `, [suiteId, usId, scenarioId, tcKey, title, steps, pre, expected, assumptions, testData, criteria, req.user.id]);
 
-            totalImported++;
+                totalImported++;
+            }
+
+            if (escenariosText.length > 0) {
+                await q(`UPDATE qa_user_stories SET escenarios_prueba = ? WHERE id = ?`, [escenariosText.join('\n'), usId]);
+            }
         }
 
-        if (escenariosText.length > 0) {
-            await query(`UPDATE qa_user_stories SET escenarios_prueba = ? WHERE id = ?`, [escenariosText.join('\n'), usId]);
-        }
+        await q('COMMIT');
+        client.release();
+        return res.json({
+            ok: true,
+            message: `Importación exitosa. Se creó la suite "${file.originalname}" con ${usCount} historias de usuario y ${totalImported} tests.`
+        });
+    } catch (err) {
+        await q('ROLLBACK');
+        client.release();
+        throw err;
     }
-
-    return res.json({
-        ok: true,
-        message: `Importación exitosa. Se creó la suite "${file.originalname}" con ${usCount} historias de usuario y ${totalImported} tests.`
-    });
 }
 // Exportar Matriz de Pruebas Completa (Todas las suites del CU) a Excel unificado
 app.get('/api/use-cases/:id/export-excel', requireAuth, async (req, res) => {
@@ -3152,7 +3208,19 @@ app.put('/api/defects/:id/assign', requireAuth, async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
-const { generateReport } = require('./report-generator');
+const { generateReport, generateMultiReport } = require('./report-generator');
+
+app.get('/api/reports/multi', requireAuth, async (req, res) => {
+    try {
+        const ids = (req.query.ids || '').split(',').map(Number).filter(n => n > 0);
+        if (ids.length < 2) return res.status(400).json({ error: 'Se requieren al menos 2 IDs de ejecución' });
+        const html = await generateMultiReport(ids);
+        res.setHeader('Content-Type', 'text/html');
+        res.send(html);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
 
 app.get('/api/reports/:runId', requireAuth, async (req, res) => {
     try {

@@ -1573,12 +1573,26 @@ getStartRunWizardContent({ suite, suites, cuTitle }) {
             const file = fileInput.files[0];
             if (!file) return;
 
-            UI.showLoading();
+            importBtn.disabled = true;
+            const originalContent = dialog.querySelector('.modal-content').innerHTML;
+            dialog.querySelector('.modal-content').innerHTML = `
+                <div style="text-align: center; padding: 40px 20px;">
+                    <div class="loader-spinner" style="width:48px; height:48px; border:4px solid var(--border); border-top-color:var(--brand); border-radius:50%; animation: spin 1s linear infinite; margin: 0 auto 20px;"></div>
+                    <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
+                    <h3 style="margin: 0 0 8px; font-size: 1.1rem; color: var(--text-main);">Importando...</h3>
+                    <p style="margin: 0 0 4px; font-size: 0.85rem; color: var(--text-muted);">Archivo: <strong>${file.name}</strong></p>
+                    <p style="margin: 0; font-size: 0.75rem; color: var(--text-muted);">Esto puede tomar unos segundos</p>
+                    <div style="margin-top: 24px; width: 100%; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden;">
+                        <div style="width: 30%; height: 100%; background: linear-gradient(90deg, var(--brand), #6366f1); border-radius: 2px; animation: progressPulse 1.5s ease-in-out infinite;"></div>
+                    </div>
+                    <style>@keyframes progressPulse { 0%, 100% { width: 10%; margin-left: 0; } 50% { width: 60%; margin-left: 40%; } }</style>
+                </div>
+            `;
+
             try {
                 const formData = new FormData();
                 formData.append('xlsx', file);
 
-                // Llamamos al nuevo endpoint que no requiere suiteId previo
                 const response = await fetch(`/api/use-cases/${options.useCaseId}/import-dual`, {
                     method: 'POST',
                     body: formData
@@ -1587,13 +1601,15 @@ getStartRunWizardContent({ suite, suites, cuTitle }) {
                 const res = await response.json();
                 if (!response.ok) throw new Error(res.error || 'Error en la importación');
 
-                UI.toast(res.message);
                 dialog.close();
+                dialog.remove();
+                UI.toast(res.message);
                 if (options.onSuccess) options.onSuccess();
             } catch (err) {
+                dialog.querySelector('.modal-content').innerHTML = originalContent;
+                importBtn.disabled = false;
                 UI.toast(err.message, 'error');
             }
-            UI.hideLoading();
         };
     }
 };

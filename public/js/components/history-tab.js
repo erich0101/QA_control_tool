@@ -9,6 +9,7 @@ export const HistoryTab = {
     runs: [],
     bugs: [],
     currentTab: 'runs', // 'runs' | 'bugs'
+    selectedRunIds: new Set(),
 
     async render(container) {
         const scrollPos = container.scrollTop;
@@ -40,6 +41,11 @@ export const HistoryTab = {
                         <span class="tab-toolbar-count">${this.currentTab === 'runs' ? this.runs.length + ' ciclos' : this.bugs.length + ' bugs'}</span>
                     </div>
                     <div class="tab-toolbar-right">
+                        ${this.currentTab === 'runs' && this.selectedRunIds.size >= 2 ? `
+                            <button class="btn btn-primary btn-sm" id="btn-consolidated-report">
+                                📊 Reporte Consolidado (${this.selectedRunIds.size})
+                            </button>
+                        ` : ''}
                         <button class="btn btn-ghost btn-sm" id="btn-refresh-history">🔄 Recargar</button>
                     </div>
                 </div>
@@ -64,10 +70,12 @@ export const HistoryTab = {
     },
 
     renderRunsView() {
+        const allSelected = this.runs.length > 0 && this.runs.every(r => this.selectedRunIds.has(r.id));
         return `
             <table class="tt-table">
                 <thead>
                     <tr>
+                        <th style="width: 30px"><input type="checkbox" id="select-all-runs" ${allSelected ? 'checked' : ''}></th>
                         <th style="width: 40px">ID</th>
                         <th>Test Suite</th>
                         <th>Fecha Inicio</th>
@@ -79,7 +87,7 @@ export const HistoryTab = {
                     </tr>
                 </thead>
                 <tbody>
-                    ${this.runs.length === 0 ? `<tr><td colspan="8" style="text-align: center; padding: 40px; color: var(--text-muted);">No hay ejecuciones finalizadas aún.</td></tr>` : ''}
+                    ${this.runs.length === 0 ? `<tr><td colspan="9" style="text-align: center; padding: 40px; color: var(--text-muted);">No hay ejecuciones finalizadas aún.</td></tr>` : ''}
                     ${this.runs.map(run => this.renderRunRow(run)).join('')}
                 </tbody>
             </table>
@@ -152,6 +160,7 @@ export const HistoryTab = {
 
         return `
             <tr>
+                <td style="text-align: center;"><input type="checkbox" class="run-checkbox" data-id="${run.id}" ${this.selectedRunIds.has(run.id) ? 'checked' : ''}></td>
                 <td style="opacity: 0.5;">#${run.id}</td>
                 <td>
                     <div style="font-weight: 600; color: var(--text-main);">${UI.escapeHTML(run.suite_title)}</div>
@@ -256,6 +265,39 @@ export const HistoryTab = {
                     UI.hideLoading();
                 });
             });
+
+            // Checkbox handlers para selección múltiple
+            container.querySelectorAll('.run-checkbox').forEach(cb => {
+                cb.addEventListener('change', () => {
+                    const id = parseInt(cb.dataset.id);
+                    if (cb.checked) {
+                        this.selectedRunIds.add(id);
+                    } else {
+                        this.selectedRunIds.delete(id);
+                    }
+                    this.render(container);
+                });
+            });
+
+            const selectAll = container.querySelector('#select-all-runs');
+            if (selectAll) {
+                selectAll.addEventListener('change', () => {
+                    if (selectAll.checked) {
+                        this.runs.forEach(r => this.selectedRunIds.add(r.id));
+                    } else {
+                        this.selectedRunIds.clear();
+                    }
+                    this.render(container);
+                });
+            }
+
+            const consolidatedBtn = container.querySelector('#btn-consolidated-report');
+            if (consolidatedBtn) {
+                consolidatedBtn.addEventListener('click', () => {
+                    const ids = [...this.selectedRunIds].join(',');
+                    window.open(`/api/reports/multi?ids=${ids}`, '_blank');
+                });
+            }
         } else {
             // Eventos de la pestaña de BUGS
             container.querySelectorAll('.btn-view-bug-details').forEach(btn => {

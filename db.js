@@ -99,5 +99,46 @@ const query = async (sql, params = []) => {
 
 module.exports = {
     query,
-    pool
+    pool,
+    getClient: async () => {
+        const client = await pool.connect();
+        return {
+            query: async (sql, params = []) => {
+                let count = 0;
+                const pgSql = sql.replace(/\?/g, () => `$${++count}`);
+
+                let finalSql = pgSql;
+                const isInsert = pgSql.trim().toUpperCase().startsWith('INSERT');
+                if (isInsert && !pgSql.trim().toUpperCase().includes('RETURNING')) {
+                    const noIdTables = [
+                        'qa_user_permissions',
+                        'qa_project_users',
+                        'qa_use_case_users',
+                        'qa_suite_users',
+                        'qa_project_sequences',
+                        'qa_tc_preconditions'
+                    ];
+                    const tableMatch = pgSql.match(/INTO\s+([a-zA-Z0-9_]+)/i);
+                    const tableName = tableMatch ? tableMatch[1].toLowerCase() : '';
+                    if (!noIdTables.includes(tableName)) {
+                        finalSql += ' RETURNING id';
+                    }
+                }
+
+                try {
+                    const result = await client.query(finalSql, params);
+                    return {
+                        rows: result.rows,
+                        lastID: (isInsert && result.rows.length > 0) ? result.rows[0].id : null,
+                        changes: result.rowCount
+                    };
+                } catch (err) {
+                    console.error('Error en ejecución Postgres:', err.message);
+                    console.error('SQL Fallido:', finalSql);
+                    throw err;
+                }
+            },
+            release: () => client.release()
+        };
+    }
 };
