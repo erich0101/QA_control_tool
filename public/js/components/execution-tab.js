@@ -82,6 +82,7 @@ export const ExecutionTab = {
                         <option value="">— Seleccionar Caso de Uso —</option>
                         ${Store.state.useCases.map(cu => `<option value="${cu.id}" ${cu.id === this.selectedCUId ? 'selected' : ''}>${UI.escapeHTML(cu.title)}</option>`).join('')}
                     </select>
+                    <button id="btn-exec-cu" class="btn btn-primary btn-sm" title="Ejecutar todas las suites de este Caso de Uso">▶ Ejecutar CU</button>
                 </div>
                 <div class="exec-toolbar-right">
                     <input type="text" id="exec-search" placeholder="🔍 Buscar..." value="${UI.escapeHTML(this.searchQuery)}" class="exec-search-input" />
@@ -607,6 +608,31 @@ export const ExecutionTab = {
         window.addEventListener('paste', globalPasteHandler);
         if (this._lastPasteHandler) window.removeEventListener('paste', this._lastPasteHandler);
         this._lastPasteHandler = globalPasteHandler;
+
+        container.querySelector('#btn-exec-cu')?.addEventListener('click', () => {
+            const cuId = this.selectedCUId;
+            if (!cuId) return UI.toast('Selecciona un Caso de Uso en el filtro', 'warn');
+
+            Modals.render('confirm', {
+                title: 'Ejecutar Caso de Uso',
+                msg: '¿Iniciar la ejecución de todas las suites de este Caso de Uso? Se ejecutarán solo los tests de regresión asignados a ti.',
+                onConfirm: async () => {
+                    UI.showLoading();
+                    try {
+                        const res = await ApiService.startAllCU(cuId);
+                        if (res.ok) {
+                            UI.toast(`Caso de Uso iniciado: ${res.executedSuites} suites, ${res.totalTests} tests`);
+                            const resSuites = await ApiService.getTestSuites(null, Store.state.activeProjectId);
+                            this.projectSuites = resSuites.testSuites || [];
+                            this.render(container);
+                        }
+                    } catch (err) {
+                        UI.toast(err.message, 'error');
+                    }
+                    UI.hideLoading();
+                }
+            });
+        });
 
         container.querySelector('#cu-exec-filter')?.addEventListener('change', (e) => {
             this.selectedCUId = parseInt(e.target.value) || null;
