@@ -1,144 +1,125 @@
-const { Pool } = require('pg');
-const dns = require('dns');
 require('dotenv').config();
+const { createClient } = require('@supabase/supabase-js');
 
-let dbConfig = { ssl: { rejectUnauthorized: false } };
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-const rawUrl = process.env.DATABASE_URL;
-if (rawUrl) {
-    const parsed = new URL(rawUrl);
-    const hostname = parsed.hostname;
-    const isIp = /^\d+\.\d+\.\d+\.\d+$/.test(hostname);
-    const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
-
-    if (!isIp && !isLocalhost) {
-        try {
-            const addresses = dns.resolve4Sync(hostname);
-            const ipv4 = addresses && addresses[0];
-            if (ipv4) {
-                dbConfig.host = ipv4;
-                dbConfig.port = parseInt(parsed.port) || 5432;
-                const user = parsed.username ? decodeURIComponent(parsed.username) : '';
-                const pass = parsed.password ? decodeURIComponent(parsed.password) : '';
-                if (user) dbConfig.user = user;
-                if (pass) dbConfig.password = pass;
-                const dbName = parsed.pathname ? parsed.pathname.replace(/^\//, '') : '';
-                if (dbName) dbConfig.database = dbName;
-            } else {
-                dbConfig.connectionString = rawUrl;
-            }
-        } catch {
-            dbConfig.connectionString = rawUrl;
-        }
-    } else {
-        dbConfig.connectionString = rawUrl;
-    }
-} else if (process.env.DB_HOST) {
-    dbConfig.host = process.env.DB_HOST;
-    dbConfig.port = parseInt(process.env.DB_PORT) || 5432;
-    dbConfig.user = process.env.DB_USER;
-    dbConfig.password = process.env.DB_PASSWORD;
-    dbConfig.database = process.env.DB_NAME;
+if (!supabaseUrl || !supabaseKey) {
+    console.error('ERROR: SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY deben estar configurados en .env');
+    process.exit(1);
 }
 
-const pool = new Pool(dbConfig);
+const supabase = createClient(supabaseUrl, supabaseKey);
 
-pool.on('connect', () => {
-    console.log('Conexión establecida con la base de datos Supabase (PostgreSQL).');
-});
+function escapeLiteral(value) {
+    if (value === null || value === undefined) return 'NULL';
+    if (typeof value === 'number') {
+        if (isNaN(value)) return 'NULL';
+        return String(value);
+    }
+    if (typeof value === 'boolean') return value ? 'TRUE' : 'FALSE';
+    if (Array.isArray(value)) {
+        const elements = value.map(v => escapeLiteral(v)).join(',');
+        return `ARRAY[${elements}]`;
+    }
+    if (value instanceof Date) return `'${value.toISOString()}'::timestamp`;
+    if (typeof value === 'string') {
+        return `'${value.replace(/'/g, "''")}'`;
+    }
+    return `'${String(value).replace(/'/g, "''")}'`;
+}
 
-pool.on('error', (err) => {
-    console.error('Error inesperado en el pool de PostgreSQL:', err);
-});
+const noIdTables = [
+    'qa_user_permissions',
+    'qa_project_users',
+    'qa_use_case_users',
+    'qa_suite_users',
+    'qa_project_sequences',
+    'qa_tc_preconditions'
+];
 
-/**
- * Helper para ejecutar consultas compatible con la interfaz anterior de SQLite.
- * Convierte parámetros de '?' a '$1, $2...' y maneja lastID/changes.
- */
-const query = async (sql, params = []) => {
-    // 1. Convertir '?' a '$1, $2...' para compatibilidad con pg
-    let count = 0;
-    const pgSql = sql.replace(/\?/g, () => `$${++count}`);
-    
-    // 2. Si es un INSERT y no tiene RETURNING, lo agregamos para obtener el lastID
-    let finalSql = pgSql;
-    const isInsert = pgSql.trim().toUpperCase().startsWith('INSERT');
-    if (isInsert && !pgSql.trim().toUpperCase().includes('RETURNING')) {
-        // Solo agregamos RETURNING id si no es una tabla de unión o configuración conocida que no tiene 'id'
-        const noIdTables = [
-            'qa_user_permissions', 
-            'qa_project_users', 
-            'qa_use_case_users', 
-            'qa_suite_users', 
-            'qa_project_sequences', 
-            'qa_tc_preconditions'
-        ];
-        const tableMatch = pgSql.match(/INTO\s+([a-zA-Z0-9_]+)/i);
+function buildSql(sql, params) {
+    let processed = sql;
+    let paramIndex = 0;
+    processed = processed.replace(/\?/g, () => {
+        const val = params[paramIndex++];
+        return escapeLiteral(val);
+    });
+
+    const trimmed = processed.trim().toUpperCase();
+    const isInsert = trimmed.startsWith('INSERT');
+    if (isInsert && !trimmed.includes('RETURNING')) {
+        const tableMatch = sql.match(/INTO\s+([a-zA-Z0-9_]+)/i);
         const tableName = tableMatch ? tableMatch[1].toLowerCase() : '';
-        
         if (!noIdTables.includes(tableName)) {
-            finalSql += ' RETURNING id';
+            processed += ' RETURNING id';
         }
     }
 
+    return processed;
+}
+
+function mapResult(data) {
+    const rows = data.rows || [];
+    const lastID = (Array.isArray(rows) && rows.length > 0 && rows[0].id !== undefined)
+        ? rows[0].id
+        : null;
+    return {
+        rows: rows,
+        lastID: lastID,
+        changes: data.rowCount !== undefined ? data.rowCount : rows.length
+    };
+}
+
+async function query(sql, params = []) {
+    const finalSql = buildSql(sql, params);
+
     try {
-        const result = await pool.query(finalSql, params);
-        
-        // Simular la respuesta de sqlite3
-        return {
-            rows: result.rows,
-            lastID: (isInsert && result.rows.length > 0) ? result.rows[0].id : null,
-            changes: result.rowCount
-        };
+        const { data, error } = await supabase.rpc('exec_query', { query_text: finalSql });
+
+        if (error) throw new Error(error.message);
+        if (data && data.error) throw new Error(data.error + (data.detail ? ' (' + data.detail + ')' : ''));
+
+        return mapResult(data || { rows: [], rowCount: 0 });
     } catch (err) {
-        console.error('Error en ejecución Postgres:', err.message);
-        console.error('SQL Fallido:', finalSql);
+        console.error('Error en ejecucion:', err.message);
+        console.error('SQL fallido:', finalSql.substring(0, 500));
         throw err;
     }
-};
+}
 
-module.exports = {
-    query,
-    pool,
-    getClient: async () => {
-        const client = await pool.connect();
-        return {
-            query: async (sql, params = []) => {
-                let count = 0;
-                const pgSql = sql.replace(/\?/g, () => `$${++count}`);
+async function getClient() {
+    return {
+        query: async (sql, params = []) => {
+            return query(sql, params);
+        },
+        release: () => {}
+    };
+}
 
-                let finalSql = pgSql;
-                const isInsert = pgSql.trim().toUpperCase().startsWith('INSERT');
-                if (isInsert && !pgSql.trim().toUpperCase().includes('RETURNING')) {
-                    const noIdTables = [
-                        'qa_user_permissions',
-                        'qa_project_users',
-                        'qa_use_case_users',
-                        'qa_suite_users',
-                        'qa_project_sequences',
-                        'qa_tc_preconditions'
-                    ];
-                    const tableMatch = pgSql.match(/INTO\s+([a-zA-Z0-9_]+)/i);
-                    const tableName = tableMatch ? tableMatch[1].toLowerCase() : '';
-                    if (!noIdTables.includes(tableName)) {
-                        finalSql += ' RETURNING id';
-                    }
-                }
+function setupRealtimeChannel(onChange) {
+    const channel = supabase
+        .channel('db-changes')
+        .on('postgres_changes',
+            { event: '*', schema: 'public' },
+            (payload) => {
+                const mapped = {
+                    table: payload.table,
+                    action: payload.eventType,
+                    data: payload.new
+                };
+                onChange(mapped);
+            }
+        )
+        .subscribe((status) => {
+            if (status === 'SUBSCRIBED') {
+                console.log('Realtime: suscrito a cambios de base de datos via Supabase');
+            } else if (status === 'CHANNEL_ERROR') {
+                console.error('Error en canal Realtime de Supabase');
+            }
+        });
 
-                try {
-                    const result = await client.query(finalSql, params);
-                    return {
-                        rows: result.rows,
-                        lastID: (isInsert && result.rows.length > 0) ? result.rows[0].id : null,
-                        changes: result.rowCount
-                    };
-                } catch (err) {
-                    console.error('Error en ejecución Postgres:', err.message);
-                    console.error('SQL Fallido:', finalSql);
-                    throw err;
-                }
-            },
-            release: () => client.release()
-        };
-    }
-};
+    return channel;
+}
+
+module.exports = { query, supabase, getClient, setupRealtimeChannel };

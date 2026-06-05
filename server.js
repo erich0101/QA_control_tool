@@ -8,7 +8,7 @@ const multer = require('multer');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const cookieParser = require('cookie-parser');
-const { query, pool, getClient } = require('./db');
+const { query, getClient, setupRealtimeChannel } = require('./db');
 const { encrypt, decrypt } = require('./utils/crypto-utils');
 const http = require('http');
 const WebSocket = require('ws');
@@ -3476,25 +3476,16 @@ const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
 // Gestión de notificaciones Realtime vía Postgres
-async function setupRealtime() {
-    const client = await pool.connect();
-    try {
-        await client.query('LISTEN table_update');
-        client.on('notification', (msg) => {
-            if (msg.channel === 'table_update') {
-                const payload = msg.payload;
-                // Broadcast a todos los clientes conectados
-                wss.clients.forEach(client => {
-                    if (client.readyState === WebSocket.OPEN) {
-                        client.send(payload);
-                    }
-                });
+function setupRealtime() {
+    setupRealtimeChannel((payload) => {
+        // Broadcast a todos los clientes conectados
+        wss.clients.forEach(client => {
+            if (client.readyState === WebSocket.OPEN) {
+                client.send(JSON.stringify(payload));
             }
         });
-        console.log('📡 Realtime: Listening for database changes...');
-    } catch (err) {
-        console.error('❌ Error setting up Postgres LISTEN:', err);
-    }
+    });
+    console.log('📡 Realtime: Listening for database changes via Supabase Realtime...');
 }
 
 setupRealtime();
