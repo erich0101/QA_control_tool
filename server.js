@@ -1404,7 +1404,7 @@ app.get('/api/test-suites', requireAuth, async (req, res) => {
             return res.status(400).json({ error: 'use_case_id o project_id REQUERIDO' });
         }
         const suites = suitesRes.rows;
-        if (suites.length === 0) return res.json([]);
+        if (suites.length === 0) return res.json({ testSuites: [] });
 
         const suiteIds = suites.map(s => s.id);
         const activeRunIds = suites.map(s => s.active_run_id).filter(id => id !== null);
@@ -2417,7 +2417,7 @@ app.post('/api/test-suites/:id/finish-execution', requireAuth, async (req, res) 
             fail: execs.rows.filter(e => e.status === 'FAIL').length,
             warn: execs.rows.filter(e => e.status === 'WARNING').length,
             block: execs.rows.filter(e => e.status === 'BLOCK').length,
-            skipped: execs.rows.filter(e => e.status === 'SKIPPED').length
+            skipped: execs.rows.filter(e => e.status === 'SKIPPED' || e.status === 'SKIP').length
         };
 
         // Consolidar tiempo si estaba RUNNING antes de finalizar
@@ -2468,7 +2468,7 @@ app.get('/api/history', requireAuth, async (req, res) => {
                     fail: execs.rows.filter(e => e.status === 'FAIL').length,
                     warn: execs.rows.filter(e => e.status === 'WARNING').length,
                     block: execs.rows.filter(e => e.status === 'BLOCK').length,
-                    skipped: execs.rows.filter(e => e.status === 'SKIPPED').length
+                    skipped: execs.rows.filter(e => e.status === 'SKIPPED' || e.status === 'SKIP').length
                 }
             });
         }
@@ -2732,7 +2732,7 @@ app.post('/api/runs/:id/retest', requireAuth, async (req, res) => {
             SELECT DISTINCT e.tc_id 
             FROM qa_executions e
             WHERE e.run_id = ? 
-            AND e.status IN ('FAIL', 'WARNING', 'BLOCKED')
+            AND e.status IN ('FAIL', 'WARNING', 'BLOCKED', 'BLOCK')
         `, [oldRunId]);
 
         if (failedTests.rows.length === 0) {
@@ -2742,7 +2742,7 @@ app.post('/api/runs/:id/retest', requireAuth, async (req, res) => {
         // 2. Crear nuevo run
         const runRes = await query(`
             INSERT INTO qa_test_runs (suite_id, status, created_by, parent_run_id, run_type) 
-            VALUES (?, 'ACTIVE', ?, ?, 'RETEST')
+            VALUES (?, 'RUNNING', ?, ?, 'RETEST')
         `, [suiteId, req.user.id, oldRunId]);
         const newRunId = runRes.lastID;
 

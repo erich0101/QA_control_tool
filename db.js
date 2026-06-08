@@ -60,14 +60,14 @@ function buildSql(sql, params) {
 }
 
 function mapResult(data) {
-    const rows = data.rows || [];
+    const rows = Array.isArray(data) ? data : (data?.rows || []);
     const lastID = (Array.isArray(rows) && rows.length > 0 && rows[0].id !== undefined)
         ? rows[0].id
         : null;
     return {
         rows: rows,
         lastID: lastID,
-        changes: data.rowCount !== undefined ? data.rowCount : rows.length
+        changes: data?.rowCount !== undefined ? data.rowCount : rows.length
     };
 }
 

@@ -126,7 +126,7 @@ export const ExecutionTab = {
 
         let filteredTcs = tcs;
         if (this.selectedCUId) {
-            const us = Store.state.userStories.find(u => u.cu_id === this.selectedCUId);
+            const us = Store.state.userStories.find(u => u.use_case_id === this.selectedCUId);
             if (us) {
                 filteredTcs = filteredTcs.filter(tc => tc.us_id === us.id);
             }

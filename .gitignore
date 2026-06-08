@@ -119,6 +119,8 @@ pids/
 *.pid
 *.seed
 *.pid.lock
+nul
+execution-tab.yml
 
 # ============================================================
 # UPLOADS / ARCHIVOS TEMPORALES DEL SERVIDOR
@@ -133,6 +135,7 @@ temp/
 coverage/
 .nyc_output/
 .cache/
+.playwright-mcp/
 
 # ============================================================
 # SHARP (binarios nativos compilados)
