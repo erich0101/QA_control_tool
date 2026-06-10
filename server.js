@@ -99,6 +99,18 @@ const ExcelJS = require('exceljs');
         await query(`ALTER TABLE qa_user_permissions ADD COLUMN IF NOT EXISTS can_manage_projects INTEGER DEFAULT 0`);
         await query(`ALTER TABLE qa_user_permissions ADD COLUMN IF NOT EXISTS can_manage_users INTEGER DEFAULT 0`);
         await query(`ALTER TABLE qa_user_permissions ADD COLUMN IF NOT EXISTS can_configure_jira INTEGER DEFAULT 0`);
+        await query(`ALTER TABLE qa_user_permissions ALTER COLUMN can_execute_test DROP DEFAULT`);
+        await query(`ALTER TABLE qa_user_permissions ALTER COLUMN can_execute_test TYPE BOOLEAN USING can_execute_test::BOOLEAN`);
+        await query(`ALTER TABLE qa_user_permissions ALTER COLUMN can_execute_test SET DEFAULT false`);
+        await query(`ALTER TABLE qa_user_permissions ALTER COLUMN can_manage_projects DROP DEFAULT`);
+        await query(`ALTER TABLE qa_user_permissions ALTER COLUMN can_manage_projects TYPE BOOLEAN USING can_manage_projects::BOOLEAN`);
+        await query(`ALTER TABLE qa_user_permissions ALTER COLUMN can_manage_projects SET DEFAULT false`);
+        await query(`ALTER TABLE qa_user_permissions ALTER COLUMN can_manage_users DROP DEFAULT`);
+        await query(`ALTER TABLE qa_user_permissions ALTER COLUMN can_manage_users TYPE BOOLEAN USING can_manage_users::BOOLEAN`);
+        await query(`ALTER TABLE qa_user_permissions ALTER COLUMN can_manage_users SET DEFAULT false`);
+        await query(`ALTER TABLE qa_user_permissions ALTER COLUMN can_configure_jira DROP DEFAULT`);
+        await query(`ALTER TABLE qa_user_permissions ALTER COLUMN can_configure_jira TYPE BOOLEAN USING can_configure_jira::BOOLEAN`);
+        await query(`ALTER TABLE qa_user_permissions ALTER COLUMN can_configure_jira SET DEFAULT false`);
 
         // Campo perfil para clasificación simple de usuarios (admin / user)
         await query(`ALTER TABLE qa_users ADD COLUMN IF NOT EXISTS perfil VARCHAR(20) DEFAULT 'user'`);
@@ -262,7 +274,7 @@ app.post('/api/users', requireAuth, requireAdmin, async (req, res) => {
         const userId = result.lastID;
         
         await query(`INSERT INTO qa_user_permissions (user_id, can_create_cu, can_create_hu, can_create_suite, can_create_test, can_assign_cu, can_assign_hu, can_assign_suite, can_execute_test, can_manage_projects, can_manage_users, can_configure_jira) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [userId, permissions.can_create_cu?1:0, permissions.can_create_hu?1:0, permissions.can_create_suite?1:0, permissions.can_create_test?1:0, permissions.can_assign_cu?1:0, permissions.can_assign_hu?1:0, permissions.can_assign_suite?1:0, permissions.can_execute_test?1:0, permissions.can_manage_projects?1:0, permissions.can_manage_users?1:0, permissions.can_configure_jira?1:0]);
+            [userId, !!permissions.can_create_cu, !!permissions.can_create_hu, !!permissions.can_create_suite, !!permissions.can_create_test, !!permissions.can_assign_cu, !!permissions.can_assign_hu, !!permissions.can_assign_suite, !!permissions.can_execute_test, !!permissions.can_manage_projects, !!permissions.can_manage_users, !!permissions.can_configure_jira]);
             
         if (projects && projects.length > 0) {
             for (let pid of projects) {
@@ -292,8 +304,8 @@ app.put('/api/users/:id', requireAuth, requireAdmin, async (req, res) => {
         
         await query(updateQuery, updateParams);
         
-        await query(`UPDATE qa_user_permissions SET can_create_cu = ?, can_create_hu = ?, can_create_suite = ?, can_create_test = ?, can_assign_cu = ?, can_assign_hu = ?, can_assign_suite = ?, can_execute_test = ?, can_manage_projects = ?, can_manage_users = ?, can_configure_jira = ? WHERE user_id = ?`,
-            [permissions.can_create_cu?1:0, permissions.can_create_hu?1:0, permissions.can_create_suite?1:0, permissions.can_create_test?1:0, permissions.can_assign_cu?1:0, permissions.can_assign_hu?1:0, permissions.can_assign_suite?1:0, permissions.can_execute_test?1:0, permissions.can_manage_projects?1:0, permissions.can_manage_users?1:0, permissions.can_configure_jira?1:0, userId]);
+        await query(`INSERT INTO qa_user_permissions (user_id, can_create_cu, can_create_hu, can_create_suite, can_create_test, can_assign_cu, can_assign_hu, can_assign_suite, can_execute_test, can_manage_projects, can_manage_users, can_configure_jira) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (user_id) DO UPDATE SET can_create_cu = EXCLUDED.can_create_cu, can_create_hu = EXCLUDED.can_create_hu, can_create_suite = EXCLUDED.can_create_suite, can_create_test = EXCLUDED.can_create_test, can_assign_cu = EXCLUDED.can_assign_cu, can_assign_hu = EXCLUDED.can_assign_hu, can_assign_suite = EXCLUDED.can_assign_suite, can_execute_test = EXCLUDED.can_execute_test, can_manage_projects = EXCLUDED.can_manage_projects, can_manage_users = EXCLUDED.can_manage_users, can_configure_jira = EXCLUDED.can_configure_jira`,
+            [userId, !!permissions.can_create_cu, !!permissions.can_create_hu, !!permissions.can_create_suite, !!permissions.can_create_test, !!permissions.can_assign_cu, !!permissions.can_assign_hu, !!permissions.can_assign_suite, !!permissions.can_execute_test, !!permissions.can_manage_projects, !!permissions.can_manage_users, !!permissions.can_configure_jira]);
             
         await query(`DELETE FROM qa_project_users WHERE user_id = ?`, [userId]);
         if (projects && projects.length > 0) {
