@@ -1,4 +1,4 @@
-const { query } = require('../config/db');
+const usersRepo = require('../repositories/users.repository');
 const { ok } = require('../utils/responses');
 const { issueToken, setAuthCookie } = require('../middleware/auth');
 const authService = require('../services/auth.service');
@@ -12,8 +12,8 @@ exports.login = async (req, res) => {
 };
 
 exports.me = async (req, res) => {
-    const perms = await query(`SELECT * FROM qa_user_permissions WHERE user_id = ?`, [req.user.id]);
-    return res.json({ user: req.user, permissions: perms.rows[0] });
+    const perms = await usersRepo.permissions.findByUserId(req.user.id);
+    return res.json({ user: req.user, permissions: perms });
 };
 
 exports.logout = (req, res) => {

@@ -1,4 +1,7 @@
-const { query } = require('../config/db');
+const testSuitesRepo = require('../repositories/testSuites.repository');
+const projectsRepo = require('../repositories/projects.repository');
+const testCasesRepo = require('../repositories/testCases.repository');
+const useCasesRepo = require('../repositories/useCases.repository');
 const JiraService = require('../../jira-service');
 const { getJiraUserCredentials } = require('./jira.controller');
 
@@ -172,70 +175,22 @@ exports.suitesStats = async (req, res) => {
     const { project_id } = req.query;
     if (!project_id) return res.status(400).json({ error: 'project_id requerido' });
 
-    const stats = await query(`
-        SELECT
-            s.id,
-            s.title,
-            COUNT(r.id)::INT as total_runs,
-            COALESCE(SUM(CASE WHEN r.status = 'FINISHED' THEN EXTRACT(EPOCH FROM (r.finished_at - r.started_at)) / 60 ELSE 0 END), 0)::FLOAT as total_minutes,
-            COALESCE(AVG(CASE WHEN r.status = 'FINISHED' THEN EXTRACT(EPOCH FROM (r.finished_at - r.started_at)) / 60 ELSE NULL END), 0)::FLOAT as avg_minutes
-        FROM qa_test_suites s
-        JOIN qa_use_cases uc ON s.use_case_id = uc.id
-        LEFT JOIN qa_test_runs r ON s.id = r.suite_id
-        WHERE uc.project_id = ?
-        GROUP BY s.id, s.title
-        ORDER BY total_minutes DESC
-    `, [project_id]);
+    const stats = await testSuitesRepo.statsByDurationByProject(project_id);
 
-    res.json({ stats: stats.rows });
+    res.json({ stats });
 };
 
 exports.overview = async (req, res) => {
     const { project_id } = req.query;
     if (!project_id) return res.status(400).json({ error: 'project_id requerido' });
 
-    const summary = await query(`
-        SELECT
-            (SELECT COUNT(*) FROM qa_use_cases WHERE project_id = ?) as total_cu,
-            (SELECT COUNT(*) FROM qa_test_suites s JOIN qa_use_cases cu ON s.use_case_id = cu.id WHERE cu.project_id = ?) as total_suites,
-            (SELECT COUNT(*) FROM qa_test_cases tc JOIN qa_test_suites s ON tc.suite_id = s.id JOIN qa_use_cases cu ON s.use_case_id = cu.id WHERE cu.project_id = ?) as total_tc
-    `, [project_id, project_id, project_id]);
-
-    const statuses = await query(`
-        SELECT
-            COALESCE(e.status, 'PENDING') as status,
-            COUNT(*) as count
-        FROM qa_test_cases tc
-        JOIN qa_test_suites s ON tc.suite_id = s.id
-        JOIN qa_use_cases cu ON s.use_case_id = cu.id
-        LEFT JOIN (
-            SELECT tc_id, status FROM qa_executions
-            WHERE id IN (SELECT MAX(id) FROM qa_executions GROUP BY tc_id)
-        ) e ON tc.id = e.tc_id
-        WHERE cu.project_id = ?
-        GROUP BY COALESCE(e.status, 'PENDING')
-    `, [project_id]);
-
-    const coverage = await query(`
-        SELECT
-            cu.title,
-            COUNT(tc.id) as total,
-            SUM(CASE WHEN e.status IN ('OK', 'PASS') THEN 1 ELSE 0 END) as ok
-        FROM qa_use_cases cu
-        LEFT JOIN qa_test_suites s ON cu.id = s.use_case_id
-        LEFT JOIN qa_test_cases tc ON s.id = tc.suite_id
-        LEFT JOIN (
-            SELECT tc_id, status FROM qa_executions
-            WHERE id IN (SELECT MAX(id) FROM qa_executions GROUP BY tc_id)
-        ) e ON tc.id = e.tc_id
-        WHERE cu.project_id = ?
-        GROUP BY cu.id, cu.title
-        ORDER BY cu.id
-    `, [project_id]);
+    const summary = await projectsRepo.overviewSummaryLegacy(project_id);
+    const statuses = await testCasesRepo.statusBreakdownByProject(project_id);
+    const coverage = await useCasesRepo.coverageByProject(project_id);
 
     res.json({
-        summary: summary.rows[0],
-        statuses: statuses.rows,
-        coverage: coverage.rows
+        summary,
+        statuses,
+        coverage
     });
 };

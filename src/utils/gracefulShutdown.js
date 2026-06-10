@@ -1,12 +1,12 @@
 const logger = require('./logger');
-const { closePool } = require('../config/db');
+const db = require('../db');
 
 function attachGracefulShutdown(server) {
     const shutdown = async (signal) => {
         logger.info({ signal }, 'shutting down gracefully');
         server.close(async () => {
             try {
-                await closePool();
+                await db.end();
                 logger.info('pg pool drained');
             } catch (e) {
                 logger.error({ err: e }, 'pool.end error');

@@ -1,4 +1,11 @@
-const { query } = require('../config/db');
+const projectsRepo = require('../repositories/projects.repository');
+const useCasesRepo = require('../repositories/useCases.repository');
+const userStoriesRepo = require('../repositories/userStories.repository');
+const testSuitesRepo = require('../repositories/testSuites.repository');
+const testCasesRepo = require('../repositories/testCases.repository');
+const testRunsRepo = require('../repositories/testRuns.repository');
+const executionsRepo = require('../repositories/executions.repository');
+const defectsRepo = require('../repositories/defects.repository');
 const { generateReport, generateMultiReport } = require('../../report-generator');
 const { AppError } = require('../middleware/errors');
 
@@ -26,74 +33,46 @@ exports.generateReport = async (req, res) => {
 exports.getData = async (req, res) => {
     const { project_id } = req.query;
     if (!project_id) {
-        const proj = await query(`SELECT id FROM qa_projects WHERE status = 'ACTIVE' ORDER BY id LIMIT 1`);
-        if (proj.rows.length === 0) return res.json({ pruebas: [] });
-        return res.redirect(`/api/data?project_id=${proj.rows[0].id}`);
+        const proj = await projectsRepo.findFirstActive();
+        if (!proj) return res.json({ pruebas: [] });
+        return res.redirect(`/api/data?project_id=${proj.id}`);
     }
 
-    const useCasesRes = await query(
-        `SELECT * FROM qa_use_cases WHERE project_id = ?`,
-        [project_id]
-    );
-    const useCases = useCasesRes.rows;
+    const useCases = await useCasesRepo.listByProject(project_id);
     if (useCases.length === 0) return res.json({ pruebas: [] });
 
     const useCaseIds = useCases.map(cu => cu.id);
 
-    const storiesRes = await query(
-        `SELECT * FROM qa_user_stories WHERE use_case_id = ANY(?)`,
-        [useCaseIds]
-    );
-    const stories = storiesRes.rows;
+    const stories = await userStoriesRepo.listByUseCaseIds(useCaseIds);
 
     const storyIds = stories.map(us => us.id);
 
-    const suitesRes = await query(
-        `SELECT * FROM qa_test_suites WHERE us_id = ANY(?)`,
-        [storyIds]
-    );
-    const suites = suitesRes.rows;
+    const suites = await testSuitesRepo.listByStoryIds(storyIds);
 
     const suiteIds = suites.map(s => s.id);
     const activeRunIds = suites.map(s => s.active_run_id).filter(id => id != null);
 
     let cases = [];
     if (suiteIds.length > 0) {
-        const casesRes = await query(
-            `SELECT * FROM qa_test_cases WHERE suite_id = ANY(?) ORDER BY id`,
-            [suiteIds]
-        );
-        cases = casesRes.rows;
+        cases = await testCasesRepo.listBySuiteIds(suiteIds);
     }
 
     const tcIds = cases.map(tc => tc.id);
 
     let activeRuns = [];
     if (activeRunIds.length > 0) {
-        const runsRes = await query(
-            `SELECT * FROM qa_test_runs WHERE id = ANY(?) AND status = 'ACTIVE'`,
-            [activeRunIds]
-        );
-        activeRuns = runsRes.rows;
+        activeRuns = await testRunsRepo.listActiveByIds(activeRunIds);
     }
 
     let executions = [];
     if (tcIds.length > 0) {
-        const execRes = await query(
-            `SELECT * FROM qa_executions WHERE tc_id = ANY(?)`,
-            [tcIds]
-        );
-        executions = execRes.rows;
+        executions = await executionsRepo.listByTcIds(tcIds);
     }
 
     let defects = [];
     if (executions.length > 0) {
         const execIds = executions.map(e => e.id);
-        const defRes = await query(
-            `SELECT * FROM qa_defects WHERE execution_id = ANY(?)`,
-            [execIds]
-        );
-        defects = defRes.rows;
+        defects = await defectsRepo.listByExecutionIds(execIds);
     }
 
     const activeRunById = new Map(activeRuns.map(r => [r.id, r]));

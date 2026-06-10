@@ -1,4 +1,10 @@
-const { query } = require('../config/db');
+const testSuitesRepo = require('../repositories/testSuites.repository');
+const testCasesRepo = require('../repositories/testCases.repository');
+const testRunsRepo = require('../repositories/testRuns.repository');
+const executionsRepo = require('../repositories/executions.repository');
+const attachmentsRepo = require('../repositories/attachments.repository');
+const defectsRepo = require('../repositories/defects.repository');
+const inconsistenciasRepo = require('../repositories/inconsistencias.repository');
 const { ValidationError } = require('../middleware/errors');
 const logger = require('../utils/logger');
 
@@ -6,60 +12,39 @@ async function list(queryParams, requestLogger) {
     const start = Date.now();
     const log = requestLogger || logger;
     const { use_case_id, project_id } = queryParams;
-    let suitesRes;
+    let suites;
 
     if (use_case_id) {
-        suitesRes = await query(`SELECT * FROM qa_test_suites WHERE use_case_id = $1 ORDER BY id`, [use_case_id]);
+        suites = await testSuitesRepo.listByUseCase(use_case_id);
     } else if (project_id) {
-        suitesRes = await query(`
-            SELECT s.* FROM qa_test_suites s
-            LEFT JOIN qa_use_cases uc ON s.use_case_id = uc.id
-            WHERE s.project_id = $1 OR uc.project_id = $1
-            ORDER BY s.id
-        `, [project_id]);
+        suites = await testSuitesRepo.listByProject(project_id);
     } else {
         throw new ValidationError('use_case_id o project_id requerido');
     }
-    const suites = suitesRes.rows;
     if (suites.length === 0) return { testSuites: [] };
 
     const suiteIds = suites.map(s => s.id);
     const activeRunIds = suites.map(s => s.active_run_id).filter(id => id !== null);
 
-    const casesRes = await query(`SELECT * FROM qa_test_cases WHERE suite_id = ANY($1::int[]) ORDER BY id`, [suiteIds]);
-    const allTestCases = casesRes.rows;
+    const allTestCases = await testCasesRepo.listBySuiteIds(suiteIds);
 
     let activeRuns = [];
     if (activeRunIds.length > 0) {
-        const runsRes = await query(`SELECT * FROM qa_test_runs WHERE id = ANY($1::int[]) AND status IN ('ACTIVE', 'RUNNING', 'PAUSED')`, [activeRunIds]);
-        activeRuns = runsRes.rows;
+        activeRuns = await testRunsRepo.listActiveByIdsWithStatuses(activeRunIds);
     }
 
-    const latestExecsRes = await query(`
-        SELECT DISTINCT ON (tc_id) *
-        FROM qa_executions
-        WHERE tc_id IN (SELECT id FROM qa_test_cases WHERE suite_id = ANY($1::int[]))
-        ORDER BY tc_id, id DESC
-    `, [suiteIds]);
-    const latestExecs = latestExecsRes.rows;
+    const latestExecs = await executionsRepo.findLatestBySuiteIds(suiteIds);
 
     let activeRunExecs = [];
     if (activeRuns.length > 0) {
         const runIds = activeRuns.map(r => r.id);
-        const runExecsRes = await query(`SELECT * FROM qa_executions WHERE run_id = ANY($1::int[])`, [runIds]);
-        activeRunExecs = runExecsRes.rows;
+        activeRunExecs = await executionsRepo.listByRunIds(runIds);
     }
 
     const parentRunIds = activeRuns.map(r => r.parent_run_id).filter(id => id !== null);
     let parentExecs = [];
     if (parentRunIds.length > 0) {
-        const pExecsRes = await query(`
-            SELECT DISTINCT ON (tc_id, run_id) *
-            FROM qa_executions
-            WHERE run_id = ANY($1::int[])
-            ORDER BY tc_id, run_id, id DESC
-        `, [parentRunIds]);
-        parentExecs = pExecsRes.rows;
+        parentExecs = await executionsRepo.findLatestByRunIds(parentRunIds);
     }
 
     const allExecIds = [...new Set([
@@ -71,19 +56,11 @@ async function list(queryParams, requestLogger) {
     let allAttachments = [];
     let allDefects = [];
     if (allExecIds.length > 0) {
-        const attRes = await query(`SELECT id, execution_id, evidence_category FROM qa_attachments WHERE execution_id = ANY($1::int[])`, [allExecIds]);
-        allAttachments = attRes.rows;
-        const defRes = await query(`SELECT * FROM qa_defects WHERE execution_id = ANY($1::int[])`, [allExecIds]);
-        allDefects = defRes.rows;
+        allAttachments = await attachmentsRepo.listByExecutionIds(allExecIds);
+        allDefects = await defectsRepo.listByExecutionIds(allExecIds);
     }
 
-    const incRes = await query(`
-        SELECT id, suite_id, title, description, severity, order_index
-        FROM qa_inconsistencias
-        WHERE suite_id = ANY($1::int[])
-        ORDER BY suite_id, order_index
-    `, [suiteIds]);
-    const allInconsistencies = incRes.rows;
+    const allInconsistencies = await inconsistenciasRepo.listBySuiteIds(suiteIds);
 
     const result = suites.map(suite => {
         const activeRun = activeRuns.find(r => r.id === suite.active_run_id) || null;

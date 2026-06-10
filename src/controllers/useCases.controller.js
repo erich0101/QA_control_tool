@@ -1,4 +1,4 @@
-const { query } = require('../config/db');
+const useCasesRepo = require('../repositories/useCases.repository');
 const { ForbiddenError, ValidationError } = require('../middleware/errors');
 const { checkPermission } = require('../middleware/auth');
 const { ok, created } = require('../utils/responses');
@@ -8,15 +8,9 @@ exports.list = async (req, res) => {
     const { project_id } = req.query;
     if (!project_id) throw new ValidationError('project_id requerido');
 
-    const result = await query(`
-        SELECT cu.*,
-            (SELECT COUNT(*) FROM qa_user_stories WHERE use_case_id = cu.id) as us_count
-        FROM qa_use_cases cu
-        WHERE cu.project_id = ?
-        ORDER BY cu.id DESC
-    `, [project_id]);
+    const useCases = await useCasesRepo.listByProjectWithUSCount(project_id);
 
-    return res.json({ useCases: result.rows });
+    return res.json({ useCases });
 };
 
 exports.create = async (req, res) => {
@@ -29,21 +23,23 @@ exports.create = async (req, res) => {
     if (!project_id || !title) throw new ValidationError('project_id y title requeridos');
 
     const finalKeyId = key_id || await generateKey(project_id, 'CU');
-    const result = await query(
-        `INSERT INTO qa_use_cases (project_id, key_id, title, description, created_by, updated_by) VALUES (?, ?, ?, ?, ?, ?)`,
-        [project_id, finalKeyId, title, description || '', req.user.id, req.user.id]
-    );
-    return created(res, { id: result.lastID, key_id: finalKeyId });
+    const id = await useCasesRepo.create({
+        projectId: project_id, keyId: finalKeyId, title,
+        description: description || '',
+        createdBy: req.user.id, updatedBy: req.user.id
+    });
+    return created(res, { id, key_id: finalKeyId });
 };
 
 exports.update = async (req, res) => {
     const { title, description, status, key_id } = req.body;
-    await query(`UPDATE qa_use_cases SET title = COALESCE(?, title), description = COALESCE(?, description), status = COALESCE(?, status), key_id = COALESCE(?, key_id), updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-        [title, description, status, key_id, req.user.id, req.params.id]);
+    await useCasesRepo.update(req.params.id, {
+        title, description, status, keyId: key_id, updatedBy: req.user.id
+    });
     return ok(res);
 };
 
 exports.remove = async (req, res) => {
-    await query(`DELETE FROM qa_use_cases WHERE id = ?`, [req.params.id]);
+    await useCasesRepo.remove(req.params.id);
     return ok(res);
 };

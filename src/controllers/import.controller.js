@@ -1,7 +1,13 @@
-const { query, getClient } = require('../config/db');
+const db = require('../db');
 const XLSX = require('xlsx');
-const { generateKey, generateKeyBatch, escapeForCsv } = require('../utils/keyGenerator');
-const logger = require('../utils/logger');
+const { escapeForCsv } = require('../utils/keyGenerator');
+const testSuitesRepo = require('../repositories/testSuites.repository');
+const userStoriesRepo = require('../repositories/userStories.repository');
+const scenariosRepo = require('../repositories/scenarios.repository');
+const testCasesRepo = require('../repositories/testCases.repository');
+const useCasesRepo = require('../repositories/useCases.repository');
+const projectsRepo = require('../repositories/projects.repository');
+const projectSequencesRepo = require('../repositories/projectSequences.repository');
 
 function normalize(str) {
     if (!str) return '';
@@ -57,43 +63,39 @@ async function processFlatImport(req, res, data, headers, ucId, projectId) {
     let totalImported = 0;
     let usCount = 0;
 
-    const client = await getClient();
-    const q = client.query;
-    try {
-        await q('BEGIN');
+    await db.withTransaction(async (tx) => {
         for (const usTitle in groups) {
             const rows = groups[usTitle];
             const firstRow = rows[0];
 
             const getVal = (row, idx) => idx !== -1 && row[idx] !== undefined ? escapeForCsv(row[idx]) : '';
 
-            const suiteKey = await generateKey(projectId, 'ST', q);
-            const suiteRes = await q(`
-                INSERT INTO qa_test_suites (use_case_id, title, description, key_id, created_by)
-                VALUES (?, ?, ?, ?, ?)
-                RETURNING id
-            `, [ucId, `Suite: ${usTitle}`, `Importación automática ${suiteKey}`, suiteKey, req.user.id]);
-            const suiteId = suiteRes.rows[0].id;
+            const suiteKeyNum = await projectSequencesRepo.increment(projectId, 'ST', tx);
+            const suiteKey = `ST-${suiteKeyNum.toString().padStart(4, '0')}`;
+            const suiteId = await testSuitesRepo.createReturning({
+                useCaseId: ucId, title: `Suite: ${usTitle}`,
+                description: `Importación automática ${suiteKey}`,
+                keyId: suiteKey, createdBy: req.user.id
+            }, tx);
 
-            const usKey = await generateKey(projectId, 'US', q);
+            const usKeyNum = await projectSequencesRepo.increment(projectId, 'US', tx);
+            const usKey = `US-${usKeyNum.toString().padStart(4, '0')}`;
             const usDesc = getVal(firstRow, colMap.data) || '';
             const usBR = '';
             const usPre = getVal(firstRow, colMap.pre) || '';
 
-            const usRes = await q(`
-                INSERT INTO qa_user_stories (use_case_id, project_id, key_id, title, hu_detallada, reglas_negocio, precondiciones, created_by)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT (key_id) DO UPDATE SET title = EXCLUDED.title
-                RETURNING id
-            `, [ucId, projectId, usKey, usTitle, usDesc, usBR, usPre, req.user.id]);
-            const usId = usRes.rows[0].id;
+            const usId = await userStoriesRepo.upsertReturning({
+                useCaseId: ucId, projectId, keyId: usKey, title: usTitle,
+                huDetallada: usDesc, reglasNegocio: usBR, precondiciones: usPre,
+                createdBy: req.user.id
+            }, tx);
             usCount++;
 
             let escenariosText = [];
             const validRows = rows.filter(row => getVal(row, colMap.title));
             let tcKeyStart = null;
             if (validRows.length > 0) {
-                tcKeyStart = await generateKeyBatch(projectId, 'TC', validRows.length, q);
+                tcKeyStart = await projectSequencesRepo.incrementBy(projectId, 'TC', validRows.length, tx);
             }
             let tcIdx = 0;
             for (const row of rows) {
@@ -107,39 +109,32 @@ async function processFlatImport(req, res, data, headers, ucId, projectId) {
                 const testData = getVal(row, colMap.data);
                 const criteria = getVal(row, colMap.criteria);
 
-                const scenarioRes = await q(
-                    `INSERT INTO qa_scenarios (us_id, title, order_index) VALUES (?, ?, ?) RETURNING id`,
-                    [usId, title, totalImported]
-                );
-                const scenarioId = scenarioRes.rows[0].id;
+                const scenarioId = await scenariosRepo.createReturning({
+                    usId, title, orderIndex: totalImported
+                }, tx);
 
                 const tcNum = tcKeyStart + tcIdx;
                 const tcKey = `TC-${tcNum.toString().padStart(4, '0')}`;
                 tcIdx++;
-                await q(`
-                    INSERT INTO qa_test_cases (suite_id, us_id, scenario_id, key_id, title, steps, preconditions, expected_result, assumptions, test_data, acceptance_criteria, created_by)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                `, [suiteId, usId, scenarioId, tcKey, title, steps, pre, expected, assumptions, testData, criteria, req.user.id]);
+                await testCasesRepo.create({
+                    suiteId, usId, scenarioId, keyId: tcKey, title, steps, preconditions: pre,
+                    expectedResult: expected, assumptions, testData, acceptanceCriteria: criteria,
+                    createdBy: req.user.id
+                }, tx);
 
                 totalImported++;
             }
 
             if (escenariosText.length > 0) {
-                await q(`UPDATE qa_user_stories SET escenarios_prueba = ? WHERE id = ?`, [escenariosText.join('\n'), usId]);
+                await userStoriesRepo.setEscenariosPrueba(usId, escenariosText.join('\n'), tx);
             }
         }
+    });
 
-        await q('COMMIT');
-        client.release();
-        return res.json({
-            ok: true,
-            message: `Importación exitosa (formato unificado). ${usCount} historias de usuario y ${totalImported} tests importados.`
-        });
-    } catch (err) {
-        await q('ROLLBACK');
-        client.release();
-        throw err;
-    }
+    return res.json({
+        ok: true,
+        message: `Importación exitosa (formato unificado). ${usCount} historias de usuario y ${totalImported} tests importados.`
+    });
 }
 
 async function processDualImport(req, res, workbook, isCSV, ucId, projectId, file) {
@@ -248,34 +243,30 @@ async function processDualImport(req, res, workbook, isCSV, ucId, projectId, fil
     let totalImported = 0;
     let usCount = 0;
 
-    const client = await getClient();
-    const q = client.query;
-    try {
-        await q('BEGIN');
+    await db.withTransaction(async (tx) => {
         for (const usTitle in groups) {
             const rows = groups[usTitle];
             const firstRow = rows[0];
 
-            const suiteKey = await generateKey(projectId, 'ST', q);
-            const suiteResNew = await q(`
-                INSERT INTO qa_test_suites (use_case_id, title, description, key_id, created_by)
-                VALUES (?, ?, ?, ?, ?)
-                RETURNING id
-            `, [ucId, `Suite: ${usTitle}`, `Importación automática ${suiteKey}`, suiteKey, req.user.id]);
-            const suiteId = suiteResNew.rows[0].id;
+            const suiteKeyNum = await projectSequencesRepo.increment(projectId, 'ST', tx);
+            const suiteKey = `ST-${suiteKeyNum.toString().padStart(4, '0')}`;
+            const suiteId = await testSuitesRepo.createReturning({
+                useCaseId: ucId, title: `Suite: ${usTitle}`,
+                description: `Importación automática ${suiteKey}`,
+                keyId: suiteKey, createdBy: req.user.id
+            }, tx);
 
-            const usKey = await generateKey(projectId, 'US', q);
+            const usKeyNum = await projectSequencesRepo.increment(projectId, 'US', tx);
+            const usKey = `US-${usKeyNum.toString().padStart(4, '0')}`;
             const usDesc = escapeForCsv(firstRow[tcColMap.us_desc]) || '';
             const usBR = escapeForCsv(firstRow[tcColMap.us_br]) || '';
             const usPre = escapeForCsv(firstRow[tcColMap.us_pre]) || '';
 
-            const usRes = await q(`
-                INSERT INTO qa_user_stories (use_case_id, project_id, key_id, title, hu_detallada, reglas_negocio, precondiciones, created_by)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT (key_id) DO UPDATE SET title = EXCLUDED.title
-                RETURNING id
-            `, [ucId, projectId, usKey, usTitle, usDesc, usBR, usPre, req.user.id]);
-            const usId = usRes.rows[0].id;
+            const usId = await userStoriesRepo.upsertReturning({
+                useCaseId: ucId, projectId, keyId: usKey, title: usTitle,
+                huDetallada: usDesc, reglasNegocio: usBR, precondiciones: usPre,
+                createdBy: req.user.id
+            }, tx);
             usCount++;
 
             let escenariosText = [];
@@ -285,7 +276,7 @@ async function processDualImport(req, res, workbook, isCSV, ucId, projectId, fil
             });
             let tcKeyStart = null;
             if (validRows.length > 0) {
-                tcKeyStart = await generateKeyBatch(projectId, 'TC', validRows.length, q);
+                tcKeyStart = await projectSequencesRepo.incrementBy(projectId, 'TC', validRows.length, tx);
             }
             let tcIdx = 0;
             for (const row of rows) {
@@ -301,40 +292,33 @@ async function processDualImport(req, res, workbook, isCSV, ucId, projectId, fil
                 const testData = getVal(tcColMap.data);
                 const criteria = getVal(tcColMap.criteria);
 
-                const scenarioRes = await q(
-                    `INSERT INTO qa_scenarios (us_id, title, order_index) VALUES (?, ?, ?) RETURNING id`,
-                    [usId, title, totalImported]
-                );
-                const scenarioId = scenarioRes.rows[0].id;
+                const scenarioId = await scenariosRepo.createReturning({
+                    usId, title, orderIndex: totalImported
+                }, tx);
                 escenariosText.push(title);
 
                 const tcNum = tcKeyStart + tcIdx;
                 const tcKey = `TC-${tcNum.toString().padStart(4, '0')}`;
                 tcIdx++;
-                await q(`
-                    INSERT INTO qa_test_cases (suite_id, us_id, scenario_id, key_id, title, steps, preconditions, expected_result, assumptions, test_data, acceptance_criteria, created_by)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                `, [suiteId, usId, scenarioId, tcKey, title, steps, pre, expected, assumptions, testData, criteria, req.user.id]);
+                await testCasesRepo.create({
+                    suiteId, usId, scenarioId, keyId: tcKey, title, steps, preconditions: pre,
+                    expectedResult: expected, assumptions, testData, acceptanceCriteria: criteria,
+                    createdBy: req.user.id
+                }, tx);
 
                 totalImported++;
             }
 
             if (escenariosText.length > 0) {
-                await q(`UPDATE qa_user_stories SET escenarios_prueba = ? WHERE id = ?`, [escenariosText.join('\n'), usId]);
+                await userStoriesRepo.setEscenariosPrueba(usId, escenariosText.join('\n'), tx);
             }
         }
+    });
 
-        await q('COMMIT');
-        client.release();
-        return res.json({
-            ok: true,
-            message: `Importación exitosa. Se creó la suite "${file.originalname}" con ${usCount} historias de usuario y ${totalImported} tests.`
-        });
-    } catch (err) {
-        await q('ROLLBACK');
-        client.release();
-        throw err;
-    }
+    return res.json({
+        ok: true,
+        message: `Importación exitosa. Se creó la suite "${file.originalname}" con ${usCount} historias de usuario y ${totalImported} tests.`
+    });
 }
 
 exports.importDual = async (req, res) => {
@@ -375,14 +359,13 @@ exports.importDual = async (req, res) => {
     const isUseCasePath = req.url.includes('/use-cases/');
 
     if (!isUseCasePath) {
-        const sRes = await query(`SELECT use_case_id FROM qa_test_suites WHERE id = ?`, [ucId]);
-        if (sRes.rows.length > 0) ucId = sRes.rows[0].use_case_id;
+        const suite = await testSuitesRepo.findUseCaseId(ucId);
+        if (suite) ucId = suite;
         else return res.status(404).json({ error: 'Suite no encontrada' });
     }
 
-    const ucRes = await query(`SELECT project_id FROM qa_use_cases WHERE id = ?`, [ucId]);
-    if (ucRes.rows.length === 0) return res.status(404).json({ error: 'Caso de Uso no encontrado' });
-    const projectId = ucRes.rows[0].project_id;
+    const projectId = await useCasesRepo.findProjectId(ucId);
+    if (!projectId) return res.status(404).json({ error: 'Caso de Uso no encontrado' });
 
     if (isFlatFormat) {
         return await processFlatImport(req, res, dataFlat, headersFlat, ucId, projectId);
@@ -394,34 +377,11 @@ exports.importDual = async (req, res) => {
 exports.exportUseCaseExcel = async (req, res) => {
     const useCaseId = req.params.id;
 
-    const ucRes = await query(`
-        SELECT uc.*, p.name as project_name
-        FROM qa_use_cases uc
-        JOIN qa_projects p ON uc.project_id = p.id
-        WHERE uc.id = ?
-    `, [useCaseId]);
+    const useCase = await useCasesRepo.findByIdWithProject(useCaseId);
 
-    if (ucRes.rows.length === 0) return res.status(404).json({ error: 'Caso de Uso no encontrado' });
-    const useCase = ucRes.rows[0];
+    if (!useCase) return res.status(404).json({ error: 'Caso de Uso no encontrado' });
 
-    const casesRes = await query(`
-        SELECT tc.*, us.title as us_title, us.key_id as us_key, s.title as suite_title,
-               uc.title as uc_title,
-               e.status as last_status, e.observations, e.obtained_result, e.tester, e.executed_at
-        FROM qa_test_cases tc
-        JOIN qa_test_suites s ON tc.suite_id = s.id
-        LEFT JOIN qa_user_stories us ON tc.us_id = us.id
-        LEFT JOIN qa_use_cases uc ON s.use_case_id = uc.id
-        LEFT JOIN LATERAL (
-            SELECT status, observations, obtained_result, tester, executed_at
-            FROM qa_executions
-            WHERE tc_id = tc.id
-            ORDER BY executed_at DESC
-            LIMIT 1
-        ) e ON true
-        WHERE s.use_case_id = ?
-        ORDER BY s.id, us.id, tc.id
-    `, [useCaseId]);
+    const cases = await testCasesRepo.exportByUseCase(useCaseId);
 
     const wb = XLSX.utils.book_new();
 
@@ -445,7 +405,7 @@ exports.exportUseCaseExcel = async (req, res) => {
     ];
 
     const data = [headers];
-    casesRes.rows.forEach((tc) => {
+    cases.forEach((tc) => {
         data.push([
             tc.uc_title || useCase.title || '',
             tc.suite_title || '',
@@ -487,28 +447,10 @@ exports.exportUseCaseExcel = async (req, res) => {
 exports.exportProjectExcel = async (req, res) => {
     const projectId = req.params.id;
 
-    const projRes = await query(`SELECT * FROM qa_projects WHERE id = ?`, [projectId]);
-    if (projRes.rows.length === 0) return res.status(404).json({ error: 'Proyecto no encontrado' });
-    const project = projRes.rows[0];
+    const project = await projectsRepo.findById(projectId);
+    if (!project) return res.status(404).json({ error: 'Proyecto no encontrado' });
 
-    const casesRes = await query(`
-        SELECT tc.*, us.title as us_title, us.key_id as us_key, s.title as suite_title,
-               uc.title as uc_title, uc.key_id as uc_key,
-               e.status as last_status, e.observations, e.obtained_result, e.tester, e.executed_at
-        FROM qa_test_cases tc
-        JOIN qa_test_suites s ON tc.suite_id = s.id
-        JOIN qa_use_cases uc ON s.use_case_id = uc.id
-        LEFT JOIN qa_user_stories us ON tc.us_id = us.id
-        LEFT JOIN LATERAL (
-            SELECT status, observations, obtained_result, tester, executed_at
-            FROM qa_executions
-            WHERE tc_id = tc.id
-            ORDER BY executed_at DESC
-            LIMIT 1
-        ) e ON true
-        WHERE uc.project_id = ?
-        ORDER BY uc.id, s.id, us.id, tc.id
-    `, [projectId]);
+    const cases = await testCasesRepo.exportByProject(projectId);
 
     const wb = XLSX.utils.book_new();
 
@@ -532,7 +474,7 @@ exports.exportProjectExcel = async (req, res) => {
     ];
 
     const data = [headers];
-    casesRes.rows.forEach((tc) => {
+    cases.forEach((tc) => {
         data.push([
             tc.uc_title || '',
             tc.suite_title || '',

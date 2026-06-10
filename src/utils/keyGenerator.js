@@ -1,57 +1,29 @@
-const { query } = require('../config/db');
-
-const ALLOWED_PERMISSIONS = new Set([
-    'can_create_cu', 'can_create_hu', 'can_create_suite', 'can_create_test',
-    'can_assign_cu', 'can_assign_hu', 'can_assign_suite', 'can_execute_test',
-    'can_manage_projects', 'can_manage_users', 'can_configure_jira'
-]);
+const usersRepo = require('../repositories/users.repository');
+const projectSequencesRepo = require('../repositories/projectSequences.repository');
+const useCasesRepo = require('../repositories/useCases.repository');
+const testSuitesRepo = require('../repositories/testSuites.repository');
 
 async function checkPermission(userId, permission) {
     if (!userId || !permission) return false;
-    if (!ALLOWED_PERMISSIONS.has(permission)) return false;
-    const result = await query(`SELECT ${permission} FROM qa_user_permissions WHERE user_id = ?`, [userId]);
-    const row = result.rows[0];
-    if (!row) return false;
-    const v = row[permission];
-    return v === true || v === 1;
+    return usersRepo.permissions.check(userId, permission);
 }
 
-async function generateKey(projectId, prefix, queryFn) {
-    const q = queryFn || query;
-    const res = await q(
-        `INSERT INTO qa_project_sequences (project_id, prefix, last_number) VALUES (?, ?, 1)
-         ON CONFLICT (project_id, prefix) DO UPDATE SET last_number = qa_project_sequences.last_number + 1
-         RETURNING last_number`,
-        [projectId, prefix]
-    );
-    const num = res.rows[0].last_number;
+async function generateKey(projectId, prefix, exec) {
+    const num = await projectSequencesRepo.increment(projectId, prefix, exec);
     return `${prefix}-${num.toString().padStart(4, '0')}`;
 }
 
-async function generateKeyBatch(projectId, prefix, count, queryFn) {
-    const q = queryFn || query;
-    const res = await q(
-        `INSERT INTO qa_project_sequences (project_id, prefix, last_number) VALUES (?, ?, ?)
-         ON CONFLICT (project_id, prefix) DO UPDATE SET last_number = qa_project_sequences.last_number + ?
-         RETURNING last_number`,
-        [projectId, prefix, count, count]
-    );
-    const endNum = res.rows[0].last_number;
+async function generateKeyBatch(projectId, prefix, count, exec) {
+    const endNum = await projectSequencesRepo.incrementBy(projectId, prefix, count, exec);
     return endNum - count + 1;
 }
 
 async function getProjectIdFromUC(ucId) {
-    const res = await query(`SELECT project_id FROM qa_use_cases WHERE id = ?`, [ucId]);
-    return res.rows[0]?.project_id;
+    return useCasesRepo.findProjectId(ucId);
 }
 
 async function getProjectIdFromSuite(suiteId) {
-    const res = await query(`
-        SELECT cu.project_id FROM qa_test_suites ts
-        JOIN qa_use_cases cu ON ts.use_case_id = cu.id
-        WHERE ts.id = ?
-    `, [suiteId]);
-    return res.rows[0]?.project_id;
+    return testSuitesRepo.findProjectId(suiteId);
 }
 
 /**

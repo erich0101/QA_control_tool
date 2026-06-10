@@ -6,7 +6,8 @@ Quick-start for AI coding agents working in this repository. Keep it short. Upda
 
 - **Runtime:** Node.js 20 (Alpine), CommonJS (no ESM).
 - **Framework:** Express 4, helmet, cors, compression, express-rate-limit, multer, sharp, jsonwebtoken, zod, pg, bcryptjs.
-- **DB:** PostgreSQL 18 (local docker container, NOT Supabase). Schema source of truth: `schema.sql`. Migrations in `migrations/*.sql`.
+- **DB:** **Agnóstica**. Cualquier Postgres accesible vía `DATABASE_URL` (Neon, Supabase, RDS, local). La app usa driver `pg` (no levanta DB local en Docker). Schema source of truth: `schema.sql`. Migraciones en `migrations/*.sql` aplicadas **manualmente** con `psql`.
+- **Arquitectura:** `controllers → repositories → db driver` con `services` opcional para lógica compleja. Drivers intercambiables (`pg`, `memory`) vía `DB_DRIVER`.
 - **Logger:** Pino (structured JSON).
 - **Deploy:** Docker Compose, single VM at `rafam_dev@20.55.241.247` via `deploy.sh` (rsync over SSH, no registry).
 - **Public port:** `8088` → container `3001`.
@@ -19,12 +20,20 @@ schema.sql                   # PostgreSQL schema (single source of truth)
 migrations/                  # Idempotent ALTER migrations; apply manually via psql
 src/
   app.js                     # createApp(): middleware chain + routes
-  config/                    # env.js (fail-fast), db.js (pg pool)
+  config/
+    env.js                   # fail-fast: JWT_SECRET, JIRA_ENCRYPTION_KEY, DB
+    db.js                    # shim de retrocompatibilidad (re-exporta src/db)
+  db/                        # Abstracción de driver (Strategy pattern)
+    index.js                 # factory: elige driver según DB_DRIVER
+    drivers/
+      pg.js                  # implementación con pg.Pool (driver real)
+      memory.js              # implementación in-memory (tests/dev sin DB)
   middleware/                # auth, errors, errorHandler, requestId, logRequest, rateLimit, upload, validate
   validators/<domain>.schema.js  # Zod schemas; one file per domain
   routes/                    # index.js mounts domain routers; paths RELATIVE inside each router
-  controllers/<domain>.controller.js  # HTTP handlers; SQL via ?-placeholders (db.js translates to $N)
-  services/                  # key.service, auth.service, testSuites.service, crypto.service
+  controllers/<domain>.controller.js  # HTTP handlers; delega a repos
+  repositories/<domain>.repository.js  # Data access. Único punto que toca db
+  services/                  # auth.service, testSuites.service, crypto.service, key.service
   utils/                     # logger, responses, keyGenerator, gracefulShutdown
 db.js, crypto-utils.js, jira-service.js, report-generator.js   # LEGACY at root; do not add new imports
 archive/                     # server.monolith.bak.js and other retired files
@@ -33,27 +42,47 @@ deploy.sh                    # rsync + build + up to remote VM
 Dockerfile, docker-compose.yml, docker-compose.override.yml
 ```
 
-Legacy note: `archive/server.monolith.bak.js` is the 3387-line original. New code belongs in `src/`. `db.js`, `crypto-utils.js`, `jira-service.js`, `report-generator.js` at the root are still imported by some controllers; do not move or rewrite them without a dedicated phase.
+Legacy note: `archive/server.monolith.bak.js` is the 3387-line original. New code belongs in `src/`. `db.js` (raíz), `crypto-utils.js`, `jira-service.js`, `report-generator.js` at the root are still imported by some legacy code; do not move or rewrite them without a dedicated phase.
+
+## Database — agnóstica por diseño
+
+La app se conecta a **cualquier Postgres accesible vía URL**. Tres formas equivalentes:
+
+| Origen | `DATABASE_URL` ejemplo |
+|---|---|
+| **Neon** | `postgresql://neondb_owner:pass@ep-xxx-pooler.region.aws.neon.tech/neondb?sslmode=require` |
+| **Supabase** (Session Pooler) | `postgresql://postgres.[ref]:pass@aws-0-region.pooler.supabase.com:5432/postgres` |
+| **RDS / EC2 / any Postgres** | `postgresql://user:pass@host:5432/dbname` |
+| **Local docker / dev** | `postgresql://qa_user:pass@localhost:5432/qa_control_tool` |
+
+Si preferís las variables libpq (compat con `psql`), también funciona: `PGHOST`, `PGPORT`, `PGUSER`, `PGPASSWORD`, `PGDATABASE`, `PGSSLMODE`.
+
+**No hay DB en `docker-compose.yml`.** El compose solo levanta la app. La DB vive afuera (Neon/Supabase/RDS/local). Las migraciones se aplican **manualmente** con `psql` (o cualquier cliente) antes del primer arranque:
+
+```bash
+# Neon
+psql "$DATABASE_URL" -f schema.sql
+psql "$DATABASE_URL" -f migrations/001_*.sql
+psql "$DATABASE_URL" -f migrations/002_*.sql
+
+# O desde Node (sin psql instalado):
+node -e "require('pg').Pool.from = null; const {Pool}=require('pg'); const p=new Pool({connectionString:process.env.DATABASE_URL,ssl:{rejectUnauthorized:false}}); (async()=>{const fs=require('fs'); await p.query(fs.readFileSync('./schema.sql','utf8')); for(const m of ['migrations/001_qa_project_sequences_composite_pk.sql','migrations/002_qa_test_cases_priority_flags.sql']){await p.query(fs.readFileSync(m,'utf8'));} await p.end();})()"
+```
 
 ## Setup & run
 
 ```bash
-# Local dev
+# Local dev (asumiendo Postgres local o remoto)
 npm install
 cp .env.example .env
-# Required env vars (fail-fast in src/config/env.js):
-#   JWT_SECRET (>=32 chars)
-#   JIRA_ENCRYPTION_KEY (64 hex chars = 32 bytes)
-#   PGUSER, PGPASSWORD, PGDATABASE
-# Generate them:
+# Editar .env: JWT_SECRET, JIRA_ENCRYPTION_KEY, DATABASE_URL
+# Generar secrets:
 export JWT_SECRET=$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")
 export JIRA_ENCRYPTION_KEY=$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")
 docker compose build app && docker compose up -d
 ```
 
-**App listens on `http://localhost:8088`.**
-
-DB container must be `Healthy` before app starts (`depends_on: service_healthy`). The first run creates the `pgdata` volume and runs `schema.sql` automatically. To wipe and re-init: `docker compose down && docker volume rm qa_control_tool_pgdata`.
+**App listens on `http://localhost:8088`.** No hay DB local en el compose; la app se conecta a la URL del `.env`.
 
 ## Admin user (auto-seeded)
 
@@ -62,15 +91,6 @@ On first boot, `server.js` creates `erich@qa.local` with a **random 32-char hex 
 docker compose logs app | grep "ADMIN CREADO"
 ```
 Re-running on an existing DB does NOT rotate the password.
-
-## Migrations
-
-Apply manually after editing `schema.sql`:
-```bash
-docker cp migrations/00X_name.sql qa_control_tool-db-1:/tmp/m.sql
-docker compose exec db psql -U "$PGUSER" -d "$PGDATABASE" -f /tmp/m.sql
-```
-Use `IF NOT EXISTS` / `DO $$ ... $$` blocks for idempotency. Always update `schema.sql` so fresh deploys include the change.
 
 ## API conventions (verified by smoke tests)
 
@@ -81,13 +101,56 @@ Use `IF NOT EXISTS` / `DO $$ ... $$` blocks for idempotency. Always update `sche
 - Response shape: use `ok(res)`, `created(res, body)`, `noContent(res)` from `src/utils/responses.js`.
 - Errors: throw `AppError` subclasses from `src/middleware/errors.js` (`ValidationError`, `UnauthorizedError`, `ForbiddenError`, `NotFoundError`, `ConflictError`). The `errorHandler` formats the JSON and includes `requestId`. **Do not** call `res.status(500).json({ error: err.message })` directly — that leaks internals.
 
+## Repositories (data access layer)
+
+`src/repositories/<domain>.repository.js` es la **única capa** que toca `db`. Cada repo exporta métodos nombrados (no clases). Ejemplo:
+
+```js
+const usersRepo = require('../repositories/users.repository');
+const user = await usersRepo.findByEmail('alice@example.com');
+```
+
+Cada método acepta opcionalmente un parámetro `exec` al final. Si se pasa, se ejecuta sobre esa conexión (útil para transacciones); si no, usa el adapter global.
+
+```js
+const db = require('../db');
+
+await db.withTransaction(async (tx) => {
+  await testSuitesRepo.create({ ... }, tx);
+  await executionsRepo.create({ ... }, tx);
+  // Cualquier error hace rollback automático.
+});
+```
+
+Reglas:
+- **Repos NO validan** (Zod ya validó en el middleware).
+- **Repos NO tienen lógica de negocio** (ej. decidir permisos).
+- **Repos centralizan whitelists** (ej. `ALLOWED_UPDATE_FIELDS` en `testCases.repository.js`).
+- **Repos devuelven datos primitivos** (array, objeto, escalar), NO el wrapper `{rows, lastID}`.
+
+## DB driver
+
+`src/db/index.js` exporta la instancia del driver elegido:
+
+```js
+const db = require('../db');
+await db.query('SELECT 1');                  // fuera de tx
+await db.withTransaction(async (tx) => ...); // tx
+await db.ping();                             // healthcheck
+await db.end();                              // graceful shutdown
+```
+
+Drivers soportados (vía `DB_DRIVER`):
+- `pg` (default) — usa `pg.Pool` con `DATABASE_URL` o libpq.
+- `memory` — implementación in-memory para tests/dev sin DB. NO production-ready.
+
 ## SQL conventions
 
-- `db.js` accepts `?`-style placeholders and translates to `$1, $2, ...` for `pg`. Controllers keep using `?`. **Never** use template literals to interpolate values.
-- Arrays in `ANY($N::int[])` work natively — pass JS arrays as params.
-- Booleans: pass `true`/`false` JS directly. Do NOT transform to `1`/`0`; columns like `qa_test_cases.is_smoke` are `BOOLEAN`, not `INTEGER`.
-- `Date` instances are auto-serialized to ISO strings.
-- `INSERT` queries that don't already include `RETURNING id` get it appended automatically (except for link/sequence tables — see `noIdTables` in `db.js`).
+- `pg` driver nativo. Los repos usan `?`-style placeholders que el driver traduce a `$1, $2, ...` (ver `convertPlaceholders` en `src/db/drivers/pg.js`).
+- Arrays en `ANY($N::int[])` funcionan nativo — pasá arrays JS como params.
+- Booleans: pasá `true`/`false` JS directo. NO transformes a `1`/`0`; columnas como `qa_test_cases.is_smoke` son `BOOLEAN`.
+- `Date` instances se auto-serializan a ISO strings (ver `normalizeParams` en pg driver).
+- `INSERT` queries sin `RETURNING id` lo reciben auto (excepto para tablas link/sequence — ver `noIdTables` en pg driver).
 
 ## Services vs controllers
 
@@ -105,7 +168,9 @@ When adding a service, the convention is: keep the controller thin (12-20 lines)
 ./deploy.sh                  # incremental build with cache
 REBUILD=1 ./deploy.sh        # force rebuild from scratch
 ```
-`deploy.sh` rsyncs to `rafam_dev@20.55.241.247:/home/rafam_dev/qa_control_tool` (excludes `.env`, `node_modules`, `uploads`, `*.log`), then runs `sudo docker compose build` and `up -d`. If the remote `.env` is missing, it copies from `.env.example` and prints a warning — **edit the remote `.env` immediately** (the generated `JWT_SECRET` and `JIRA_ENCRYPTION_KEY` must match what the local env exports).
+`deploy.sh` rsyncs to `rafam_dev@20.55.241.247:/home/rafam_dev/qa_control_tool` (excludes `.env`, `node_modules`, `uploads`, `*.log`), then runs `sudo docker compose build` and `up -d`. If the remote `.env` is missing, it copies from `.env.example` and prints a warning — **edit the remote `.env` immediately** (the generated `JWT_SECRET`, `JIRA_ENCRYPTION_KEY`, and `DATABASE_URL` must be set).
+
+El script valida que el `.env` remoto tenga `JWT_SECRET`, `JIRA_ENCRYPTION_KEY`, y `DATABASE_URL` con `postgresql://`. **No aplica migraciones** — eso se hace manualmente contra la URL.
 
 SSH-in and tail logs:
 ```bash
@@ -120,7 +185,7 @@ ssh rafam_dev@20.55.241.247 'cd /home/rafam_dev/qa_control_tool && sudo docker c
 
 - `jira-service.js` decrypts with legacy AES-CBC, but `jira.controller.js` encrypts with the new AES-256-GCM `crypto.service`. 100% of Jira requests fail in production until Phase B1.
 - `testCases.controller.js` `create` does not persist `is_smoke`/`is_regression`/etc. on INSERT (only on UPDATE). Frontend should PUT after POST.
-- `db.js` and `utils/crypto-utils.js` cannot be moved to `archive/` yet because `jira-service.js` and `report-generator.js` import them.
+- `db.js` (raíz) and `utils/crypto-utils.js` cannot be moved to `archive/` yet because `jira-service.js` and `report-generator.js` import them.
 - No automated tests, no global pagination, no idempotency keys, no CSP nonces — all deferred to Phase F.
 
 ## What's not here
@@ -129,3 +194,4 @@ ssh rafam_dev@20.55.241.247 'cd /home/rafam_dev/qa_control_tool && sudo docker c
 - No CI. `deploy.sh` is the only deploy path.
 - No monorepo, no `workspaces` in `package.json`. Single package.
 - ESM is not configured. Stay on CommonJS (`require`/`module.exports`).
+- No DB local en compose. Toda DB es remota, vía `DATABASE_URL`.

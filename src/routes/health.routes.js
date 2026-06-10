@@ -1,12 +1,12 @@
 const express = require('express');
-const { query } = require('../config/db');
+const db = require('../db');
 const { asyncHandler } = require('../middleware/errors');
 
 const router = express.Router();
 
 router.get('/', asyncHandler(async (req, res) => {
     try {
-        await query('SELECT 1');
+        await db.ping();
         return res.status(200).json({
             status: 'ok',
             db: 'ok',

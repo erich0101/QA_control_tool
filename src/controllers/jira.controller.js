@@ -1,18 +1,21 @@
-const { query } = require('../config/db');
+const jiraRepo = require('../repositories/jira.repository');
+const defectsRepo = require('../repositories/defects.repository');
+const useCasesRepo = require('../repositories/useCases.repository');
+const attachmentsRepo = require('../repositories/attachments.repository');
 const JiraService = require('../../jira-service');
 const { encrypt } = require('../services/crypto.service');
 
 async function getJiraUserCredentials(projectId, userId) {
-    const [projRes, userRes] = await Promise.all([
-        query(`SELECT jira_domain, jira_project_key FROM qa_jira_configs WHERE project_id = ?`, [projectId]),
-        query(`SELECT jira_user_email, encrypted_token FROM qa_jira_user_configs WHERE project_id = ? AND user_id = ?`, [projectId, userId])
+    const [proj, userCfg] = await Promise.all([
+        jiraRepo.jiraConfigs.findByProjectId(projectId),
+        jiraRepo.jiraUserConfigs.findByProjectAndUser(projectId, userId)
     ]);
-    if (projRes.rows.length === 0) return { error: 'Jira no configurado para este proyecto', code: 'NO_PROJECT_CONFIG' };
-    if (userRes.rows.length === 0) return { error: 'Configura tu token de Jira en tu perfil', code: 'NO_USER_TOKEN' };
+    if (!proj) return { error: 'Jira no configurado para este proyecto', code: 'NO_PROJECT_CONFIG' };
+    if (!userCfg) return { error: 'Configura tu token de Jira en tu perfil', code: 'NO_USER_TOKEN' };
     return {
-        projectKey: projRes.rows[0].jira_project_key,
-        domain: projRes.rows[0].jira_domain,
-        userCredentials: userRes.rows[0]
+        projectKey: proj.jira_project_key,
+        domain: proj.jira_domain,
+        userCredentials: userCfg
     };
 }
 
@@ -53,19 +56,17 @@ function getLastStatusChange(issue, targetStatus) {
 
 exports.getJiraConfig = async (req, res) => {
     const projectId = req.params.id;
-    const result = await query(`SELECT jira_domain, jira_project_key FROM qa_jira_configs WHERE project_id = ?`, [projectId]);
-    if (result.rows.length === 0) {
+    const row = await jiraRepo.jiraConfigs.findByProjectId(projectId);
+    if (!row) {
         return res.json({ config: null, userHasToken: false });
     }
-    const row = result.rows[0];
-    const userConfig = await query(`SELECT id FROM qa_jira_user_configs WHERE project_id = ? AND user_id = ?`, [projectId, req.user.id]);
-    const userHasToken = userConfig.rows.length > 0;
+    const userConfig = await jiraRepo.jiraUserConfigs.existsForProjectAndUser(projectId, req.user.id);
     res.json({
         config: {
             jira_domain: row.jira_domain,
             jira_project_key: row.jira_project_key
         },
-        userHasToken
+        userHasToken: userConfig
     });
 };
 
@@ -75,18 +76,15 @@ exports.saveJiraConfig = async (req, res) => {
     if (!jira_domain || !jira_project_key) {
         return res.status(400).json({ error: 'Faltan campos requeridos: jira_domain y jira_project_key' });
     }
-    const existing = await query(`SELECT project_id FROM qa_jira_configs WHERE project_id = ?`, [projectId]);
-    if (existing.rows.length > 0) {
-        await query(`
-            UPDATE qa_jira_configs
-            SET jira_domain = ?, jira_project_key = ?, updated_at = CURRENT_TIMESTAMP
-            WHERE project_id = ?
-        `, [jira_domain, jira_project_key, projectId]);
+    const exists = await jiraRepo.jiraConfigs.existsForProject(projectId);
+    if (exists) {
+        await jiraRepo.jiraConfigs.updateByProject({
+            projectId, jiraDomain: jira_domain, jiraProjectKey: jira_project_key
+        });
     } else {
-        await query(`
-            INSERT INTO qa_jira_configs (project_id, jira_domain, jira_project_key)
-            VALUES (?, ?, ?)
-        `, [projectId, jira_domain, jira_project_key]);
+        await jiraRepo.jiraConfigs.create({
+            projectId, jiraDomain: jira_domain, jiraProjectKey: jira_project_key
+        });
     }
     res.json({ ok: true });
 };
@@ -94,11 +92,11 @@ exports.saveJiraConfig = async (req, res) => {
 exports.getJiraUserConfig = async (req, res) => {
     const projectId = req.params.id;
     const userId = req.user.id;
-    const result = await query(`SELECT jira_user_email FROM qa_jira_user_configs WHERE project_id = ? AND user_id = ?`, [projectId, userId]);
-    if (result.rows.length === 0) {
+    const email = await jiraRepo.jiraUserConfigs.findEmailByProjectAndUser(projectId, userId);
+    if (!email) {
         return res.json({ hasConfig: false });
     }
-    res.json({ hasConfig: true, email: result.rows[0].jira_user_email });
+    res.json({ hasConfig: true, email });
 };
 
 exports.saveJiraUserConfig = async (req, res) => {
@@ -108,32 +106,29 @@ exports.saveJiraUserConfig = async (req, res) => {
     if (!jira_user_email) {
         return res.status(400).json({ error: 'El email de Jira es obligatorio' });
     }
-    const existing = await query(`SELECT id, encrypted_token FROM qa_jira_user_configs WHERE project_id = ? AND user_id = ?`, [projectId, userId]);
+    const existing = await jiraRepo.jiraUserConfigs.findTokenByProjectAndUser(projectId, userId);
     let encToken;
     if (jira_api_token) {
         encToken = encrypt(jira_api_token);
-    } else if (existing.rows.length > 0) {
-        encToken = existing.rows[0].encrypted_token;
+    } else if (existing) {
+        encToken = existing.encrypted_token;
     } else {
         return res.status(400).json({ error: 'El API Token es obligatorio para una nueva configuración' });
     }
-    if (existing.rows.length > 0) {
-        await query(`
-            UPDATE qa_jira_user_configs
-            SET jira_user_email = ?, encrypted_token = ?, updated_at = CURRENT_TIMESTAMP
-            WHERE project_id = ? AND user_id = ?
-        `, [jira_user_email, encToken, projectId, userId]);
+    if (existing) {
+        await jiraRepo.jiraUserConfigs.updateByProjectAndUser({
+            projectId, userId, jiraUserEmail: jira_user_email, encryptedToken: encToken
+        });
     } else {
-        await query(`
-            INSERT INTO qa_jira_user_configs (project_id, user_id, jira_user_email, encrypted_token)
-            VALUES (?, ?, ?, ?)
-        `, [projectId, userId, jira_user_email, encToken]);
+        await jiraRepo.jiraUserConfigs.create({
+            projectId, userId, jiraUserEmail: jira_user_email, encryptedToken: encToken
+        });
     }
     res.json({ ok: true });
 };
 
 exports.deleteJiraUserConfig = async (req, res) => {
-    await query(`DELETE FROM qa_jira_user_configs WHERE project_id = ? AND user_id = ?`, [req.params.id, req.user.id]);
+    await jiraRepo.jiraUserConfigs.deleteByProjectAndUser(req.params.id, req.user.id);
     res.json({ ok: true });
 };
 
@@ -424,22 +419,14 @@ exports.getTracking = async (req, res) => {
     const creds = await getJiraUserCredentials(projectId, req.user.id);
     if (creds.error) return res.status(creds.code === 'NO_PROJECT_CONFIG' ? 404 : 403).json({ error: creds.error });
 
-    const dbBugs = await query(`
-        SELECT d.id, d.title, d.jira_key, d.jira_url, d.created_at
-        FROM qa_defects d
-        JOIN qa_executions e ON d.execution_id = e.id
-        JOIN qa_test_cases tc ON e.tc_id = tc.id
-        JOIN qa_test_suites s ON tc.suite_id = s.id
-        JOIN qa_use_cases cu ON s.use_case_id = cu.id
-        WHERE cu.project_id = ? AND d.jira_key IS NOT NULL
-    `, [projectId]);
+    const dbBugs = await defectsRepo.findTrackedByProject(projectId);
 
-    if (dbBugs.rows.length === 0) return res.json({ tracking: [] });
+    if (dbBugs.length === 0) return res.json({ tracking: [] });
 
-    const keys = dbBugs.rows.map(b => b.jira_key);
+    const keys = dbBugs.map(b => b.jira_key);
     const jiraIssues = await JiraService.getTicketsDetails(creds.userCredentials, creds.domain, keys);
 
-    const tracking = dbBugs.rows.map(bug => {
+    const tracking = dbBugs.map(bug => {
         const jira = jiraIssues.find(j => j.key === bug.jira_key);
         return {
             ...bug,
@@ -477,24 +464,15 @@ exports.createDefectTicket = async (req, res) => {
     const defectId = req.params.id;
     const { epicId, assigneeId, priorityId, customFields } = req.body;
 
-    const bugRes = await query(`
-        SELECT d.*, tc.title as tc_title, tc.key_id as tc_key, e.tester as tester_name, s.use_case_id
-        FROM qa_defects d
-        JOIN qa_executions e ON d.execution_id = e.id
-        JOIN qa_test_cases tc ON e.tc_id = tc.id
-        JOIN qa_test_suites s ON tc.suite_id = s.id
-        WHERE d.id = ?
-    `, [defectId]);
+    const bug = await defectsRepo.findDetailById(defectId);
 
-    if (bugRes.rows.length === 0) return res.status(404).json({ error: 'Defecto no encontrado.' });
-    const bug = bugRes.rows[0];
+    if (!bug) return res.status(404).json({ error: 'Defecto no encontrado.' });
 
-    const ucRes = await query(`SELECT project_id FROM qa_use_cases WHERE id = ?`, [bug.use_case_id]);
-    const projectId = ucRes.rows[0].project_id;
+    const projectId = await useCasesRepo.findProjectId(bug.use_case_id);
 
-    const evidenceRes = await query(`SELECT file_name, mime_type, file_data FROM qa_attachments WHERE execution_id = ?`, [bug.execution_id]);
-    if (evidenceRes.rows.length > 0) {
-        bug.evidences = evidenceRes.rows.map(r => r.file_name);
+    const evidenceRes = await attachmentsRepo.listByExecution(bug.execution_id);
+    if (evidenceRes.length > 0) {
+        bug.evidences = evidenceRes.map(r => r.file_name);
     }
 
     const creds = await getJiraUserCredentials(projectId, req.user.id);
@@ -505,8 +483,8 @@ exports.createDefectTicket = async (req, res) => {
 
     let attachmentCount = 0;
     const attachmentErrors = [];
-    if (evidenceRes.rows.length > 0) {
-        for (const ev of evidenceRes.rows) {
+    if (evidenceRes.length > 0) {
+        for (const ev of evidenceRes) {
             try {
                 await JiraService.attachFile(creds.userCredentials, creds.domain, jiraResult.key, ev.file_name, ev.file_data, ev.mime_type);
                 attachmentCount++;
@@ -516,11 +494,9 @@ exports.createDefectTicket = async (req, res) => {
         }
     }
 
-    await query(`
-        UPDATE qa_defects
-        SET jira_key = ?, jira_url = ?, root_cause = ?
-        WHERE id = ?
-    `, [jiraResult.key, jiraUrl, `JIRA: ${jiraResult.key}`, defectId]);
+    await defectsRepo.setJiraLink(defectId, {
+        jiraKey: jiraResult.key, jiraUrl, rootCause: `JIRA: ${jiraResult.key}`
+    });
 
     res.json({ ok: true, jira: { ...jiraResult, browser_url: jiraUrl }, attachment_count: attachmentCount, attachment_errors: attachmentErrors });
 };
