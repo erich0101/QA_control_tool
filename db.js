@@ -77,14 +77,19 @@ function mapResult(data) {
 async function query(sql, params = []) {
     const finalSql = buildSql(sql, params);
 
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 30000);
+
     try {
-        const { data, error } = await supabase.rpc('exec_query', { query_text: finalSql });
+        const { data, error } = await supabase.rpc('exec_query', { query_text: finalSql }, { signal: controller.signal });
 
         if (error) throw new Error(error.message);
         if (data && data.error) throw new Error(data.error + (data.detail ? ' (' + data.detail + ')' : ''));
 
+        clearTimeout(timer);
         return mapResult(data || { rows: [], rowCount: 0 });
     } catch (err) {
+        clearTimeout(timer);
         console.error('Error en ejecucion:', err.message);
         console.error('SQL fallido:', finalSql.substring(0, 500));
         throw err;

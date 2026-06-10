@@ -10,6 +10,7 @@ import { DashboardTab } from './components/dashboard-tab.js';
 import { HistoryTab } from './components/history-tab.js';
 import { JiraTrackingTab } from './components/jira-tracking-tab.js';
 import { MiJiraTab } from './components/mi-jira-tab.js';
+import { HallazgosTab } from './components/hallazgos-tab.js';
 import { UI } from './utils/ui-utils.js';
 import { RealtimeService } from './services/realtime.js';
 import { Modals } from './components/modals.js';
@@ -128,6 +129,9 @@ function renderActiveTab(container, state) {
             break;
         case 'dashboard':
             DashboardTab.render(container);
+            break;
+        case 'hallazgos':
+            HallazgosTab.render(container);
             break;
         case 'mi-jira':
             MiJiraTab.render(container);

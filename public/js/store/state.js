@@ -34,7 +34,8 @@ export const Store = {
         currentIdx: -1,
         sbsPairs: [],
         isLoading: false,
-        jiraEpics: []
+        jiraEpics: [],
+        hallazgos: []
     },
     
     listeners: [],
@@ -156,6 +157,12 @@ export const Store = {
 
     setJiraEpics(epics) {
         this.state.jiraEpics = epics;
+        this.notify();
+    },
+
+    // Hallazgos
+    setHallazgos(hallazgos) {
+        this.state.hallazgos = hallazgos;
         this.notify();
     }
 };

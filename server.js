@@ -44,8 +44,17 @@ const ExcelJS = require('exceljs');
         `);
 
         await query(`ALTER TABLE qa_jira_configs ADD COLUMN IF NOT EXISTS jira_project_key TEXT`);
-        await query(`ALTER TABLE qa_defects ADD COLUMN IF NOT EXISTS jira_epic_key TEXT`);
-        await query(`ALTER TABLE qa_test_cases ADD COLUMN IF NOT EXISTS jira_epic_key TEXT`);
+await query(`ALTER TABLE qa_defects ADD COLUMN IF NOT EXISTS jira_epic_key TEXT`);
+await query(`ALTER TABLE qa_defects ADD COLUMN IF NOT EXISTS project_id INTEGER REFERENCES qa_projects(id) ON DELETE CASCADE`);
+await query(`ALTER TABLE qa_defects ADD COLUMN IF NOT EXISTS steps_to_reproduce TEXT`);
+await query(`ALTER TABLE qa_defects ADD COLUMN IF NOT EXISTS expected_result TEXT`);
+await query(`ALTER TABLE qa_defects ADD COLUMN IF NOT EXISTS actual_result TEXT`);
+await query(`ALTER TABLE qa_defects ADD COLUMN IF NOT EXISTS frequency VARCHAR(50)`);
+await query(`ALTER TABLE qa_defects ADD COLUMN IF NOT EXISTS business_impact TEXT`);
+await query(`ALTER TABLE qa_defects ADD COLUMN IF NOT EXISTS assigned_to INTEGER REFERENCES qa_users(id) ON DELETE SET NULL`);
+await query(`ALTER TABLE qa_defects ADD COLUMN IF NOT EXISTS created_by INTEGER REFERENCES qa_users(id)`);
+await query(`ALTER TABLE qa_defects ADD COLUMN IF NOT EXISTS preconditions TEXT`);
+await query(`ALTER TABLE qa_defects ADD COLUMN IF NOT EXISTS observations TEXT`);
         await query(`ALTER TABLE qa_test_runs ADD COLUMN IF NOT EXISTS accumulated_seconds INTEGER DEFAULT 0`);
         await query(`ALTER TABLE qa_test_runs ADD COLUMN IF NOT EXISTS last_resume_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP`);
         await query(`ALTER TABLE qa_test_runs ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'RUNNING'`);
@@ -124,6 +133,16 @@ const ExcelJS = require('exceljs');
         await query(`CREATE INDEX IF NOT EXISTS idx_exec_run_status   ON qa_executions (run_id, status)`);
         await query(`CREATE INDEX IF NOT EXISTS idx_defects_exec_id   ON qa_defects (execution_id)`);
         await query(`CREATE INDEX IF NOT EXISTS idx_defects_jira_key  ON qa_defects (jira_key) WHERE jira_key IS NOT NULL`);
+        await query(`CREATE INDEX IF NOT EXISTS idx_defects_project_id ON qa_defects (project_id)`);
+await query(`CREATE INDEX IF NOT EXISTS idx_defects_proj_exec ON qa_defects (project_id, execution_id)`);
+        await query(`CREATE TABLE IF NOT EXISTS qa_hallazgo_tc (
+            hallazgo_id INTEGER REFERENCES qa_defects(id) ON DELETE CASCADE,
+            tc_id INTEGER REFERENCES qa_test_cases(id) ON DELETE CASCADE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (hallazgo_id, tc_id)
+        )`);
+        await query(`CREATE INDEX IF NOT EXISTS idx_hallazgo_tc_hallazgo ON qa_hallazgo_tc (hallazgo_id)`);
+        await query(`CREATE INDEX IF NOT EXISTS idx_hallazgo_tc_tc       ON qa_hallazgo_tc (tc_id)`);
         await query(`CREATE INDEX IF NOT EXISTS idx_suites_uc_id      ON qa_test_suites (use_case_id)`);
         await query(`CREATE INDEX IF NOT EXISTS idx_suites_active_run ON qa_test_suites (active_run_id) WHERE active_run_id IS NOT NULL`);
         await query(`CREATE INDEX IF NOT EXISTS idx_uc_project_id     ON qa_use_cases (project_id)`);
@@ -162,6 +181,10 @@ const ExcelJS = require('exceljs');
     } catch (e) {
         console.error("⚠️ Error en verificación de esquema:", e.message);
     }
+    setupRealtime();
+    server.listen(PORT, () => {
+        console.log(`Manual QA Tool (JIRA Edition) -> http://localhost:${PORT}`);
+    });
 })();
 
 const app = express();
@@ -3220,6 +3243,193 @@ app.put('/api/defects/:id/assign', requireAuth, async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+
+// ══════════════════════════════════════════════════════════════
+// ── HALLAZGOS QA ──
+// ══════════════════════════════════════════════════════════════
+
+app.get('/api/hallazgos', requireAuth, async (req, res) => {
+    try {
+        const { project_id } = req.query;
+        if (!project_id) return res.status(400).json({ error: 'project_id requerido' });
+
+        const sql = `
+            SELECT d.id, d.title, d.description, d.severity, d.status, d.steps_to_reproduce,
+                   d.expected_result, d.actual_result, d.frequency, d.business_impact,
+                   d.assigned_to, d.jira_key, d.jira_url, d.jira_epic_key, d.project_id,
+                   d.created_by, d.created_at,
+                   d.preconditions, d.observations,
+                   assignee.name as assignee_name,
+                   (SELECT COUNT(*) FROM qa_attachments WHERE defect_id = d.id) as evidence_count,
+                   ht.tc_id IS NOT NULL as converted_to_tc,
+                   ht.tc_id as converted_tc_id
+            FROM qa_defects d
+            LEFT JOIN qa_hallazgo_tc ht ON d.id = ht.hallazgo_id
+            LEFT JOIN qa_users assignee ON d.assigned_to = assignee.id
+            WHERE d.project_id = ? AND d.execution_id IS NULL
+            ORDER BY d.id DESC
+            LIMIT 500
+        `;
+        const result = await query(sql, [project_id]);
+        res.json({ hallazgos: result.rows });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/hallazgos', requireAuth, async (req, res) => {
+    try {
+        if (!(await checkPermission(req.user.id, 'can_create_cu')) && req.user.role !== 'Admin' && req.user.role !== 'Analista QA') {
+            return res.status(403).json({ error: 'Permisos insuficientes' });
+        }
+        const { project_id, title, description, severity, steps_to_reproduce, expected_result, actual_result, frequency, business_impact, preconditions, observations, assigned_to } = req.body;
+        if (!project_id || !title) return res.status(400).json({ error: 'project_id y title son requeridos' });
+
+        const result = await query(
+            `INSERT INTO qa_defects (project_id, title, description, severity, steps_to_reproduce, expected_result, actual_result, frequency, business_impact, preconditions, observations, assigned_to, status, created_by)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?)`,
+            [project_id, title, description || '', severity || 'Media', steps_to_reproduce || '', expected_result || '', actual_result || '', frequency || 'Siempre', business_impact || '', preconditions || '', observations || '', assigned_to || null, req.user.id]
+        );
+        res.json({ ok: true, id: result.lastID });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.put('/api/hallazgos/:id', requireAuth, async (req, res) => {
+    try {
+        const { title, description, severity, steps_to_reproduce, expected_result, actual_result, frequency, business_impact, preconditions, observations, assigned_to } = req.body;
+        const fields = [];
+        const params = [];
+        ['title', 'description', 'severity', 'steps_to_reproduce', 'expected_result', 'actual_result', 'frequency', 'business_impact', 'preconditions', 'observations', 'assigned_to'].forEach(f => {
+            if (req.body[f] !== undefined) {
+                fields.push(`${f} = ?`);
+                params.push(req.body[f]);
+            }
+        });
+        if (fields.length === 0) return res.status(400).json({ error: 'Sin campos para actualizar' });
+        params.push(req.params.id);
+        await query(`UPDATE qa_defects SET ${fields.join(', ')} WHERE id = ? AND execution_id IS NULL`, params);
+        res.json({ ok: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.delete('/api/hallazgos/:id', requireAuth, requireAdmin, async (req, res) => {
+    try {
+        await query(`DELETE FROM qa_defects WHERE id = ? AND execution_id IS NULL`, [req.params.id]);
+        res.json({ ok: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.put('/api/hallazgos/:id/status', requireAuth, async (req, res) => {
+    try {
+        const { status } = req.body;
+        if (!status) return res.status(400).json({ error: 'status requerido' });
+        await query(`UPDATE qa_defects SET status = ? WHERE id = ? AND execution_id IS NULL`, [status, req.params.id]);
+        res.json({ ok: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.put('/api/hallazgos/:id/assign', requireAuth, async (req, res) => {
+    try {
+        const { assigned_to } = req.body;
+        await query(`UPDATE qa_defects SET assigned_to = ? WHERE id = ? AND execution_id IS NULL`, [assigned_to || null, req.params.id]);
+        res.json({ ok: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/hallazgos/:id/convert-to-tc', requireAuth, async (req, res) => {
+    try {
+        const { suite_id } = req.body;
+        if (!suite_id) return res.status(400).json({ error: 'suite_id requerido' });
+
+        // 1. Leer hallazgo
+        const hallazgoRes = await query(`SELECT * FROM qa_defects WHERE id = ? AND execution_id IS NULL`, [req.params.id]);
+        if (hallazgoRes.rows.length === 0) return res.status(404).json({ error: 'Hallazgo no encontrado' });
+        const h = hallazgoRes.rows[0];
+
+        // 2. Obtener proyecto y generar key
+        const projectRes = await query(`SELECT project_id FROM qa_use_cases WHERE id = (SELECT use_case_id FROM qa_test_suites WHERE id = ?)`, [suite_id]);
+        const projectId = projectRes.rows[0]?.project_id;
+        if (!projectId) return res.status(400).json({ error: 'Suite no encontrada' });
+
+        const keyRes = await query(`SELECT generate_key(?, 'TC') as key_id`, [projectId]);
+        const finalKeyId = keyRes.rows[0]?.key_id || null;
+
+        // 3. Crear Test Case con datos del hallazgo
+        const tcRes = await query(
+            `INSERT INTO qa_test_cases (suite_id, title, steps, expected_result, created_by, updated_by, key_id)
+             VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+            [suite_id, h.title, h.steps_to_reproduce || '', h.expected_result || '', req.user.id, req.user.id, finalKeyId]
+        );
+        const tcId = tcRes.rows[0].id;
+
+        // 4. Registrar relación
+        await query(`INSERT INTO qa_hallazgo_tc (hallazgo_id, tc_id) VALUES (?, ?) ON CONFLICT DO NOTHING`, [h.id, tcId]);
+
+        res.json({ ok: true, tc_id: tcId, key_id: finalKeyId });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/jira/hallazgos/:id/create-ticket', requireAuth, async (req, res) => {
+    try {
+        const hallazgoId = req.params.id;
+        const { epicId, assigneeId, priorityId, customFields } = req.body;
+
+        const bugRes = await query(`
+            SELECT d.*, u.name as tester_name
+            FROM qa_defects d
+            LEFT JOIN qa_users u ON d.created_by = u.id
+            WHERE d.id = ? AND d.execution_id IS NULL
+        `, [hallazgoId]);
+        if (bugRes.rows.length === 0) return res.status(404).json({ error: 'Hallazgo no encontrado.' });
+        const bug = bugRes.rows[0];
+
+        const projectId = bug.project_id;
+
+        const evidenceRes = await query(`SELECT file_name, mime_type, file_data FROM qa_attachments WHERE defect_id = ?`, [hallazgoId]);
+        if (evidenceRes.rows.length > 0) {
+            bug.evidences = evidenceRes.rows.map(r => r.file_name);
+        }
+
+        const creds = await getJiraUserCredentials(projectId, req.user.id);
+        if (creds.error) return res.status(creds.code === 'NO_PROJECT_CONFIG' ? 404 : 403).json({ error: creds.error });
+
+        const jiraResult = await JiraService.createIssue(creds.userCredentials, creds.projectKey, creds.domain, bug, epicId, assigneeId, priorityId, customFields);
+        const jiraUrl = `${jiraResult.self.split('/rest/')[0]}/browse/${jiraResult.key}`;
+
+        let attachmentCount = 0;
+        const attachmentErrors = [];
+        if (evidenceRes.rows.length > 0) {
+            for (const ev of evidenceRes.rows) {
+                try {
+                    await JiraService.attachFile(creds.userCredentials, creds.domain, jiraResult.key, ev.file_name, ev.file_data, ev.mime_type);
+                    attachmentCount++;
+                } catch (attachErr) {
+                    attachmentErrors.push({ file: ev.file_name, error: attachErr.message });
+                }
+            }
+        }
+
+        await query(`UPDATE qa_defects SET jira_key = ?, jira_url = ? WHERE id = ?`, [jiraResult.key, jiraUrl, hallazgoId]);
+
+        res.json({ ok: true, jira: { ...jiraResult, browser_url: jiraUrl }, attachment_count: attachmentCount, attachment_errors: attachmentErrors });
+    } catch (err) {
+        console.error("Error al crear ticket en Jira:", err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 const { generateReport, generateMultiReport } = require('./report-generator');
 
 app.get('/api/reports/multi', requireAuth, async (req, res) => {
@@ -3263,20 +3473,24 @@ app.get('/api/evidence/:id', requireAuth, async (req, res) => {
 
 app.post('/api/evidence', requireAuth, upload.single('evidence'), async (req, res) => {
     try {
-        const { tc_id, category } = req.body;
+        const { tc_id, defect_id, category } = req.body;
         const file = req.file;
         if (!file) return res.status(400).json({ error: 'Archivo no recibido' });
 
-        // Obtener la última ejecución para este TC
-        const execRes = await query(`SELECT id FROM qa_executions WHERE tc_id = ? ORDER BY id DESC LIMIT 1`, [tc_id]);
-        if (execRes.rows.length === 0) return res.status(400).json({ error: 'No hay una ejecución reciente para este Test Case' });
-        
-        const executionId = execRes.rows[0].id;
-
-        await query(`
-            INSERT INTO qa_attachments (execution_id, file_name, mime_type, file_data, evidence_category)
-            VALUES (?, ?, ?, ?, ?)
-        `, [executionId, file.originalname, file.mimetype, file.buffer, category || 'GENERAL']);
+        if (defect_id) {
+            await query(`
+                INSERT INTO qa_attachments (defect_id, file_name, mime_type, file_data, evidence_category)
+                VALUES (?, ?, ?, ?, ?)
+            `, [defect_id, file.originalname, file.mimetype, file.buffer, category || 'GENERAL']);
+        } else {
+            const execRes = await query(`SELECT id FROM qa_executions WHERE tc_id = ? ORDER BY id DESC LIMIT 1`, [tc_id]);
+            if (execRes.rows.length === 0) return res.status(400).json({ error: 'No hay una ejecución reciente para este Test Case' });
+            const executionId = execRes.rows[0].id;
+            await query(`
+                INSERT INTO qa_attachments (execution_id, file_name, mime_type, file_data, evidence_category)
+                VALUES (?, ?, ?, ?, ?)
+            `, [executionId, file.originalname, file.mimetype, file.buffer, category || 'GENERAL']);
+        }
 
         res.json({ ok: true });
     } catch (err) {
@@ -3289,6 +3503,18 @@ app.delete('/api/evidence/:id', requireAuth, async (req, res) => {
         const result = await query(`DELETE FROM qa_attachments WHERE id = ?`, [req.params.id]);
         if (result.changes === 0) return res.status(404).json({ error: 'Evidencia no encontrada' });
         res.json({ ok: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get('/api/hallazgos/:id/evidence', requireAuth, async (req, res) => {
+    try {
+        const result = await query(`
+            SELECT id, file_name, mime_type, evidence_category, created_at
+            FROM qa_attachments WHERE defect_id = ? ORDER BY id
+        `, [req.params.id]);
+        res.json({ evidence: result.rows });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -3500,8 +3726,4 @@ function setupRealtime() {
     console.log('📡 Realtime: Listening for database changes via Supabase Realtime...');
 }
 
-setupRealtime();
 
-server.listen(PORT, () => {
-    console.log(`Manual QA Tool (JIRA Edition) -> http://localhost:${PORT}`);
-});

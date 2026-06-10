@@ -1236,6 +1236,60 @@ input:checked + .slider:before {
     padding: 16px 32px; border-bottom: 1px solid var(--border); background: var(--bg-surface); display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 10;
 }
 .ts-detail-body { padding: 24px; display: flex; flex-direction: column; gap: 16px; max-width: 1200px; margin: 0 auto; width: 100%; }
+
+/* Hallazgos Master-Detail Layout */
+.hallazgos-layout { display: flex; height: calc(100vh - 120px); overflow: hidden; background: var(--bg-main); }
+.hallazgos-sidebar { width: 320px; min-width: 320px; border-right: 1px solid rgba(255,255,255,0.08); display: flex; flex-direction: column; background: #111318; }
+.hallazgos-main-content { flex: 1; overflow-y: auto; display: flex; flex-direction: column; background: var(--bg-main); position: relative; }
+
+.hallazgos-sidebar-header { padding: 16px; border-bottom: 1px solid rgba(255,255,255,0.08); background: #111318; }
+.hallazgos-sidebar-list { flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 2px; background: #111318; }
+
+.h-card {
+    padding: 10px 12px; border-radius: 0; border: none; border-bottom: 1px solid rgba(255,255,255,0.04); background: rgba(255,255,255,0.03); cursor: pointer; transition: all 0.15s;
+}
+.h-card:hover { background: rgba(255,255,255,0.07); }
+.h-card.active { background: rgba(59, 130, 246, 0.2); border-left: 3px solid var(--brand); }
+
+.h-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+.h-card-id { font-size: 0.65rem; font-weight: 800; color: var(--fail); letter-spacing: 0.05em; }
+.h-card-title { font-size: 0.82rem; font-weight: 600; color: #d1d5db; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h-card-title:hover { color: var(--text-main); }
+.h-card-meta { font-size: 0.62rem; color: #6b7280; margin-top: 2px; display: flex; gap: 8px; align-items: center; }
+.h-card-severity { font-size: 0.6rem; padding: 1px 6px; border-radius: 3px; font-weight: 700; }
+
+.h-detail-header { 
+    padding: 16px 32px; border-bottom: 1px solid var(--border); background: var(--bg-surface); display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 10;
+}
+.h-detail-body { padding: 32px; display: flex; flex-direction: column; gap: 24px; max-width: 1100px; margin: 0 auto; width: 100%; }
+
+.h-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.h-form-grid .full-width { grid-column: 1 / -1; }
+.h-form-section { 
+    background: var(--bg-surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden;
+}
+.h-form-section-header { 
+    padding: 14px 20px; background: rgba(255,255,255,0.02); display: flex; justify-content: space-between; align-items: center;
+}
+.h-form-section-title { font-size: 0.7rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em; display: flex; align-items: center; gap: 10px; }
+.h-form-section-body { padding: 20px; }
+
+.h-evidence-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px; margin-top: 12px;
+}
+.h-evidence-item {
+    position: relative; border-radius: 8px; overflow: hidden; border: 1px solid var(--border); aspect-ratio: 1; background: rgba(0,0,0,0.3);
+}
+.h-evidence-item img {
+    width: 100%; height: 100%; object-fit: cover; display: block;
+}
+.h-evidence-item .h-evidence-remove {
+    position: absolute; top: 4px; right: 4px; background: rgba(0,0,0,0.7); border: none; color: white; border-radius: 50%; width: 22px; height: 22px; font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+}
+.h-evidence-category-badge {
+    position: absolute; bottom: 4px; left: 4px; font-size: 0.55rem; padding: 1px 6px; border-radius: 3px; background: rgba(0,0,0,0.7); color: #ccc;
+}
+
 /* HU Details Drawer */
 .hu-drawer-overlay {
     position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 1000;

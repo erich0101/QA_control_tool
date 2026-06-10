@@ -38,6 +38,7 @@ export const Modals = {
             case 'bug-details-pro': content = this.getBugDetailsProContent(options); width = '800px'; break;
             case 'evidence-upload': content = this.getEvidenceUploadContent(options); width = '450px'; break;
             case 'import-dual': content = this.getImportDualContent(options); width = '450px'; break;
+            // Hallazgos ahora usan master-detail inline — estos casos se eliminaron
         }
 
         dialog.innerHTML = `
@@ -85,6 +86,7 @@ export const Modals = {
             this.bindEvidenceUploadEvents(dialog, options);
         } else if (type === 'import-dual') {
             this.bindImportDualEvents(dialog, options);
+        } else if (false) { // Hallazgos ahora usan master-detail inline
         } else {
             const content = dialog.querySelector('.modal-content');
             this.bindEvents(content, type, options);
@@ -1611,5 +1613,6 @@ getStartRunWizardContent({ suite, suites, cuTitle }) {
                 UI.toast(err.message, 'error');
             }
         };
-    }
+    },
+
 };

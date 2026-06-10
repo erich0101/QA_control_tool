@@ -11,6 +11,7 @@ const TABS = [
     { id: 'history', icon: '🕒', label: 'Historial' },
     { id: 'jira-tracking', icon: '🎯', label: 'Seguimiento Jira' },
     { id: 'dashboard', icon: '📊', label: 'Dashboard' },
+    { id: 'hallazgos', icon: '🔍', label: 'Hallazgos' },
     { id: 'mi-jira', icon: '👤', label: 'Mi JIRA' },
     { id: 'team', icon: '👥', label: 'Gestión de Equipo' }
 ];

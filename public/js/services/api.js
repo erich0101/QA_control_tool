@@ -230,6 +230,36 @@ export const ApiService = {
         }).then(json);
     },
 
+    // ── Hallazgos QA ──
+    async getHallazgos(projectId) {
+        return fetch(`/api/hallazgos?project_id=${projectId}`).then(json);
+    },
+    async createHallazgo(data) {
+        return fetch('/api/hallazgos', { method: 'POST', body: JSON.stringify(data), headers }).then(json);
+    },
+    async updateHallazgo(id, data) {
+        return fetch(`/api/hallazgos/${id}`, { method: 'PUT', body: JSON.stringify(data), headers }).then(json);
+    },
+    async deleteHallazgo(id) {
+        return fetch(`/api/hallazgos/${id}`, { method: 'DELETE' }).then(json);
+    },
+    async updateHallazgoStatus(id, status) {
+        return fetch(`/api/hallazgos/${id}/status`, { method: 'PUT', body: JSON.stringify({ status }), headers }).then(json);
+    },
+    async assignHallazgo(id, userId) {
+        return fetch(`/api/hallazgos/${id}/assign`, { method: 'PUT', body: JSON.stringify({ assigned_to: userId }), headers }).then(json);
+    },
+    async convertHallazgoToTC(id, suiteId) {
+        return fetch(`/api/hallazgos/${id}/convert-to-tc`, { method: 'POST', body: JSON.stringify({ suite_id: suiteId }), headers }).then(json);
+    },
+    async createJiraFromHallazgo(id, epicId, assigneeId, priorityId, customFields) {
+        return fetch(`/api/jira/hallazgos/${id}/create-ticket`, {
+            method: 'POST',
+            body: JSON.stringify({ epicId, assigneeId, priorityId, customFields }),
+            headers
+        }).then(json);
+    },
+
     // ── Test Cases ──
     async createTestCase(data) {
         return fetch('/api/test-cases', { method: 'POST', body: JSON.stringify(data), headers }).then(json);
