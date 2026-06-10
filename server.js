@@ -3238,12 +3238,12 @@ app.get('/api/reports/:runId', requireAuth, async (req, res) => {
 
 app.get('/api/evidence/:id', requireAuth, async (req, res) => {
     try {
-        const result = await query(`SELECT mime_type, file_data FROM qa_attachments WHERE id = ?`, [req.params.id]);
+        const result = await query(`SELECT mime_type, encode(file_data, 'base64') as file_b64 FROM qa_attachments WHERE id = ?`, [req.params.id]);
         if (result.rows.length === 0) return res.status(404).json({ error: 'Evidencia no encontrada' });
         
         const row = result.rows[0];
         res.setHeader('Content-Type', row.mime_type);
-        res.send(row.file_data);
+        res.send(Buffer.from(row.file_b64, 'base64'));
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

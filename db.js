@@ -23,6 +23,9 @@ function escapeLiteral(value) {
         return `ARRAY[${elements}]`;
     }
     if (value instanceof Date) return `'${value.toISOString()}'::timestamp`;
+    if (Buffer.isBuffer(value)) {
+        return `'\\x${value.toString('hex')}'::bytea`;
+    }
     if (typeof value === 'string') {
         return `'${value.replace(/'/g, "''")}'`;
     }

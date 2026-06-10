@@ -69,8 +69,8 @@ async function fetchExecutionsWithMedia(runId) {
     const testsWithMedia = [];
     for (let tc of allTests.rows) {
         if (tc.exec_id) {
-            const atts = await query(`SELECT * FROM qa_attachments WHERE execution_id = ?`, [tc.exec_id]);
-            tc.attachments = atts.rows.map(a => ({ mime_type: a.mime_type, category: a.evidence_category, data: a.file_data.toString('base64') }));
+            const atts = await query(`SELECT id, execution_id, defect_id, file_name, mime_type, evidence_category, encode(file_data, 'base64') as file_data, created_at FROM qa_attachments WHERE execution_id = ?`, [tc.exec_id]);
+            tc.attachments = atts.rows.map(a => ({ mime_type: a.mime_type, category: a.evidence_category, data: a.file_data }));
             const defects = await query(`SELECT * FROM qa_defects WHERE execution_id = ?`, [tc.exec_id]);
             tc.defects = defects.rows;
         } else {
@@ -493,8 +493,8 @@ async function fetchSuiteGroupedData(runIds) {
 
             // Load attachments & defects for both executions
             if (enriched.orig_exec_id) {
-                const origAtts = await query(`SELECT * FROM qa_attachments WHERE execution_id = ?`, [enriched.orig_exec_id]);
-                enriched.orig_attachments = origAtts.rows.map(a => ({ mime_type: a.mime_type, category: a.evidence_category, data: a.file_data.toString('base64') }));
+                const origAtts = await query(`SELECT id, execution_id, defect_id, file_name, mime_type, evidence_category, encode(file_data, 'base64') as file_data, created_at FROM qa_attachments WHERE execution_id = ?`, [enriched.orig_exec_id]);
+                enriched.orig_attachments = origAtts.rows.map(a => ({ mime_type: a.mime_type, category: a.evidence_category, data: a.file_data }));
                 const origDefs = await query(`SELECT * FROM qa_defects WHERE execution_id = ?`, [enriched.orig_exec_id]);
                 enriched.orig_defects = origDefs.rows;
             } else {
@@ -503,8 +503,8 @@ async function fetchSuiteGroupedData(runIds) {
             }
 
             if (enriched.retest_exec_id) {
-                const retAtts = await query(`SELECT * FROM qa_attachments WHERE execution_id = ?`, [enriched.retest_exec_id]);
-                enriched.retest_attachments = retAtts.rows.map(a => ({ mime_type: a.mime_type, category: a.evidence_category, data: a.file_data.toString('base64') }));
+                const retAtts = await query(`SELECT id, execution_id, defect_id, file_name, mime_type, evidence_category, encode(file_data, 'base64') as file_data, created_at FROM qa_attachments WHERE execution_id = ?`, [enriched.retest_exec_id]);
+                enriched.retest_attachments = retAtts.rows.map(a => ({ mime_type: a.mime_type, category: a.evidence_category, data: a.file_data }));
                 const retDefs = await query(`SELECT * FROM qa_defects WHERE execution_id = ?`, [enriched.retest_exec_id]);
                 enriched.retest_defects = retDefs.rows;
             } else {
