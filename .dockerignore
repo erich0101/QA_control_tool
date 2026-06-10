@@ -1,0 +1,17 @@
+node_modules
+.git
+.gitignore
+.env
+.env.*
+*.log
+uploads
+.github
+.warp
+.vscode
+.idea
+README.md
+KNOWLEDGE.md
+PROJECT_INDEX.md
+RULES.md
+skills-lock.json
+deploy*

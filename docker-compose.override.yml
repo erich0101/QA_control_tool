@@ -1,0 +1,5 @@
+services:
+  app:
+    environment:
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in shell}
+      JIRA_ENCRYPTION_KEY: ${JIRA_ENCRYPTION_KEY:?JIRA_ENCRYPTION_KEY must be set in shell}

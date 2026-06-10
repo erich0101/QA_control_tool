@@ -1,15 +1,19 @@
 require('dotenv').config();
-const { createClient } = require('@supabase/supabase-js');
+const { Pool } = require('pg');
 
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const pool = new Pool({
+    host: process.env.PGHOST || 'db',
+    port: parseInt(process.env.PGPORT || '5432', 10),
+    user: process.env.PGUSER,
+    password: process.env.PGPASSWORD,
+    database: process.env.PGDATABASE,
+    max: 10,
+    idleTimeoutMillis: 30000,
+});
 
-if (!supabaseUrl || !supabaseKey) {
-    console.error('ERROR: SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY deben estar configurados en .env');
-    process.exit(1);
-}
-
-const supabase = createClient(supabaseUrl, supabaseKey);
+pool.on('error', (err) => {
+    console.error('Error inesperado en el pool de Postgres:', err);
+});
 
 function escapeLiteral(value) {
     if (value === null || value === undefined) return 'NULL';
@@ -59,67 +63,52 @@ function buildSql(sql, params) {
     return processed;
 }
 
-function mapResult(data) {
-    const rows = Array.isArray(data) ? data : (data?.rows || []);
-    const lastID = (Array.isArray(rows) && rows.length > 0 && rows[0].id !== undefined)
+function mapResult(res) {
+    const rows = res.rows || [];
+    const lastID = (rows.length > 0 && rows[0].id !== undefined && rows[0].id !== null)
         ? rows[0].id
         : null;
     return {
         rows: rows,
         lastID: lastID,
-        changes: data?.rowCount !== undefined ? data.rowCount : rows.length
+        changes: res.rowCount !== undefined ? res.rowCount : rows.length
     };
 }
 
 async function query(sql, params = []) {
     const finalSql = buildSql(sql, params);
-
+    let client;
     try {
-        const { data, error } = await supabase.rpc('exec_query', { query_text: finalSql });
-
-        if (error) throw new Error(error.message);
-        if (data && data.error) throw new Error(data.error + (data.detail ? ' (' + data.detail + ')' : ''));
-
-        return mapResult(data || { rows: [], rowCount: 0 });
+        client = await pool.connect();
+        const res = await client.query(finalSql);
+        return mapResult(res);
     } catch (err) {
         console.error('Error en ejecucion:', err.message);
         console.error('SQL fallido:', finalSql.substring(0, 500));
         throw err;
+    } finally {
+        if (client) client.release();
     }
 }
 
 async function getClient() {
-    return {
+    const client = await pool.connect();
+    const wrapper = {
         query: async (sql, params = []) => {
-            return query(sql, params);
+            const finalSql = buildSql(sql, params);
+            const res = await client.query(finalSql);
+            return mapResult(res);
         },
-        release: () => {}
+        release: () => client.release()
     };
+    return wrapper;
 }
 
 function setupRealtimeChannel(onChange) {
-    const channel = supabase
-        .channel('db-changes')
-        .on('postgres_changes',
-            { event: '*', schema: 'public' },
-            (payload) => {
-                const mapped = {
-                    table: payload.table,
-                    action: payload.eventType,
-                    data: payload.new
-                };
-                onChange(mapped);
-            }
-        )
-        .subscribe((status) => {
-            if (status === 'SUBSCRIBED') {
-                console.log('Realtime: suscrito a cambios de base de datos via Supabase');
-            } else if (status === 'CHANNEL_ERROR') {
-                console.error('Error en canal Realtime de Supabase');
-            }
-        });
-
-    return channel;
+    console.log('Realtime: usando WebSocket directo (Postgres LISTEN/NOTIFY) - no soportado en este modo');
+    return {
+        unsubscribe: () => {}
+    };
 }
 
-module.exports = { query, supabase, getClient, setupRealtimeChannel };
+module.exports = { query, pool, getClient, setupRealtimeChannel };
