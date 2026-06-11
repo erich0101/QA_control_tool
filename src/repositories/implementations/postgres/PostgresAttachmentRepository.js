@@ -22,6 +22,10 @@ class PostgresAttachmentRepository extends AttachmentRepository {
         const r = await this._query(`SELECT mime_type, file_data FROM qa_attachments WHERE id = ?`, [id]);
         return r.rows[0] || null;
     }
+    async findBinaryAsBase64(id, exec) {
+        const r = await this._query(`SELECT mime_type, encode(file_data, 'base64') AS file_b64 FROM qa_attachments WHERE id = ?`, [id]);
+        return r.rows[0] || null;
+    }
     async listByExecutionIds(execIds, exec) {
         const r = await this._query(
             `SELECT id, execution_id, evidence_category FROM qa_attachments WHERE execution_id = ANY(?)`,
@@ -154,6 +158,103 @@ class PostgresDefectRepository extends DefectRepository {
     }
     async assign(id, userId, exec) {
         await this._query(`UPDATE qa_defects SET assigned_to = ? WHERE id = ?`, [userId, id]);
+    }
+    async listHallazgosByProject(projectId, exec) {
+        const r = await this._query(
+            `SELECT d.id, d.title, d.description, d.severity, d.status, d.steps_to_reproduce,
+                    d.expected_result, d.actual_result, d.frequency, d.business_impact,
+                    d.assigned_to, d.jira_key, d.jira_url, d.jira_epic_key, d.project_id,
+                    d.created_by, d.created_at,
+                    d.preconditions, d.observations,
+                    assignee.name AS assignee_name,
+                    (SELECT COUNT(*) FROM qa_attachments WHERE defect_id = d.id) AS evidence_count,
+                    ht.tc_id IS NOT NULL AS converted_to_tc,
+                    ht.tc_id AS converted_tc_id
+             FROM qa_defects d
+             LEFT JOIN qa_hallazgo_tc ht ON d.id = ht.hallazgo_id
+             LEFT JOIN qa_users assignee ON d.assigned_to = assignee.id
+             WHERE d.project_id = ? AND d.execution_id IS NULL
+             ORDER BY d.id DESC LIMIT 500`, [projectId]
+        );
+        return r.rows;
+    }
+    async update(id, fields, exec) {
+        const allowed = ['title', 'description', 'severity', 'steps_to_reproduce', 'expected_result', 'actual_result', 'frequency', 'business_impact', 'preconditions', 'observations', 'assigned_to'];
+        const setClause = [];
+        const params = [];
+        for (const key of allowed) {
+            if (fields[key] !== undefined) {
+                setClause.push(`${key} = ?`);
+                params.push(fields[key]);
+            }
+        }
+        if (setClause.length === 0) {
+            const { ValidationError } = require('../../../middleware/errors');
+            throw new ValidationError('Sin campos para actualizar');
+        }
+        params.push(id);
+        const r = await this._query(
+            `UPDATE qa_defects SET ${setClause.join(', ')} WHERE id = ? AND execution_id IS NULL`,
+            params
+        );
+        return { changes: r.changes };
+    }
+    async remove(id, exec) {
+        const r = await this._query(`DELETE FROM qa_defects WHERE id = ? AND execution_id IS NULL`, [id]);
+        return { changes: r.changes };
+    }
+    async convertToTC(hallazgoId, suiteId, userId, generateKeyFn, exec) {
+        const { ValidationError, NotFoundError } = require('../../../middleware/errors');
+        const tcPre = await this._query(`SELECT * FROM qa_defects WHERE id = ? AND execution_id IS NULL`, [hallazgoId]);
+        if (tcPre.rows.length === 0) throw new NotFoundError('Hallazgo no encontrado');
+        const h = tcPre.rows[0];
+
+        const projRes = await this._query(
+            `SELECT project_id FROM qa_use_cases WHERE id = (SELECT use_case_id FROM qa_test_suites WHERE id = ?)`,
+            [suiteId]
+        );
+        const projectId = projRes.rows[0]?.project_id;
+        if (!projectId) throw new ValidationError('Suite no encontrada');
+
+        const num = await generateKeyFn(projectId, 'TC', exec);
+        const keyId = `${'TC'}-${String(num).padStart(4, '0')}`;
+
+        const tcRes = await this._query(
+            `INSERT INTO qa_test_cases (suite_id, title, steps, expected_result, created_by, updated_by, key_id)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [suiteId, h.title, h.steps_to_reproduce || '', h.expected_result || '', userId, userId, keyId]
+        );
+        const tcId = tcRes.lastID;
+
+        await this._query(
+            `INSERT INTO qa_hallazgo_tc (hallazgo_id, tc_id) VALUES (?, ?) ON CONFLICT DO NOTHING`,
+            [hallazgoId, tcId]
+        );
+
+        return { tc_id: tcId, key_id: keyId };
+    }
+    async listEvidence(hallazgoId, exec) {
+        const r = await this._query(
+            `SELECT id, file_name, mime_type, evidence_category, created_at
+             FROM qa_attachments WHERE defect_id = ? ORDER BY id`, [hallazgoId]
+        );
+        return r.rows;
+    }
+    async linkToJiraTicket(hallazgoId, { jiraKey, jiraUrl }, exec) {
+        await this._query(
+            `UPDATE qa_defects SET jira_key = ?, jira_url = ? WHERE id = ?`,
+            [jiraKey, jiraUrl, hallazgoId]
+        );
+    }
+    async findHallazgoById(id, exec) {
+        const r = await this._query(
+            `SELECT d.*, tester.name AS tester_name, assignee.name AS assignee_name
+             FROM qa_defects d
+             LEFT JOIN qa_users tester ON d.created_by = tester.id
+             LEFT JOIN qa_users assignee ON d.assigned_to = assignee.id
+             WHERE d.id = ? AND d.execution_id IS NULL`, [id]
+        );
+        return r.rows[0] || null;
     }
 }
 

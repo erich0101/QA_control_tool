@@ -1,11 +1,11 @@
 const { attachments, executions } = require('../repositories');
 
 exports.getEvidence = async (req, res) => {
-    const row = await attachments.findBinary(req.params.id);
+    const row = await attachments.findBinaryAsBase64(req.params.id);
     if (!row) return res.status(404).json({ error: 'Evidencia no encontrada' });
 
     res.setHeader('Content-Type', row.mime_type);
-    res.send(row.file_data);
+    res.send(Buffer.from(row.file_b64, 'base64'));
 };
 
 exports.uploadEvidence = async (req, res) => {

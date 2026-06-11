@@ -6,6 +6,7 @@ class AttachmentRepository {
         }
     }
     async findBinary(id, exec) { throw new Error("not implemented"); }
+    async findBinaryAsBase64(id, exec) { throw new Error("not implemented"); }
     async listByExecutionIds(execIds, exec) { throw new Error("not implemented"); }
     async listByExecution(executionId, exec) { throw new Error("not implemented"); }
     async create(data, exec) { throw new Error("not implemented"); }
@@ -31,6 +32,13 @@ class DefectRepository {
     async create(data, exec) { throw new Error("not implemented"); }
     async updateStatus(id, status, exec) { throw new Error("not implemented"); }
     async assign(id, userId, exec) { throw new Error("not implemented"); }
+    async listHallazgosByProject(projectId, exec) { throw new Error("not implemented"); }
+    async update(id, fields, exec) { throw new Error("not implemented"); }
+    async remove(id, exec) { throw new Error("not implemented"); }
+    async convertToTC(hallazgoId, suiteId, userId, generateKeyFn, exec) { throw new Error("not implemented"); }
+    async listEvidence(hallazgoId, exec) { throw new Error("not implemented"); }
+    async linkToJiraTicket(hallazgoId, jiraData, exec) { throw new Error("not implemented"); }
+    async findHallazgoById(id, exec) { throw new Error("not implemented"); }
 }
 
 class PreconditionRepository {
