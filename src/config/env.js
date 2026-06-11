@@ -57,7 +57,7 @@ module.exports = {
     SUPABASE_SERVICE_ROLE_KEY,
     DB,
     COOKIE: {
-        secure: process.env.NODE_ENV === 'production',
+        secure: (process.env.COOKIE_SECURE || 'auto') === 'true' || ((process.env.COOKIE_SECURE || 'auto') === 'auto' && process.env.NODE_ENV === 'production' && process.env.HTTPS === 'true'),
         sameSite: 'lax',
         maxAge: 24 * 60 * 60 * 1000,
     },
