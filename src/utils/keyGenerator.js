@@ -1,29 +1,26 @@
-const usersRepo = require('../repositories/users.repository');
-const projectSequencesRepo = require('../repositories/projectSequences.repository');
-const useCasesRepo = require('../repositories/useCases.repository');
-const testSuitesRepo = require('../repositories/testSuites.repository');
+const { users, projectSequences, useCases, testSuites } = require('../repositories');
 
 async function checkPermission(userId, permission) {
     if (!userId || !permission) return false;
-    return usersRepo.permissions.check(userId, permission);
+    return users.permissions.check(userId, permission);
 }
 
 async function generateKey(projectId, prefix, exec) {
-    const num = await projectSequencesRepo.increment(projectId, prefix, exec);
+    const num = await projectSequences.increment(projectId, prefix, exec);
     return `${prefix}-${num.toString().padStart(4, '0')}`;
 }
 
 async function generateKeyBatch(projectId, prefix, count, exec) {
-    const endNum = await projectSequencesRepo.incrementBy(projectId, prefix, count, exec);
+    const endNum = await projectSequences.incrementBy(projectId, prefix, count, exec);
     return endNum - count + 1;
 }
 
 async function getProjectIdFromUC(ucId) {
-    return useCasesRepo.findProjectId(ucId);
+    return useCases.findProjectId(ucId);
 }
 
 async function getProjectIdFromSuite(suiteId) {
-    return testSuitesRepo.findProjectId(suiteId);
+    return testSuites.findProjectId(suiteId);
 }
 
 /**

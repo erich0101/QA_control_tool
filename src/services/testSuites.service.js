@@ -1,10 +1,4 @@
-const testSuitesRepo = require('../repositories/testSuites.repository');
-const testCasesRepo = require('../repositories/testCases.repository');
-const testRunsRepo = require('../repositories/testRuns.repository');
-const executionsRepo = require('../repositories/executions.repository');
-const attachmentsRepo = require('../repositories/attachments.repository');
-const defectsRepo = require('../repositories/defects.repository');
-const inconsistenciasRepo = require('../repositories/inconsistencias.repository');
+const { testSuites, testCases, testRuns, executions, attachments, defects, inconsistencias } = require('../repositories');
 const { ValidationError } = require('../middleware/errors');
 const logger = require('../utils/logger');
 
@@ -15,9 +9,9 @@ async function list(queryParams, requestLogger) {
     let suites;
 
     if (use_case_id) {
-        suites = await testSuitesRepo.listByUseCase(use_case_id);
+        suites = await testSuites.listByUseCase(use_case_id);
     } else if (project_id) {
-        suites = await testSuitesRepo.listByProject(project_id);
+        suites = await testSuites.listByProject(project_id);
     } else {
         throw new ValidationError('use_case_id o project_id requerido');
     }
@@ -26,25 +20,25 @@ async function list(queryParams, requestLogger) {
     const suiteIds = suites.map(s => s.id);
     const activeRunIds = suites.map(s => s.active_run_id).filter(id => id !== null);
 
-    const allTestCases = await testCasesRepo.listBySuiteIds(suiteIds);
+    const allTestCases = await testCases.listBySuiteIds(suiteIds);
 
     let activeRuns = [];
     if (activeRunIds.length > 0) {
-        activeRuns = await testRunsRepo.listActiveByIdsWithStatuses(activeRunIds);
+        activeRuns = await testRuns.listActiveByIdsWithStatuses(activeRunIds);
     }
 
-    const latestExecs = await executionsRepo.findLatestBySuiteIds(suiteIds);
+    const latestExecs = await executions.findLatestBySuiteIds(suiteIds);
 
     let activeRunExecs = [];
     if (activeRuns.length > 0) {
         const runIds = activeRuns.map(r => r.id);
-        activeRunExecs = await executionsRepo.listByRunIds(runIds);
+        activeRunExecs = await executions.listByRunIds(runIds);
     }
 
     const parentRunIds = activeRuns.map(r => r.parent_run_id).filter(id => id !== null);
     let parentExecs = [];
     if (parentRunIds.length > 0) {
-        parentExecs = await executionsRepo.findLatestByRunIds(parentRunIds);
+        parentExecs = await executions.findLatestByRunIds(parentRunIds);
     }
 
     const allExecIds = [...new Set([
@@ -56,11 +50,11 @@ async function list(queryParams, requestLogger) {
     let allAttachments = [];
     let allDefects = [];
     if (allExecIds.length > 0) {
-        allAttachments = await attachmentsRepo.listByExecutionIds(allExecIds);
-        allDefects = await defectsRepo.listByExecutionIds(allExecIds);
+        allAttachments = await attachments.listByExecutionIds(allExecIds);
+        allDefects = await defects.listByExecutionIds(allExecIds);
     }
 
-    const allInconsistencies = await inconsistenciasRepo.listBySuiteIds(suiteIds);
+    const allInconsistencies = await inconsistencias.listBySuiteIds(suiteIds);
 
     const result = suites.map(suite => {
         const activeRun = activeRuns.find(r => r.id === suite.active_run_id) || null;

@@ -1,9 +1,4 @@
-const testSuitesRepo = require('../repositories/testSuites.repository');
-const testRunsRepo = require('../repositories/testRuns.repository');
-const executionsRepo = require('../repositories/executions.repository');
-const inconsistenciasRepo = require('../repositories/inconsistencias.repository');
-const testCasesRepo = require('../repositories/testCases.repository');
-const useCasesRepo = require('../repositories/useCases.repository');
+const { testSuites, testRuns, executions, inconsistencias, testCases, useCases } = require('../repositories');
 const { ok, created, noContent } = require('../utils/responses');
 const { checkPermission, generateKey, getProjectIdFromUC } = require('../services/key.service');
 const { AppError } = require('../middleware/errors');
@@ -24,7 +19,7 @@ exports.create = async (req, res) => {
     const projectId = await getProjectIdFromUC(use_case_id);
     const finalKeyId = await generateKey(projectId, 'TS');
 
-    const id = await testSuitesRepo.create({
+    const id = await testSuites.create({
         useCaseId: use_case_id, title, description: description || '',
         createdBy: req.user.id, updatedBy: req.user.id,
         keyId: finalKeyId, jiraEpicKey: jira_epic_key || ''
@@ -36,7 +31,7 @@ exports.startExecution = async (req, res) => {
     const suiteId = req.params.id;
     const { execution_type, filters } = req.body;
 
-    const eligibleRows = await testCasesRepo.findEligibleForExecution({
+    const eligibleRows = await testCases.findEligibleForExecution({
         suiteId, executionType: execution_type, filters
     });
 
@@ -49,15 +44,15 @@ exports.startExecution = async (req, res) => {
         return res.status(400).json({ error: 'No hay tests asignados a tu usuario en esta suite o no coinciden con los filtros.' });
     }
 
-    const runId = await testRunsRepo.create({
+    const runId = await testRuns.create({
         suiteId, createdBy: req.user.id, runType: execution_type || 'FULL',
         lastResumeAt: null, accumulatedSeconds: 0
     });
 
-    await testSuitesRepo.setActiveRun(suiteId, runId);
+    await testSuites.setActiveRun(suiteId, runId);
 
     for (const tc of finalEligible) {
-        await executionsRepo.create({
+        await executions.create({
             tcId: tc.id, runId, tester: req.user.name, status: 'PENDING'
         });
     }
@@ -70,7 +65,7 @@ exports.startAll = async (req, res) => {
     const onlyAssigned = req.body.only_assigned !== false;
     const executionType = req.body.execution_type || 'REGRESSION';
 
-    const suitesRows = await testSuitesRepo.listAvailableForUC(ucId);
+    const suitesRows = await testSuites.listAvailableForUC(ucId);
 
     if (suitesRows.length === 0) {
         return res.status(400).json({ error: 'No hay suites disponibles para ejecutar en este Caso de Uso' });
@@ -81,7 +76,7 @@ exports.startAll = async (req, res) => {
 
     for (const suite of suitesRows) {
         try {
-            const eligibleRows = await testCasesRepo.findEligibleForExecution({
+            const eligibleRows = await testCases.findEligibleForExecution({
                 suiteId: suite.id, executionType, filters: undefined
             });
 
@@ -95,15 +90,15 @@ exports.startAll = async (req, res) => {
                 continue;
             }
 
-            const runId = await testRunsRepo.create({
+            const runId = await testRuns.create({
                 suiteId: suite.id, createdBy: req.user.id, runType: executionType,
                 lastResumeAt: null, accumulatedSeconds: 0
             });
 
-            await testSuitesRepo.setActiveRun(suite.id, runId);
+            await testSuites.setActiveRun(suite.id, runId);
 
             for (const tc of finalEligible) {
-                await executionsRepo.create({
+                await executions.create({
                     tcId: tc.id, runId, tester: req.user.name, status: 'PENDING'
                 });
             }
@@ -132,7 +127,7 @@ exports.startAll = async (req, res) => {
 
 exports.pauseRun = async (req, res) => {
     const runId = req.params.id;
-    const run = await testRunsRepo.findActive(runId);
+    const run = await testRuns.findActive(runId);
     if (!run) return res.status(400).json({ error: 'El ciclo no está en ejecución o no existe.' });
 
     const lastResume = new Date(run.last_resume_at);
@@ -140,29 +135,29 @@ exports.pauseRun = async (req, res) => {
     const deltaSeconds = Math.floor((now - lastResume) / 1000);
     const newAccumulated = (run.accumulated_seconds || 0) + deltaSeconds;
 
-    await testRunsRepo.pause(runId, newAccumulated);
+    await testRuns.pause(runId, newAccumulated);
     res.json({ ok: true, accumulated_seconds: newAccumulated });
 };
 
 exports.resumeRun = async (req, res) => {
     const runId = req.params.id;
-    const run = await testRunsRepo.findPaused(runId);
+    const run = await testRuns.findPaused(runId);
     if (!run) return res.status(400).json({ error: 'El ciclo no está pausado o no existe.' });
 
-    await testRunsRepo.resume(runId);
+    await testRuns.resume(runId);
     return ok(res);
 };
 
 exports.finishExecution = async (req, res) => {
     const suiteId = req.params.id;
-    const suite = await testSuitesRepo.findById(suiteId);
+    const suite = await testSuites.findById(suiteId);
 
     if (!suite) return res.status(404).json({ error: 'Suite no encontrada' });
 
     const runId = suite.active_run_id;
     if (!runId) return res.status(400).json({ error: 'No hay un ciclo activo para esta suite' });
 
-    const execs = await executionsRepo.findStatusesByRunId(runId);
+    const execs = await executions.findStatusesByRunId(runId);
     const stats = {
         total: execs.length,
         pass: execs.filter(e => e.status === 'PASS' || e.status === 'OK').length,
@@ -172,7 +167,7 @@ exports.finishExecution = async (req, res) => {
         skipped: execs.filter(e => e.status === 'SKIPPED' || e.status === 'SKIP').length
     };
 
-    const run = await testRunsRepo.findById(runId);
+    const run = await testRuns.findById(runId);
     let finalSeconds = run.accumulated_seconds || 0;
 
     if (run.status === 'RUNNING') {
@@ -180,31 +175,31 @@ exports.finishExecution = async (req, res) => {
         finalSeconds += Math.floor((new Date() - lastResume) / 1000);
     }
 
-    await testRunsRepo.finish(runId, finalSeconds);
-    await testSuitesRepo.clearActiveRun(suiteId);
+    await testRuns.finish(runId, finalSeconds);
+    await testSuites.clearActiveRun(suiteId);
 
     res.json({ ok: true, stats });
 };
 
 exports.retest = async (req, res) => {
     const oldRunId = req.params.id;
-    const suiteId = await testRunsRepo.findSuiteId(oldRunId);
+    const suiteId = await testRuns.findSuiteId(oldRunId);
     if (suiteId === null || suiteId === undefined) return res.status(404).json({ error: 'Run no encontrado' });
 
-    const failedTcIds = await executionsRepo.findFailedTcIds(oldRunId);
+    const failedTcIds = await executions.findFailedTcIds(oldRunId);
 
     if (failedTcIds.length === 0) {
         return res.status(400).json({ error: 'No hay tests fallidos o bloqueados para retestear.' });
     }
 
-    const newRunId = await testRunsRepo.createRetest({
+    const newRunId = await testRuns.createRetest({
         suiteId, createdBy: req.user.id, parentRunId: oldRunId
     });
 
-    await testSuitesRepo.setActiveRun(suiteId, newRunId);
+    await testSuites.setActiveRun(suiteId, newRunId);
 
     for (const tcId of failedTcIds) {
-        await executionsRepo.create({
+        await executions.create({
             tcId, runId: newRunId, tester: req.user.name,
             status: 'PENDING', observations: 'Pendiente de retest'
         });
@@ -219,11 +214,11 @@ exports.updateInconsistencies = async (req, res) => {
 
     const suiteId = req.params.id;
 
-    await inconsistenciasRepo.deleteBySuiteId(suiteId);
+    await inconsistencias.deleteBySuiteId(suiteId);
 
     for (let i = 0; i < inconsistencies.length; i++) {
         const inc = inconsistencies[i];
-        await inconsistenciasRepo.create({
+        await inconsistencias.create({
             suiteId, title: inc.title, description: inc.description || '',
             severity: inc.severity || 'Alta', orderIndex: i
         });
@@ -233,12 +228,12 @@ exports.updateInconsistencies = async (req, res) => {
 };
 
 exports.remove = async (req, res) => {
-    await testSuitesRepo.remove(req.params.id);
+    await testSuites.remove(req.params.id);
     return ok(res);
 };
 
 exports.getOne = async (req, res) => {
-    const row = await testSuitesRepo.findById(req.params.id);
+    const row = await testSuites.findById(req.params.id);
     if (!row) return res.status(404).json({ error: 'Suite no encontrada' });
     res.json(row);
 };
@@ -251,7 +246,7 @@ exports.move = async (req, res) => {
 
     if (!new_use_case_id) return res.status(400).json({ error: 'new_use_case_id requerido' });
 
-    const suite = await testSuitesRepo.findById(suiteId);
+    const suite = await testSuites.findById(suiteId);
     if (!suite) return res.status(404).json({ error: 'Suite no encontrada' });
 
     req.log?.debug({ id: suite.id, current_uc: suite.use_case_id, active_run_id: suite.active_run_id }, '[MOVE SUITE] Suite found');
@@ -260,22 +255,22 @@ exports.move = async (req, res) => {
         return res.status(400).json({ error: 'La suite está en ejecución. No se puede mover.' });
     }
 
-    const linkedCount = await testCasesRepo.countLinkedToUS(suiteId);
+    const linkedCount = await testCases.countLinkedToUS(suiteId);
     if (linkedCount > 0) {
         return res.status(400).json({ error: `La suite tiene ${linkedCount} TC(s) vinculados a HU. Desvinculá las HU antes de mover.` });
     }
 
-    const sourceCU = await useCasesRepo.findById(suite.use_case_id);
+    const sourceCU = await useCases.findById(suite.use_case_id);
     if (!sourceCU) return res.status(404).json({ error: 'CU origen no encontrado' });
 
-    const destCU = await useCasesRepo.findById(new_use_case_id);
+    const destCU = await useCases.findById(new_use_case_id);
     if (!destCU) return res.status(404).json({ error: 'CU destino no encontrado' });
 
     if (sourceCU.project_id !== destCU.project_id) {
         return res.status(400).json({ error: 'Solo se pueden mover suites entre CU del mismo proyecto.' });
     }
 
-    const changes = await testSuitesRepo.moveToUC(suiteId, new_use_case_id, req.user.id);
+    const changes = await testSuites.moveToUC(suiteId, new_use_case_id, req.user.id);
 
     req.log?.debug({ rowCount: changes, suiteId, new_uc: new_use_case_id }, '[MOVE SUITE] UPDATE result');
 
@@ -289,7 +284,7 @@ exports.move = async (req, res) => {
 
 exports.update = async (req, res) => {
     const { title, description, assigned_to, jira_epic_key } = req.body;
-    await testSuitesRepo.update(req.params.id, {
+    await testSuites.update(req.params.id, {
         title, description, assignedTo: assigned_to,
         jiraEpicKey: jira_epic_key, updatedBy: req.user.id
     });
@@ -300,6 +295,6 @@ exports.assignAll = async (req, res) => {
     const { assigned_to } = req.body;
     const suiteId = parseInt(req.params.id);
     const userId = assigned_to ? parseInt(assigned_to) : null;
-    await testCasesRepo.assignAllBySuite(suiteId, userId);
+    await testCases.assignAllBySuite(suiteId, userId);
     res.json({ ok: true, updated_suite_id: suiteId });
 };

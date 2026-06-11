@@ -1,11 +1,4 @@
-const projectsRepo = require('../repositories/projects.repository');
-const useCasesRepo = require('../repositories/useCases.repository');
-const userStoriesRepo = require('../repositories/userStories.repository');
-const testSuitesRepo = require('../repositories/testSuites.repository');
-const testCasesRepo = require('../repositories/testCases.repository');
-const testRunsRepo = require('../repositories/testRuns.repository');
-const executionsRepo = require('../repositories/executions.repository');
-const defectsRepo = require('../repositories/defects.repository');
+const { projects, useCases, userStories, testSuites, testCases, testRuns, executions, defects } = require('../repositories');
 const { generateReport, generateMultiReport } = require('../../report-generator');
 const { AppError } = require('../middleware/errors');
 
@@ -33,51 +26,51 @@ exports.generateReport = async (req, res) => {
 exports.getData = async (req, res) => {
     const { project_id } = req.query;
     if (!project_id) {
-        const proj = await projectsRepo.findFirstActive();
+        const proj = await projects.findFirstActive();
         if (!proj) return res.json({ pruebas: [] });
         return res.redirect(`/api/data?project_id=${proj.id}`);
     }
 
-    const useCases = await useCasesRepo.listByProject(project_id);
-    if (useCases.length === 0) return res.json({ pruebas: [] });
+    const useCaseList = await useCases.listByProject(project_id);
+    if (useCaseList.length === 0) return res.json({ pruebas: [] });
 
-    const useCaseIds = useCases.map(cu => cu.id);
+    const useCaseIds = useCaseList.map(cu => cu.id);
 
-    const stories = await userStoriesRepo.listByUseCaseIds(useCaseIds);
+    const stories = await userStories.listByUseCaseIds(useCaseIds);
 
     const storyIds = stories.map(us => us.id);
 
-    const suites = await testSuitesRepo.listByStoryIds(storyIds);
+    const suites = await testSuites.listByStoryIds(storyIds);
 
     const suiteIds = suites.map(s => s.id);
     const activeRunIds = suites.map(s => s.active_run_id).filter(id => id != null);
 
     let cases = [];
     if (suiteIds.length > 0) {
-        cases = await testCasesRepo.listBySuiteIds(suiteIds);
+        cases = await testCases.listBySuiteIds(suiteIds);
     }
 
     const tcIds = cases.map(tc => tc.id);
 
     let activeRuns = [];
     if (activeRunIds.length > 0) {
-        activeRuns = await testRunsRepo.listActiveByIds(activeRunIds);
+        activeRuns = await testRuns.listActiveByIds(activeRunIds);
     }
 
-    let executions = [];
+    let execList = [];
     if (tcIds.length > 0) {
-        executions = await executionsRepo.listByTcIds(tcIds);
+        execList = await executions.listByTcIds(tcIds);
     }
 
-    let defects = [];
-    if (executions.length > 0) {
-        const execIds = executions.map(e => e.id);
-        defects = await defectsRepo.listByExecutionIds(execIds);
+    let defectList = [];
+    if (execList.length > 0) {
+        const execIds = execList.map(e => e.id);
+        defectList = await defects.listByExecutionIds(execIds);
     }
 
     const activeRunById = new Map(activeRuns.map(r => [r.id, r]));
     const executionsByTc = new Map();
-    for (const e of executions) {
+    for (const e of execList) {
         if (!executionsByTc.has(e.tc_id)) executionsByTc.set(e.tc_id, []);
         executionsByTc.get(e.tc_id).push(e);
     }
@@ -85,7 +78,7 @@ exports.getData = async (req, res) => {
         list.sort((a, b) => b.id - a.id);
     }
     const defectsByExec = new Map();
-    for (const d of defects) {
+    for (const d of defectList) {
         if (!defectsByExec.has(d.execution_id)) defectsByExec.set(d.execution_id, []);
         defectsByExec.get(d.execution_id).push(d);
     }
@@ -106,7 +99,7 @@ exports.getData = async (req, res) => {
     }
 
     const pruebas = [];
-    for (const cu of useCases) {
+    for (const cu of useCaseList) {
         const storyList = storiesByUseCase.get(cu.id) || [];
         for (const us of storyList) {
             const suiteList = suitesByStory.get(us.id) || [];

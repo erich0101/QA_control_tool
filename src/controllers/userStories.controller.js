@@ -1,6 +1,4 @@
-const userStoriesRepo = require('../repositories/userStories.repository');
-const scenariosRepo = require('../repositories/scenarios.repository');
-const inconsistenciasRepo = require('../repositories/inconsistencias.repository');
+const { userStories, scenarios, inconsistencias } = require('../repositories');
 const { ForbiddenError, ValidationError } = require('../middleware/errors');
 const { checkPermission } = require('../middleware/auth');
 const { ok, created } = require('../utils/responses');
@@ -10,16 +8,16 @@ exports.list = async (req, res) => {
     const { use_case_id } = req.query;
     if (!use_case_id) throw new ValidationError('use_case_id requerido');
 
-    const userStories = await userStoriesRepo.listByUseCase(use_case_id);
+    const rows = await userStories.listByUseCase(use_case_id);
 
-    return res.json({ userStories });
+    return res.json({ userStories: rows });
 };
 
 exports.createScenario = async (req, res) => {
     const { us_id, title, description, order_index } = req.body;
     if (!us_id || !title) throw new ValidationError('us_id y title requeridos');
 
-    const id = await scenariosRepo.create({
+    const id = await scenarios.create({
         usId: us_id, title, description: description || '', orderIndex: order_index || 0
     });
 
@@ -30,17 +28,17 @@ exports.updateScenario = async (req, res) => {
     const { title, description, order_index } = req.body;
     const scenarioId = req.params.id;
 
-    await scenariosRepo.update(scenarioId, { title, description, orderIndex: order_index });
+    await scenarios.update(scenarioId, { title, description, orderIndex: order_index });
 
     if (title !== undefined) {
-        await scenariosRepo.updateTitle(scenarioId, title);
+        await scenarios.updateTitle(scenarioId, title);
     }
 
     return ok(res);
 };
 
 exports.deleteScenario = async (req, res) => {
-    await scenariosRepo.remove(req.params.id);
+    await scenarios.remove(req.params.id);
     return ok(res);
 };
 
@@ -49,7 +47,7 @@ exports.createInconsistency = async (req, res) => {
     if (!title) throw new ValidationError('title requerido');
     if (!suite_id && !us_id) throw new ValidationError('suite_id o us_id requerido');
 
-    const id = await inconsistenciasRepo.create({
+    const id = await inconsistencias.create({
         suiteId: suite_id, usId: us_id, title,
         description: description || '', severity: severity || 'Alta', orderIndex: order_index || 0
     });
@@ -59,12 +57,12 @@ exports.createInconsistency = async (req, res) => {
 
 exports.updateInconsistency = async (req, res) => {
     const { title, description, severity, order_index } = req.body;
-    await inconsistenciasRepo.update(req.params.id, { title, description, severity, orderIndex: order_index });
+    await inconsistencias.update(req.params.id, { title, description, severity, orderIndex: order_index });
     return ok(res);
 };
 
 exports.deleteInconsistency = async (req, res) => {
-    await inconsistenciasRepo.remove(req.params.id);
+    await inconsistencias.remove(req.params.id);
     return ok(res);
 };
 
@@ -78,7 +76,7 @@ exports.createUserStory = async (req, res) => {
 
     const projectId = await getProjectIdFromUC(use_case_id);
     const finalKeyId = key_id || await generateKey(projectId, 'HU');
-    const usId = await userStoriesRepo.create({
+    const usId = await userStories.create({
         useCaseId: use_case_id, projectId, keyId: finalKeyId, title,
         huDetallada: hu_detallada || '', priority: priority || 'Media', status: status || 'En Análisis',
         escenariosPrueba: escenarios_prueba || '', reglasNegocio: reglas_negocio || '',
@@ -87,7 +85,7 @@ exports.createUserStory = async (req, res) => {
     });
 
     if (hu_detallada) {
-        await inconsistenciasRepo.createForUS(usId, hu_detallada);
+        await inconsistencias.createForUS(usId, hu_detallada);
     }
 
     return created(res, { id: usId, key_id: finalKeyId });
@@ -96,7 +94,7 @@ exports.createUserStory = async (req, res) => {
 exports.updateRecommendations = async (req, res) => {
     const { recommendations } = req.body;
     if (!Array.isArray(recommendations)) throw new ValidationError('recommendations debe ser un array');
-    await userStoriesRepo.updateRecommendations(req.params.id, JSON.stringify(recommendations));
+    await userStories.updateRecommendations(req.params.id, JSON.stringify(recommendations));
     return ok(res);
 };
 
@@ -119,11 +117,11 @@ exports.updateUserStory = async (req, res) => {
         return ok(res, { message: 'No fields to update' });
     }
 
-    await userStoriesRepo.updateDynamicWithUpdatedBy(usId, fields, req.user.id);
+    await userStories.updateDynamicWithUpdatedBy(usId, fields, req.user.id);
     return ok(res);
 };
 
 exports.deleteUserStory = async (req, res) => {
-    await userStoriesRepo.remove(req.params.id);
+    await userStories.remove(req.params.id);
     return ok(res);
 };

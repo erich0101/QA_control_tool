@@ -1,14 +1,11 @@
-const jiraRepo = require('../repositories/jira.repository');
-const defectsRepo = require('../repositories/defects.repository');
-const useCasesRepo = require('../repositories/useCases.repository');
-const attachmentsRepo = require('../repositories/attachments.repository');
+const { jiraConfigs, jiraUserConfigs, defects, useCases, attachments } = require('../repositories');
 const JiraService = require('../../jira-service');
 const { encrypt } = require('../services/crypto.service');
 
 async function getJiraUserCredentials(projectId, userId) {
     const [proj, userCfg] = await Promise.all([
-        jiraRepo.jiraConfigs.findByProjectId(projectId),
-        jiraRepo.jiraUserConfigs.findByProjectAndUser(projectId, userId)
+        jiraConfigs.findByProjectId(projectId),
+        jiraUserConfigs.findByProjectAndUser(projectId, userId)
     ]);
     if (!proj) return { error: 'Jira no configurado para este proyecto', code: 'NO_PROJECT_CONFIG' };
     if (!userCfg) return { error: 'Configura tu token de Jira en tu perfil', code: 'NO_USER_TOKEN' };
@@ -56,11 +53,11 @@ function getLastStatusChange(issue, targetStatus) {
 
 exports.getJiraConfig = async (req, res) => {
     const projectId = req.params.id;
-    const row = await jiraRepo.jiraConfigs.findByProjectId(projectId);
+    const row = await jiraConfigs.findByProjectId(projectId);
     if (!row) {
         return res.json({ config: null, userHasToken: false });
     }
-    const userConfig = await jiraRepo.jiraUserConfigs.existsForProjectAndUser(projectId, req.user.id);
+    const userConfig = await jiraUserConfigs.existsForProjectAndUser(projectId, req.user.id);
     res.json({
         config: {
             jira_domain: row.jira_domain,
@@ -76,13 +73,13 @@ exports.saveJiraConfig = async (req, res) => {
     if (!jira_domain || !jira_project_key) {
         return res.status(400).json({ error: 'Faltan campos requeridos: jira_domain y jira_project_key' });
     }
-    const exists = await jiraRepo.jiraConfigs.existsForProject(projectId);
+    const exists = await jiraConfigs.existsForProject(projectId);
     if (exists) {
-        await jiraRepo.jiraConfigs.updateByProject({
+        await jiraConfigs.updateByProject({
             projectId, jiraDomain: jira_domain, jiraProjectKey: jira_project_key
         });
     } else {
-        await jiraRepo.jiraConfigs.create({
+        await jiraConfigs.create({
             projectId, jiraDomain: jira_domain, jiraProjectKey: jira_project_key
         });
     }
@@ -92,7 +89,7 @@ exports.saveJiraConfig = async (req, res) => {
 exports.getJiraUserConfig = async (req, res) => {
     const projectId = req.params.id;
     const userId = req.user.id;
-    const email = await jiraRepo.jiraUserConfigs.findEmailByProjectAndUser(projectId, userId);
+    const email = await jiraUserConfigs.findEmailByProjectAndUser(projectId, userId);
     if (!email) {
         return res.json({ hasConfig: false });
     }
@@ -106,7 +103,7 @@ exports.saveJiraUserConfig = async (req, res) => {
     if (!jira_user_email) {
         return res.status(400).json({ error: 'El email de Jira es obligatorio' });
     }
-    const existing = await jiraRepo.jiraUserConfigs.findTokenByProjectAndUser(projectId, userId);
+    const existing = await jiraUserConfigs.findTokenByProjectAndUser(projectId, userId);
     let encToken;
     if (jira_api_token) {
         encToken = encrypt(jira_api_token);
@@ -116,11 +113,11 @@ exports.saveJiraUserConfig = async (req, res) => {
         return res.status(400).json({ error: 'El API Token es obligatorio para una nueva configuración' });
     }
     if (existing) {
-        await jiraRepo.jiraUserConfigs.updateByProjectAndUser({
+        await jiraUserConfigs.updateByProjectAndUser({
             projectId, userId, jiraUserEmail: jira_user_email, encryptedToken: encToken
         });
     } else {
-        await jiraRepo.jiraUserConfigs.create({
+        await jiraUserConfigs.create({
             projectId, userId, jiraUserEmail: jira_user_email, encryptedToken: encToken
         });
     }
@@ -128,7 +125,7 @@ exports.saveJiraUserConfig = async (req, res) => {
 };
 
 exports.deleteJiraUserConfig = async (req, res) => {
-    await jiraRepo.jiraUserConfigs.deleteByProjectAndUser(req.params.id, req.user.id);
+    await jiraUserConfigs.deleteByProjectAndUser(req.params.id, req.user.id);
     res.json({ ok: true });
 };
 
@@ -419,7 +416,7 @@ exports.getTracking = async (req, res) => {
     const creds = await getJiraUserCredentials(projectId, req.user.id);
     if (creds.error) return res.status(creds.code === 'NO_PROJECT_CONFIG' ? 404 : 403).json({ error: creds.error });
 
-    const dbBugs = await defectsRepo.findTrackedByProject(projectId);
+    const dbBugs = await defects.findTrackedByProject(projectId);
 
     if (dbBugs.length === 0) return res.json({ tracking: [] });
 
@@ -464,13 +461,13 @@ exports.createDefectTicket = async (req, res) => {
     const defectId = req.params.id;
     const { epicId, assigneeId, priorityId, customFields } = req.body;
 
-    const bug = await defectsRepo.findDetailById(defectId);
+    const bug = await defects.findDetailById(defectId);
 
     if (!bug) return res.status(404).json({ error: 'Defecto no encontrado.' });
 
-    const projectId = await useCasesRepo.findProjectId(bug.use_case_id);
+    const projectId = await useCases.findProjectId(bug.use_case_id);
 
-    const evidenceRes = await attachmentsRepo.listByExecution(bug.execution_id);
+    const evidenceRes = await attachments.listByExecution(bug.execution_id);
     if (evidenceRes.length > 0) {
         bug.evidences = evidenceRes.map(r => r.file_name);
     }
@@ -494,7 +491,7 @@ exports.createDefectTicket = async (req, res) => {
         }
     }
 
-    await defectsRepo.setJiraLink(defectId, {
+    await defects.setJiraLink(defectId, {
         jiraKey: jiraResult.key, jiraUrl, rootCause: `JIRA: ${jiraResult.key}`
     });
 

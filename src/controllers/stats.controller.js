@@ -1,7 +1,4 @@
-const testSuitesRepo = require('../repositories/testSuites.repository');
-const projectsRepo = require('../repositories/projects.repository');
-const testCasesRepo = require('../repositories/testCases.repository');
-const useCasesRepo = require('../repositories/useCases.repository');
+const { testSuites, projects, testCases, useCases } = require('../repositories');
 const JiraService = require('../../jira-service');
 const { getJiraUserCredentials } = require('./jira.controller');
 
@@ -175,7 +172,7 @@ exports.suitesStats = async (req, res) => {
     const { project_id } = req.query;
     if (!project_id) return res.status(400).json({ error: 'project_id requerido' });
 
-    const stats = await testSuitesRepo.statsByDurationByProject(project_id);
+    const stats = await testSuites.statsByDurationByProject(project_id);
 
     res.json({ stats });
 };
@@ -184,9 +181,9 @@ exports.overview = async (req, res) => {
     const { project_id } = req.query;
     if (!project_id) return res.status(400).json({ error: 'project_id requerido' });
 
-    const summary = await projectsRepo.overviewSummaryLegacy(project_id);
-    const statuses = await testCasesRepo.statusBreakdownByProject(project_id);
-    const coverage = await useCasesRepo.coverageByProject(project_id);
+    const summary = await projects.overviewSummaryLegacy(project_id);
+    const statuses = await testCases.statusBreakdownByProject(project_id);
+    const coverage = await useCases.coverageByProject(project_id);
 
     res.json({
         summary,

@@ -1,13 +1,7 @@
 const db = require('../db');
 const XLSX = require('xlsx');
 const { escapeForCsv } = require('../utils/keyGenerator');
-const testSuitesRepo = require('../repositories/testSuites.repository');
-const userStoriesRepo = require('../repositories/userStories.repository');
-const scenariosRepo = require('../repositories/scenarios.repository');
-const testCasesRepo = require('../repositories/testCases.repository');
-const useCasesRepo = require('../repositories/useCases.repository');
-const projectsRepo = require('../repositories/projects.repository');
-const projectSequencesRepo = require('../repositories/projectSequences.repository');
+const { testSuites, userStories, scenarios, testCases, useCases, projects, projectSequences } = require('../repositories');
 
 function normalize(str) {
     if (!str) return '';
@@ -70,21 +64,21 @@ async function processFlatImport(req, res, data, headers, ucId, projectId) {
 
             const getVal = (row, idx) => idx !== -1 && row[idx] !== undefined ? escapeForCsv(row[idx]) : '';
 
-            const suiteKeyNum = await projectSequencesRepo.increment(projectId, 'ST', tx);
+            const suiteKeyNum = await projectSequences.increment(projectId, 'ST', tx);
             const suiteKey = `ST-${suiteKeyNum.toString().padStart(4, '0')}`;
-            const suiteId = await testSuitesRepo.createReturning({
+            const suiteId = await testSuites.createReturning({
                 useCaseId: ucId, title: `Suite: ${usTitle}`,
                 description: `Importación automática ${suiteKey}`,
                 keyId: suiteKey, createdBy: req.user.id
             }, tx);
 
-            const usKeyNum = await projectSequencesRepo.increment(projectId, 'US', tx);
+            const usKeyNum = await projectSequences.increment(projectId, 'US', tx);
             const usKey = `US-${usKeyNum.toString().padStart(4, '0')}`;
             const usDesc = getVal(firstRow, colMap.data) || '';
             const usBR = '';
             const usPre = getVal(firstRow, colMap.pre) || '';
 
-            const usId = await userStoriesRepo.upsertReturning({
+            const usId = await userStories.upsertReturning({
                 useCaseId: ucId, projectId, keyId: usKey, title: usTitle,
                 huDetallada: usDesc, reglasNegocio: usBR, precondiciones: usPre,
                 createdBy: req.user.id
@@ -95,7 +89,7 @@ async function processFlatImport(req, res, data, headers, ucId, projectId) {
             const validRows = rows.filter(row => getVal(row, colMap.title));
             let tcKeyStart = null;
             if (validRows.length > 0) {
-                tcKeyStart = await projectSequencesRepo.incrementBy(projectId, 'TC', validRows.length, tx);
+                tcKeyStart = await projectSequences.incrementBy(projectId, 'TC', validRows.length, tx);
             }
             let tcIdx = 0;
             for (const row of rows) {
@@ -109,14 +103,14 @@ async function processFlatImport(req, res, data, headers, ucId, projectId) {
                 const testData = getVal(row, colMap.data);
                 const criteria = getVal(row, colMap.criteria);
 
-                const scenarioId = await scenariosRepo.createReturning({
+                const scenarioId = await scenarios.createReturning({
                     usId, title, orderIndex: totalImported
                 }, tx);
 
                 const tcNum = tcKeyStart + tcIdx;
                 const tcKey = `TC-${tcNum.toString().padStart(4, '0')}`;
                 tcIdx++;
-                await testCasesRepo.create({
+                await testCases.create({
                     suiteId, usId, scenarioId, keyId: tcKey, title, steps, preconditions: pre,
                     expectedResult: expected, assumptions, testData, acceptanceCriteria: criteria,
                     createdBy: req.user.id
@@ -126,7 +120,7 @@ async function processFlatImport(req, res, data, headers, ucId, projectId) {
             }
 
             if (escenariosText.length > 0) {
-                await userStoriesRepo.setEscenariosPrueba(usId, escenariosText.join('\n'), tx);
+                await userStories.setEscenariosPrueba(usId, escenariosText.join('\n'), tx);
             }
         }
     });
@@ -248,21 +242,21 @@ async function processDualImport(req, res, workbook, isCSV, ucId, projectId, fil
             const rows = groups[usTitle];
             const firstRow = rows[0];
 
-            const suiteKeyNum = await projectSequencesRepo.increment(projectId, 'ST', tx);
+            const suiteKeyNum = await projectSequences.increment(projectId, 'ST', tx);
             const suiteKey = `ST-${suiteKeyNum.toString().padStart(4, '0')}`;
-            const suiteId = await testSuitesRepo.createReturning({
+            const suiteId = await testSuites.createReturning({
                 useCaseId: ucId, title: `Suite: ${usTitle}`,
                 description: `Importación automática ${suiteKey}`,
                 keyId: suiteKey, createdBy: req.user.id
             }, tx);
 
-            const usKeyNum = await projectSequencesRepo.increment(projectId, 'US', tx);
+            const usKeyNum = await projectSequences.increment(projectId, 'US', tx);
             const usKey = `US-${usKeyNum.toString().padStart(4, '0')}`;
             const usDesc = escapeForCsv(firstRow[tcColMap.us_desc]) || '';
             const usBR = escapeForCsv(firstRow[tcColMap.us_br]) || '';
             const usPre = escapeForCsv(firstRow[tcColMap.us_pre]) || '';
 
-            const usId = await userStoriesRepo.upsertReturning({
+            const usId = await userStories.upsertReturning({
                 useCaseId: ucId, projectId, keyId: usKey, title: usTitle,
                 huDetallada: usDesc, reglasNegocio: usBR, precondiciones: usPre,
                 createdBy: req.user.id
@@ -276,7 +270,7 @@ async function processDualImport(req, res, workbook, isCSV, ucId, projectId, fil
             });
             let tcKeyStart = null;
             if (validRows.length > 0) {
-                tcKeyStart = await projectSequencesRepo.incrementBy(projectId, 'TC', validRows.length, tx);
+                tcKeyStart = await projectSequences.incrementBy(projectId, 'TC', validRows.length, tx);
             }
             let tcIdx = 0;
             for (const row of rows) {
@@ -292,7 +286,7 @@ async function processDualImport(req, res, workbook, isCSV, ucId, projectId, fil
                 const testData = getVal(tcColMap.data);
                 const criteria = getVal(tcColMap.criteria);
 
-                const scenarioId = await scenariosRepo.createReturning({
+                const scenarioId = await scenarios.createReturning({
                     usId, title, orderIndex: totalImported
                 }, tx);
                 escenariosText.push(title);
@@ -300,7 +294,7 @@ async function processDualImport(req, res, workbook, isCSV, ucId, projectId, fil
                 const tcNum = tcKeyStart + tcIdx;
                 const tcKey = `TC-${tcNum.toString().padStart(4, '0')}`;
                 tcIdx++;
-                await testCasesRepo.create({
+                await testCases.create({
                     suiteId, usId, scenarioId, keyId: tcKey, title, steps, preconditions: pre,
                     expectedResult: expected, assumptions, testData, acceptanceCriteria: criteria,
                     createdBy: req.user.id
@@ -310,7 +304,7 @@ async function processDualImport(req, res, workbook, isCSV, ucId, projectId, fil
             }
 
             if (escenariosText.length > 0) {
-                await userStoriesRepo.setEscenariosPrueba(usId, escenariosText.join('\n'), tx);
+                await userStories.setEscenariosPrueba(usId, escenariosText.join('\n'), tx);
             }
         }
     });
@@ -359,12 +353,12 @@ exports.importDual = async (req, res) => {
     const isUseCasePath = req.url.includes('/use-cases/');
 
     if (!isUseCasePath) {
-        const suite = await testSuitesRepo.findUseCaseId(ucId);
+        const suite = await testSuites.findUseCaseId(ucId);
         if (suite) ucId = suite;
         else return res.status(404).json({ error: 'Suite no encontrada' });
     }
 
-    const projectId = await useCasesRepo.findProjectId(ucId);
+    const projectId = await useCases.findProjectId(ucId);
     if (!projectId) return res.status(404).json({ error: 'Caso de Uso no encontrado' });
 
     if (isFlatFormat) {
@@ -377,11 +371,11 @@ exports.importDual = async (req, res) => {
 exports.exportUseCaseExcel = async (req, res) => {
     const useCaseId = req.params.id;
 
-    const useCase = await useCasesRepo.findByIdWithProject(useCaseId);
+    const useCase = await useCases.findByIdWithProject(useCaseId);
 
     if (!useCase) return res.status(404).json({ error: 'Caso de Uso no encontrado' });
 
-    const cases = await testCasesRepo.exportByUseCase(useCaseId);
+    const cases = await testCases.exportByUseCase(useCaseId);
 
     const wb = XLSX.utils.book_new();
 
@@ -447,10 +441,10 @@ exports.exportUseCaseExcel = async (req, res) => {
 exports.exportProjectExcel = async (req, res) => {
     const projectId = req.params.id;
 
-    const project = await projectsRepo.findById(projectId);
+    const project = await projects.findById(projectId);
     if (!project) return res.status(404).json({ error: 'Proyecto no encontrado' });
 
-    const cases = await testCasesRepo.exportByProject(projectId);
+    const cases = await testCases.exportByProject(projectId);
 
     const wb = XLSX.utils.book_new();
 

@@ -1,4 +1,4 @@
-const usersRepo = require('../repositories/users.repository');
+const { users } = require('../repositories');
 const { ok } = require('../utils/responses');
 const { issueToken, setAuthCookie } = require('../middleware/auth');
 const authService = require('../services/auth.service');
@@ -12,7 +12,7 @@ exports.login = async (req, res) => {
 };
 
 exports.me = async (req, res) => {
-    const perms = await usersRepo.permissions.findByUserId(req.user.id);
+    const perms = await users.permissions.findByUserId(req.user.id);
     return res.json({ user: req.user, permissions: perms });
 };
 

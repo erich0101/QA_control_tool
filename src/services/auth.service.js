@@ -1,9 +1,9 @@
 const bcrypt = require('bcryptjs');
-const usersRepo = require('../repositories/users.repository');
+const { users } = require('../repositories');
 const { UnauthorizedError } = require('../middleware/errors');
 
 async function verifyCredentials(email, password) {
-    const user = await usersRepo.findByEmail(email);
+    const user = await users.findByEmail(email);
     if (!user) throw new UnauthorizedError('Credenciales inválidas');
     const valid = await bcrypt.compare(password, user.password_hash);
     if (!valid) throw new UnauthorizedError('Credenciales inválidas');
@@ -11,7 +11,7 @@ async function verifyCredentials(email, password) {
 }
 
 async function getUserPermissions(userId) {
-    return usersRepo.permissions.getByUserId(userId);
+    return users.permissions.getByUserId(userId);
 }
 
 module.exports = { verifyCredentials, getUserPermissions };

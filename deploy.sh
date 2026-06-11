@@ -44,7 +44,7 @@ if [ ! -f .env ]; then
   cp .env.example .env
   echo "*** ACCION REQUERIDA: editar /home/rafam_dev/qa_control_tool/.env con valores seguros ***"
 fi
-# El .env es agnóstico: solo necesita JWT_SECRET, JIRA_ENCRYPTION_KEY y DATABASE_URL.
+# Validar las variables requeridas por src/config/env.js.
 # docker-compose.override.yml usa ${VAR:?...} que rompe el build silenciosamente.
 if ! grep -qE '^JWT_SECRET=[A-Za-z0-9_-]{32,}' .env; then
   echo "ERROR: JWT_SECRET falta o es demasiado corto (>=32 chars) en .env remoto"
@@ -56,11 +56,20 @@ if ! grep -qE '^JIRA_ENCRYPTION_KEY=[0-9a-fA-F]{64}' .env; then
   echo "Generá uno con: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\""
   exit 1
 fi
+if ! grep -qE '^SUPABASE_URL=https://' .env; then
+  echo "ERROR: SUPABASE_URL falta o no es una URL https:// valida en .env remoto"
+  echo "Ejemplo: SUPABASE_URL=https://vcwpestqvpneemzdxcfe.supabase.co"
+  exit 1
+fi
+if ! grep -qE '^SUPABASE_SERVICE_ROLE_KEY=eyJ' .env; then
+  echo "ERROR: SUPABASE_SERVICE_ROLE_KEY falta o no empieza con eyJ en .env remoto"
+  exit 1
+fi
 if ! grep -qE '^DATABASE_URL=postgresql://' .env; then
   echo "ERROR: DATABASE_URL falta o no es una URL postgresql:// valida en .env remoto"
   echo "Para Neon:    postgresql://user:pass@ep-xxx-pooler.region.aws.neon.tech/db?sslmode=require"
-  echo "Para Supabase: postgresql://postgres.[ref]:pass@aws-0-xxx.pooler.supabase.com:5432/postgres"
   echo "Para local:   postgresql://qa_user:pass@db:5432/qa_control_tool"
+  echo "Nota:        requerida por env.js aunque DB_IMPL=supabase (legacy libpq)"
   exit 1
 fi
 REMOTE_EOF
@@ -88,13 +97,14 @@ ssh "$REMOTE_HOST" "cd ${REMOTE_DIR} && sudo docker compose logs --tail=40 app"
 echo ""
 echo "==[DONE]== Despliegue completo"
 echo "App disponible en: http://${REMOTE_HOST#*@}:8088"
-echo "Conexion a DB:    provista por DATABASE_URL en /home/rafam_dev/qa_control_tool/.env"
+echo "Conexion a DB:    Supabase (SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY en .env)"
 echo "El usuario admin (erich@qa.local) se crea automaticamente en el primer arranque"
 echo "con password aleatorio. Recuperarlo del log con:"
 echo "  ssh ${REMOTE_HOST} 'cd ${REMOTE_DIR} && sudo docker compose logs app | grep \"ADMIN CREADO\"'"
 echo ""
-echo "Migraciones / schema: aplicar manualmente a la DB remota con psql o cualquier cliente SQL."
-echo "  Por ejemplo, contra Neon: psql \"\$DATABASE_URL\" -f schema.sql"
+echo "IMPORTANTE: La funcion RPC public.exec_query debe existir en Supabase."
+echo "Si es un Supabase nuevo, aplicarla manualmente en el SQL editor de Supabase"
+echo "(ver AGENTS.md para la definicion)."
 echo ""
 echo "Para ver logs en vivo: ssh ${REMOTE_HOST} 'cd ${REMOTE_DIR} && sudo docker compose logs -f app'"
 echo "Para reiniciar:       ssh ${REMOTE_HOST} 'cd ${REMOTE_DIR} && sudo docker compose restart app'"

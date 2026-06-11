@@ -1,16 +1,14 @@
-const testRunsRepo = require('../repositories/testRuns.repository');
-const defectsRepo = require('../repositories/defects.repository');
-const executionsRepo = require('../repositories/executions.repository');
+const { testRuns, defects, executions } = require('../repositories');
 
 exports.getHistory = async (req, res) => {
     const { project_id } = req.query;
     if (!project_id) return res.status(400).json({ error: 'project_id requerido' });
 
-    const runs = await testRunsRepo.listFinishedByProject(project_id);
+    const runs = await testRuns.listFinishedByProject(project_id);
 
     const result = [];
     for (const run of runs) {
-        const execs = await executionsRepo.findStatusesByRunId(run.id);
+        const execs = await executions.findStatusesByRunId(run.id);
         result.push({
             ...run,
             stats: {
@@ -28,6 +26,6 @@ exports.getHistory = async (req, res) => {
 };
 
 exports.getRunBugs = async (req, res) => {
-    const bugs = await defectsRepo.listByRunId(req.params.id);
+    const bugs = await defects.listByRunId(req.params.id);
     res.json({ bugs });
 };

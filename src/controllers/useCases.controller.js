@@ -1,4 +1,4 @@
-const useCasesRepo = require('../repositories/useCases.repository');
+const { useCases } = require('../repositories');
 const { ForbiddenError, ValidationError } = require('../middleware/errors');
 const { checkPermission } = require('../middleware/auth');
 const { ok, created } = require('../utils/responses');
@@ -8,9 +8,9 @@ exports.list = async (req, res) => {
     const { project_id } = req.query;
     if (!project_id) throw new ValidationError('project_id requerido');
 
-    const useCases = await useCasesRepo.listByProjectWithUSCount(project_id);
+    const rows = await useCases.listByProjectWithUSCount(project_id);
 
-    return res.json({ useCases });
+    return res.json({ useCases: rows });
 };
 
 exports.create = async (req, res) => {
@@ -23,7 +23,7 @@ exports.create = async (req, res) => {
     if (!project_id || !title) throw new ValidationError('project_id y title requeridos');
 
     const finalKeyId = key_id || await generateKey(project_id, 'CU');
-    const id = await useCasesRepo.create({
+    const id = await useCases.create({
         projectId: project_id, keyId: finalKeyId, title,
         description: description || '',
         createdBy: req.user.id, updatedBy: req.user.id
@@ -33,13 +33,13 @@ exports.create = async (req, res) => {
 
 exports.update = async (req, res) => {
     const { title, description, status, key_id } = req.body;
-    await useCasesRepo.update(req.params.id, {
+    await useCases.update(req.params.id, {
         title, description, status, keyId: key_id, updatedBy: req.user.id
     });
     return ok(res);
 };
 
 exports.remove = async (req, res) => {
-    await useCasesRepo.remove(req.params.id);
+    await useCases.remove(req.params.id);
     return ok(res);
 };

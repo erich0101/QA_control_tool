@@ -3,5 +3,7 @@ services:
     environment:
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in shell}
       JIRA_ENCRYPTION_KEY: ${JIRA_ENCRYPTION_KEY:?JIRA_ENCRYPTION_KEY must be set in shell}
-      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL must be set in shell}
-      DB_DRIVER: ${DB_DRIVER:-pg}
+      SUPABASE_URL: ${SUPABASE_URL:?SUPABASE_URL must be set in shell}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:?SUPABASE_SERVICE_ROLE_KEY must be set in shell}
+      DB_IMPL: ${DB_IMPL:-supabase}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://placeholder:placeholder@localhost:5432/placeholder}
