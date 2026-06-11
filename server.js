@@ -8,6 +8,7 @@ const config = require('./src/config/env');
 const logger = require('./src/utils/logger');
 const { attachGracefulShutdown } = require('./src/utils/gracefulShutdown');
 const { users } = require('./src/repositories');
+const { createRealtimeService } = require('./src/services/realtime.service');
 const bcrypt = require('bcryptjs');
 
 (async () => {
@@ -36,8 +37,11 @@ const bcrypt = require('bcryptjs');
 const app = createApp();
 const server = http.createServer(app);
 
+const realtime = createRealtimeService();
+realtime.attach(server);
+
 server.listen(config.PORT, () => {
-  logger.info({ port: config.PORT, env: config.NODE_ENV }, `QA Tool -> http://localhost:${config.PORT}`);
+  logger.info({ port: config.PORT, env: config.NODE_ENV, wsPath: '/ws' }, `QA Tool -> http://localhost:${config.PORT}`);
 });
 
-attachGracefulShutdown(server);
+attachGracefulShutdown(server, { onShutdown: () => realtime.close() });

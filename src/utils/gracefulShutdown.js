@@ -1,9 +1,19 @@
 const logger = require('./logger');
 const db = require('../db');
 
-function attachGracefulShutdown(server) {
+function attachGracefulShutdown(server, { onShutdown } = {}) {
+    let shuttingDown = false;
     const shutdown = async (signal) => {
+        if (shuttingDown) return;
+        shuttingDown = true;
         logger.info({ signal }, 'shutting down gracefully');
+        if (typeof onShutdown === 'function') {
+            try {
+                await onShutdown(signal);
+            } catch (err) {
+                logger.error({ err: err.message }, 'onShutdown hook failed');
+            }
+        }
         server.close(async () => {
             try {
                 await db.end();

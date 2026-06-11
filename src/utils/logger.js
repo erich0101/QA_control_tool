@@ -1,5 +1,6 @@
 const pino = require('pino');
 const config = require('../config/env');
+const { stream: ringStream } = require('./logBuffer');
 
 const logger = pino({
     level: config.LOG_LEVEL,
@@ -8,6 +9,9 @@ const logger = pino({
     formatters: {
         level: (label) => ({ level: label }),
     },
-});
+}, pino.multistream([
+    { stream: process.stdout },
+    { stream: ringStream, level: 'info' },
+]));
 
 module.exports = logger;

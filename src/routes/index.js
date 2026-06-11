@@ -22,6 +22,7 @@ const evidenceRouter = require('./evidence.routes');
 const issueRouter = require('./issue.routes');
 const jiraRouter = require('./jira.routes');
 const reportsRouter = require('./reports.routes');
+const adminRouter = require('./admin.routes');
 
 router.use('/auth', (req, res, next) => {
   if (req.method === 'POST' && req.path === '/login') {
@@ -49,6 +50,7 @@ router.use(jiraRouter);
 router.use(statsRouter);
 router.use(reportsRouter);
 router.use(historyRouter);
+router.use('/admin', adminRouter);
 
 router.use('/projects', projectsRouter);
 

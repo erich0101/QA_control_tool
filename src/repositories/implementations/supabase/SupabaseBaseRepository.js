@@ -12,6 +12,12 @@ function escapeLiteral(value) {
         return String(value);
     }
     if (typeof value === 'boolean') return value ? 'TRUE' : 'FALSE';
+    if (Buffer.isBuffer(value)) {
+        return `decode('${value.toString('hex')}', 'hex')`;
+    }
+    if (value instanceof Uint8Array) {
+        return `decode('${Buffer.from(value).toString('hex')}', 'hex')`;
+    }
     if (Array.isArray(value)) {
         const elements = value.map(v => escapeLiteral(v)).join(',');
         return `ARRAY[${elements}]`;
@@ -48,6 +54,67 @@ function mapResult(data) {
     };
 }
 
+const SQLSTATE_HINTS = {
+    '22P02': 'validation',
+    '23502': 'validation',
+    '23503': 'conflict',
+    '23505': 'conflict',
+    '23514': 'validation',
+    '40P01': 'transient',
+    '40001': 'transient',
+    '57014': 'timeout',
+    '53300': 'capacity',
+    '08000': 'connection',
+    '08003': 'connection',
+    '08006': 'connection',
+};
+
+function mapSqlStateToHint(sqlstate, message) {
+    if (sqlstate && SQLSTATE_HINTS[sqlstate]) return SQLSTATE_HINTS[sqlstate];
+    const m = String(message || '').toLowerCase();
+    if (m.includes('timeout') || m.includes('canceling statement')) return 'timeout';
+    if (m.includes('connection') || m.includes('econnrefused')) return 'connection';
+    if (m.includes('permission denied')) return 'permission';
+    if (m.includes('bytea') || m.includes('invalid input syntax')) return 'validation';
+    if (m.includes('duplicate') || m.includes('unique')) return 'conflict';
+    if (m.includes('foreign key')) return 'conflict';
+    if (m.includes('not null') || m.includes('check constraint')) return 'validation';
+    return 'database';
+}
+
+function mapSqlStateToMessage(sqlstate, message) {
+    if (!message) return null;
+    const m = String(message).toLowerCase();
+    if (sqlstate === '23505' || m.includes('duplicate') || m.includes('unique constraint')) {
+        return 'Ya existe un registro con esos datos únicos';
+    }
+    if (sqlstate === '23503' || m.includes('foreign key')) {
+        return 'La referencia a otro registro no es válida';
+    }
+    if (sqlstate === '23502' || m.includes('not-null') || m.includes('not null')) {
+        return 'Faltan datos obligatorios para guardar el registro';
+    }
+    if (sqlstate === '23514' || m.includes('check constraint')) {
+        return 'Algún valor no cumple las reglas de validación';
+    }
+    if (sqlstate === '22P02' || m.includes('invalid input syntax')) {
+        return 'Uno de los valores enviados tiene un formato inválido';
+    }
+    if (sqlstate === '57014' || m.includes('timeout')) {
+        return 'La base de datos tardó demasiado en responder';
+    }
+    if (sqlstate === '53300') {
+        return 'La base de datos está saturada, reintentá en unos segundos';
+    }
+    if (m.includes('connection')) {
+        return 'No se pudo conectar con la base de datos';
+    }
+    if (m.includes('permission denied')) {
+        return 'La base de datos rechazó la operación por permisos';
+    }
+    return null;
+}
+
 class SupabaseBaseRepository {
     constructor({ client } = {}) {
         if (!client) {
@@ -56,12 +123,36 @@ class SupabaseBaseRepository {
         this.client = client;
     }
 
+    _wrapDbError(err, sql) {
+        const { AppError } = require('../../../middleware/errors');
+        const message = (err && err.message) || 'Database error';
+        const detail = (err && err.detail) || null;
+        const sqlstate = (err && (err.code || err.sqlState)) || null;
+
+        const hint = mapSqlStateToHint(sqlstate, message);
+        const safeMessage = mapSqlStateToMessage(sqlstate, message) || 'No se pudo completar la operación en la base de datos';
+
+        const wrapped = new AppError(safeMessage, 500, 'DATABASE_ERROR', { hint });
+        wrapped.cause = err;
+        wrapped.dbSqlState = sqlstate;
+        wrapped.dbDetail = detail;
+        wrapped.dbQuery = sql;
+        return wrapped;
+    }
+
     async _query(sql, params = []) {
-        const finalSql = buildSql(sql, params);
+        let finalSql;
+        try {
+            finalSql = buildSql(sql, params);
+        } catch (buildErr) {
+            throw this._wrapDbError(buildErr, sql);
+        }
         const { data, error } = await this.client.rpc('exec_query', { query_text: finalSql });
-        if (error) throw new Error(error.message);
+        if (error) {
+            throw this._wrapDbError({ message: error.message, code: error.code }, finalSql);
+        }
         if (data && data.error) {
-            throw new Error(data.error + (data.detail ? ` (${data.detail})` : ''));
+            throw this._wrapDbError({ message: data.error, detail: data.detail, code: data.detail }, finalSql);
         }
         return mapResult(data || { rows: [], rowCount: 0 });
     }
@@ -98,4 +189,12 @@ class SupabaseBaseRepository {
     }
 }
 
-module.exports = { SupabaseBaseRepository, escapeLiteral, buildSql, mapResult, noIdTables };
+module.exports = {
+    SupabaseBaseRepository,
+    escapeLiteral,
+    buildSql,
+    mapResult,
+    mapSqlStateToHint,
+    mapSqlStateToMessage,
+    noIdTables,
+};

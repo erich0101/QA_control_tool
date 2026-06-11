@@ -11,8 +11,8 @@ export const RealtimeService = {
 
     init() {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = `${protocol}//${window.location.host}`;
-        
+        const wsUrl = `${protocol}//${window.location.host}/ws`;
+
         console.log(`🔌 Conectando a Realtime: ${wsUrl}`);
         this.socket = new WebSocket(wsUrl);
 
@@ -23,14 +23,20 @@ export const RealtimeService = {
         this.socket.onmessage = (event) => {
             try {
                 const payload = JSON.parse(event.data);
+                if (payload && payload.type === 'hello') {
+                    console.log('👋 Realtime handshake OK, tablas vigiladas:', payload.tables);
+                    return;
+                }
+                if (payload && payload.type === 'pong') return;
                 this.handleUpdate(payload);
             } catch (err) {
                 console.error('❌ Error procesando mensaje realtime:', err);
             }
         };
 
-        this.socket.onclose = () => {
-            console.warn('⚠️ Realtime desconectado. Reintentando...');
+        this.socket.onclose = (event) => {
+            const reason = event && event.code ? `(code ${event.code})` : '';
+            console.warn(`⚠️ Realtime desconectado${reason}. Reintentando en ${this.reconnectInterval / 1000}s...`);
             setTimeout(() => this.init(), this.reconnectInterval);
         };
 
@@ -40,28 +46,42 @@ export const RealtimeService = {
     },
 
     handleUpdate(payload) {
-        const { table, action, data } = payload;
-        console.log(`🔔 Cambio detectado: [${table}] ${action}`, data);
+        const table = payload.table;
+        const event = payload.event || payload.action;
+        if (!table) return;
+        console.log(`🔔 Cambio detectado: [${table}] ${event}`);
 
         // Reaccionar según la tabla
         switch (table) {
-            case 'qa_executions':
-                this.updateExecutions(data);
+            case 'qa_executions': {
+                const row = payload.new || payload.old;
+                if (row && payload.event === 'DELETE') {
+                    this.triggerGlobalReload();
+                } else if (row) {
+                    this.updateExecutions(row);
+                }
                 break;
+            }
             case 'qa_test_runs':
-                this.updateTestRuns(data);
+                this.updateTestRuns(payload.new);
                 break;
             case 'qa_test_suites':
-                // Por ahora forzamos reload de suites si cambia la suite (ej: nombre o active_run_id)
+                this.triggerGlobalReload();
+                break;
+            case 'qa_test_cases':
                 this.triggerGlobalReload();
                 break;
             case 'qa_defects':
+                this.triggerGlobalReload();
+                break;
+            case 'qa_attachments':
                 this.triggerGlobalReload();
                 break;
         }
     },
 
     updateExecutions(execution) {
+        if (!execution || !execution.tc_id) return;
         const suites = Store.state.testSuites;
         let changed = false;
 
@@ -81,7 +101,7 @@ export const RealtimeService = {
 
         if (changed) {
             console.log('✨ Sincronización de ejecución preparada');
-            this.triggerUIRefresh(); // Debounced notify
+            this.triggerUIRefresh();
         }
     },
 

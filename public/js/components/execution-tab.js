@@ -551,7 +551,12 @@ export const ExecutionTab = {
                     formData.append('category', category);
 
                     const response = await fetch('/api/evidence', { method: 'POST', body: formData });
-                    if (!response.ok) throw new Error('Error al subir evidencia');
+                    if (!response.ok) {
+                        const errBody = await response.json().catch(() => ({}));
+                        const errMsg = errBody.error || `Error al subir evidencia (HTTP ${response.status})`;
+                        const errCode = errBody.code ? ` [${errBody.code}]` : '';
+                        throw new Error(`${errMsg}${errCode}`);
+                    }
 
                     UI.toast('Evidencia adjuntada');
                     const resSuites = await ApiService.getTestSuites(null, Store.state.activeProjectId);
@@ -589,12 +594,17 @@ export const ExecutionTab = {
                                     formData.append('category', category);
 
                                     const response = await fetch('/api/evidence', { method: 'POST', body: formData });
-                                    if (response.ok) {
-                                        UI.toast('Evidencia pegada');
-                                        const resSuites = await ApiService.getTestSuites(null, Store.state.activeProjectId);
-                                        this.projectSuites = resSuites.testSuites || [];
-                                        this.render(container);
+                                    if (!response.ok) {
+                                        const errBody = await response.json().catch(() => ({}));
+                                        const errMsg = errBody.error || `Error al subir evidencia (HTTP ${response.status})`;
+                                        const errCode = errBody.code ? ` [${errBody.code}]` : '';
+                                        UI.toast(`${errMsg}${errCode}`, 'error');
+                                        return;
                                     }
+                                    UI.toast('Evidencia pegada');
+                                    const resSuites = await ApiService.getTestSuites(null, Store.state.activeProjectId);
+                                    this.projectSuites = resSuites.testSuites || [];
+                                    this.render(container);
                                 } catch (err) { UI.toast(err.message, 'error'); }
                                 UI.hideLoading();
                             };
