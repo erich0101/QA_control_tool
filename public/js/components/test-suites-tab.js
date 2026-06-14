@@ -106,7 +106,7 @@ export const TestSuitesTab = {
                             </div>
                             <div style="display: flex; gap: 6px;">
                                 <button class="btn btn-ghost btn-sm" id="btn-sidebar-import-xlsx" ${!selectedUseCaseId ? 'disabled' : ''} style="flex: 1; font-size: 0.72rem;">📥</button>
-                                <button class="btn btn-success btn-sm" id="btn-export-matrix" ${!selectedUseCaseId ? 'disabled' : ''} style="flex: 1; font-size: 0.72rem; background: #10b981; border: none; color: white;">📊</button>
+                                <button class="btn btn-success btn-sm" id="btn-export-matrix" ${!selectedUseCaseId ? 'disabled' : ''} style="flex: 1; font-size: 0.72rem; background: var(--apple-green); border: none; color: white;">📊</button>
                             </div>
                         </div>
                     </div>
@@ -160,7 +160,7 @@ export const TestSuitesTab = {
                         let incIndicator = '';
                         const incList = suite.inconsistencies || [];
                         if (incList.length > 0) {
-                            incIndicator = `<span title="Tiene inconsistencias" style="font-size: 0.65rem; color: #fbbf24;">⚠️</span>`;
+                            incIndicator = `<span title="Tiene inconsistencias" style="font-size: 0.65rem; color: var(--apple-orange);">⚠️</span>`;
                         }
 
                         return `
@@ -187,41 +187,41 @@ export const TestSuitesTab = {
     renderInconsistenciesPanel(suite) {
         const incList = suite?.inconsistencies || [];
 
-        const sevColor = (sev) => ({ Alta: '#f87171', Media: '#fbbf24', Baja: '#4ade80' }[sev] || '#a5b4fc');
-        const sevBg = (sev) => ({ Alta: 'rgba(239,68,68,0.15)', Media: 'rgba(245,158,11,0.15)', Baja: 'rgba(34,197,94,0.15)' }[sev] || 'rgba(99,102,241,0.15)');
+        const sevColor = (sev) => ({ Alta: 'var(--apple-red)', Media: 'var(--apple-orange)', Baja: 'var(--apple-green)' }[sev] || 'var(--apple-indigo)');
+        const sevBg = (sev) => ({ Alta: 'var(--apple-red-soft)', Media: 'var(--apple-orange-soft)', Baja: 'var(--apple-green-soft)' }[sev] || 'var(--apple-indigo-soft)');
 
         const altaCount = incList.filter(i => i.severity === 'Alta').length;
         const mediaCount = incList.filter(i => i.severity === 'Media').length;
         const bajaCount = incList.filter(i => i.severity === 'Baja').length;
 
         const badges = [];
-        if (altaCount) badges.push(`<span style="background:rgba(239,68,68,0.2);color:#f87171;padding:2px 8px;border-radius:6px;font-size:0.62rem;font-weight:800;">${altaCount} Alta</span>`);
-        if (mediaCount) badges.push(`<span style="background:rgba(245,158,11,0.2);color:#fbbf24;padding:2px 8px;border-radius:6px;font-size:0.62rem;font-weight:800;">${mediaCount} Media</span>`);
-        if (bajaCount) badges.push(`<span style="background:rgba(34,197,94,0.2);color:#4ade80;padding:2px 8px;border-radius:6px;font-size:0.62rem;font-weight:800;">${bajaCount} Baja</span>`);
+        if (altaCount) badges.push(`<span style="background:var(--apple-red-soft);color:var(--apple-red);padding:2px 8px;border-radius:var(--apple-radius-sm);font-size:0.62rem;font-weight:800;">${altaCount} Alta</span>`);
+        if (mediaCount) badges.push(`<span style="background:var(--apple-orange-soft);color:var(--apple-orange);padding:2px 8px;border-radius:var(--apple-radius-sm);font-size:0.62rem;font-weight:800;">${mediaCount} Media</span>`);
+        if (bajaCount) badges.push(`<span style="background:var(--apple-green-soft);color:var(--apple-green);padding:2px 8px;border-radius:var(--apple-radius-sm);font-size:0.62rem;font-weight:800;">${bajaCount} Baja</span>`);
 
         return `
             <div class="inc-panel" style="border-bottom:1px solid var(--border);">
                 <div class="inc-panel-header" onclick="window._toggleIncPanel(this)"
-                    style="padding:8px 20px;background:rgba(0,0,0,0.15);cursor:pointer;display:flex;align-items:center;gap:10px;user-select:none;">
+                    style="padding:8px 20px;background:var(--inc-bg);cursor:pointer;display:flex;align-items:center;gap:10px;user-select:none;">
                     <span class="inc-chevron" style="font-size:0.7rem;transition:transform 0.2s;">▶</span>
                     <span style="font-size:0.75rem;">⚠️</span>
-                    <span style="font-size:0.68rem;font-weight:800;color:#f87171;text-transform:uppercase;letter-spacing:0.05em;">Inconsistencias</span>
-                    <span style="font-size:0.65rem;color:#64748b;">${incList.length} total</span>
+                    <span style="font-size:0.68rem;font-weight:800;color:var(--apple-red);text-transform:uppercase;letter-spacing:0.05em;">Inconsistencias</span>
+                    <span style="font-size:0.65rem;color:var(--inc-text-muted);">${incList.length} total</span>
                     <div style="display:flex;gap:6px;">${badges.join('')}</div>
                 </div>
-                <div class="inc-panel-body" style="display:none;padding:12px 20px;background:rgba(0,0,0,0.1);">
+                <div class="inc-panel-body" style="display:none;padding:12px 20px;background:var(--inc-bg);">
                     <div style="display:flex;flex-direction:column;gap:6px;">
                         ${incList.map(inc => `
                             <div style="display:flex;align-items:flex-start;gap:10px;padding:8px 10px;border-radius:6px;background:${sevBg(inc.severity)};border-left:3px solid ${sevColor(inc.severity)};">
                                 <span style="font-size:0.65rem;color:${sevColor(inc.severity)};font-weight:800;min-width:40px;">${inc.severity}</span>
                                 <div style="flex:1;min-width:0;">
-                                    <div style="font-size:0.78rem;font-weight:700;color:#f1f5f9;">${UI.escapeHTML(inc.title || '')}</div>
-                                    ${inc.description ? `<div style="font-size:0.7rem;color:#cbd5e1;margin-top:2px;line-height:1.4;">${UI.escapeHTML(inc.description)}</div>` : ''}
+                                    <div style="font-size:0.78rem;font-weight:700;color:var(--inc-text);">${UI.escapeHTML(inc.title || '')}</div>
+                                    ${inc.description ? `<div style="font-size:0.7rem;color:var(--inc-text-secondary);margin-top:2px;line-height:1.4;">${UI.escapeHTML(inc.description)}</div>` : ''}
                                 </div>
-                                <button class="resolve-inc-btn" data-id="${inc.id}" data-suite-id="${suite.id}" title="Resolver" style="background:none;border:none;color:#22c55e;cursor:pointer;font-size:0.75rem;padding:2px 6px;">✅</button>
+                                <button class="resolve-inc-btn" data-id="${inc.id}" data-suite-id="${suite.id}" title="Resolver" style="background:none;border:none;color:var(--apple-green);cursor:pointer;font-size:0.75rem;padding:2px 6px;">✅</button>
                             </div>
                         `).join('')}
-                        <button id="btn-add-inc-${suite.id}" data-suite-id="${suite.id}" style="margin-top:6px;padding:6px 10px;border:1px dashed rgba(255,255,255,0.2);border-radius:6px;background:none;color:#8b949e;font-size:0.72rem;cursor:pointer;">+ Agregar inconsistencia</button>
+                        <button id="btn-add-inc-${suite.id}" data-suite-id="${suite.id}" style="margin-top:6px;padding:6px 10px;border:1px dashed var(--inc-border);border-radius:6px;background:none;color:var(--inc-text-muted);font-size:0.72rem;cursor:pointer;">+ Agregar inconsistencia</button>
                     </div>
                 </div>
             </div>
@@ -250,11 +250,11 @@ export const TestSuitesTab = {
             <div class="ts-detail-header" style="padding: 10px 20px; border-bottom: 1px solid var(--border); background: var(--bg-surface); flex-shrink: 0; display: flex; align-items: center; gap: 16px;">
                 <div style="flex: 1; min-width: 0;">
                     <h2 style="margin: 0; font-size: 1rem; font-weight: 800; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${UI.escapeHTML(suite.title)}</h2>
-                    ${suite.jira_epic_key ? `<span class="tab-badge" style="background: rgba(59, 130, 246, 0.1); color: var(--brand); font-size: 0.65rem; margin-top: 2px; display: inline-block;">Épica: ${UI.escapeHTML(suite.jira_epic_key)}</span>` : ''}
+                    ${suite.jira_epic_key ? `<span class="tab-badge" style="background: var(--apple-blue-soft); color: var(--apple-blue); font-size: 0.65rem; margin-top: 2px; display: inline-block;">Épica: ${UI.escapeHTML(suite.jira_epic_key)}</span>` : ''}
                 </div>
                 <div style="display: flex; gap: 6px; align-items: center; flex-shrink: 0;">
                     <button class="btn btn-ghost btn-sm edit-suite" data-id="${suite.id}" title="Editar Suite" style="padding: 4px 8px;">✏️</button>
-                    <button class="btn btn-sm delete-suite" data-id="${suite.id}" title="Eliminar Suite" style="padding: 4px 8px; background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.3);">🗑️</button>
+                    <button class="btn btn-sm delete-suite" data-id="${suite.id}" title="Eliminar Suite" style="padding: 4px 8px; background: var(--apple-red-soft); color: var(--apple-red); border: 1px solid var(--apple-red-soft);">🗑️</button>
                     <div style="width: 1px; height: 18px; background: var(--border);"></div>
                     <button class="btn btn-success btn-sm run-suite" data-id="${suite.id}" style="padding: 4px 10px; font-size: 0.72rem;">▶ EJECUTAR</button>
                     <button class="btn btn-sm" id="btn-ai-gen-tc" data-suite-id="${suite.id}" style="background: linear-gradient(135deg,#2563eb,#3b82f6); color: white; border: none; padding: 4px 10px; font-size: 0.72rem;">✨ AI Tool</button>
@@ -357,7 +357,7 @@ export const TestSuitesTab = {
                             <button class="btn btn-success btn-sm run-tc-grid" data-id="${tc.id}" title="Ejecutar" style="padding: 3px 10px; font-size: 0.65rem; font-weight: 800;">▶</button>
                         ` : ''}
                         ${isAdmin ? `
-                            <button class="btn btn-sm delete-tc-grid" data-tc-id="${tc.id}" title="Eliminar" style="padding: 3px 10px; font-size: 0.65rem; font-weight: 800; opacity: ${activeRunId ? '0.3' : '1'}; cursor: ${activeRunId ? 'not-allowed' : 'pointer'}; background: rgba(239,68,68,0.15); color: #f87171; border: 1px solid rgba(239,68,68,0.3);">🗑️</button>
+                            <button class="btn btn-sm delete-tc-grid" data-tc-id="${tc.id}" title="Eliminar" style="padding: 3px 10px; font-size: 0.65rem; font-weight: 800; opacity: ${activeRunId ? '0.3' : '1'}; cursor: ${activeRunId ? 'not-allowed' : 'pointer'}; background: var(--apple-red-soft); color: var(--apple-red); border: 1px solid var(--apple-red-soft);">🗑️</button>
                         ` : ''}
                     </div>
                 </td>
@@ -558,7 +558,7 @@ export const TestSuitesTab = {
                                     <option value="${s.id}">${UI.escapeHTML(s.title)}</option>
                                 `).join('')}
                             </select>
-                            ${tc.us_id ? `<p style="font-size: 0.65rem; color: #f59e0b; margin-top: 4px;">⚠️ Desvinculá la HU antes de mover</p>` : ''}
+                            ${tc.us_id ? `<p style="font-size: 0.65rem; color: var(--apple-orange); margin-top: 4px;">⚠️ Desvinculá la HU antes de mover</p>` : ''}
                         </div>
                         <div style="padding: 12px; display: flex; flex-direction: column; gap: 10px;">
                             <label style="display: flex; align-items: center; gap: 10px; font-size: 0.78rem; cursor: pointer;">
@@ -584,7 +584,7 @@ export const TestSuitesTab = {
                             </label>
                         </div>
                         ${linkedUS ? `
-                            <button class="btn btn-ghost btn-sm view-hu-details" data-us-id="${linkedUS.id}" style="font-size: 0.72rem; font-weight: 800; color: var(--brand); border-color: rgba(59,130,246,0.2); padding: 5px 12px; align-self: flex-start;">
+                            <button class="btn btn-ghost btn-sm view-hu-details" data-us-id="${linkedUS.id}" style="font-size: 0.72rem; font-weight: 800; color: var(--apple-blue); border-color: var(--apple-blue-soft); padding: 5px 12px; align-self: flex-start;">
                                 📖 Ver Detalles de HU
                             </button>
                         ` : ''}
@@ -614,7 +614,7 @@ export const TestSuitesTab = {
                                     ${attachments.length > 0 ? `
                                         <div style="display: flex; gap: 6px; flex-wrap: wrap;">
                                             ${attachments.map(att => `
-                                                <a href="/api/attachments/${att.id}" target="_blank" style="font-size: 0.72rem; background: rgba(99,102,241,0.1); color: var(--brand); padding: 3px 10px; border-radius: 6px; text-decoration: none; display: flex; align-items: center; gap: 4px;">
+                                                <a href="/api/attachments/${att.id}" target="_blank" style="font-size: 0.72rem; background: var(--apple-indigo-soft); color: var(--apple-indigo); padding: 3px 10px; border-radius: var(--apple-radius-sm); text-decoration: none; display: flex; align-items: center; gap: 4px;">
                                                     📎 ${UI.escapeHTML(att.filename || 'archivo')}
                                                 </a>
                                             `).join('')}
@@ -635,11 +635,11 @@ export const TestSuitesTab = {
         if (!this.executionOverlay) return '';
         const { tcId, status, logs } = this.executionOverlay;
         return `
-            <div id="ts-exec-overlay" style="position: fixed; bottom: 20px; right: 20px; width: 480px; background: var(--bg-surface-elevated); border: 1px solid var(--border); border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.5); z-index: 9998; overflow: hidden;">
+            <div id="ts-exec-overlay" style="position: fixed; bottom: 20px; right: 20px; width: 480px; background: var(--apple-bg-elevated); border: 1px solid var(--apple-separator); border-radius: var(--apple-radius-xl); box-shadow: var(--apple-shadow-xl); z-index: 9998; overflow: hidden;">
                 <div style="padding: 14px 16px; background: linear-gradient(135deg,#1d4ed8,#2563eb); display: flex; align-items: center; gap: 10px;">
-                    <div style="width: 8px; height: 8px; border-radius: 50%; background: #4ade80; animation: pulse 2s infinite;"></div>
+                    <div style="width: 8px; height: 8px; border-radius: 50%; background: var(--apple-green); animation: pulse 2s infinite;"></div>
                     <span style="font-size: 0.85rem; font-weight: 800; color: white;">Ejecución en curso</span>
-                    <button id="ts-exec-close" style="margin-left: auto; background: rgba(0,0,0,0.2); border: none; color: white; width: 24px; height: 24px; border-radius: 50%; cursor: pointer; font-size: 0.9rem;">✕</button>
+                    <button id="ts-exec-close" style="margin-left: auto; background: var(--apple-fill); border: none; color: var(--apple-label); width: 24px; height: 24px; border-radius: 50%; cursor: pointer; font-size: 0.9rem;">✕</button>
                 </div>
                 <div style="padding: 14px 16px; font-size: 0.78rem; color: var(--text-muted); max-height: 200px; overflow-y: auto; font-family: monospace;">
                     ${(logs || []).map(log => `<div style="margin-bottom: 4px;">${UI.escapeHTML(log)}</div>`).join('')}
@@ -1119,35 +1119,35 @@ export const TestSuitesTab = {
         const savedKey = localStorage.getItem('gemini_api_key') || '';
         const modal = document.createElement('div');
         modal.id = 'modal-gemini-tc';
-        modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);';
+        modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(20px) saturate(180%);';
         modal.innerHTML = `
-            <div style="max-width:760px;width:95vw;max-height:90vh;display:flex;flex-direction:column;background:rgba(10,12,28,0.98);border:1px solid rgba(99,102,241,0.35);border-radius:20px;box-shadow:0 30px 60px rgba(0,0,0,0.7);overflow:hidden;">
+            <div style="max-width:760px;width:95vw;max-height:90vh;display:flex;flex-direction:column;background:var(--apple-bg-elevated);border:1px solid var(--apple-separator);border-radius:var(--apple-radius-xl);box-shadow:var(--apple-shadow-xl);overflow:hidden;">
                 <div style="background:linear-gradient(135deg,#4f46e5,#7c3aed);padding:16px 24px;color:white;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;">
                     <div>
                         <h2 style="margin:0;font-size:1.1rem;font-weight:800;">✨ Generar Tests con Gemini IA</h2>
                         <p style="margin:3px 0 0;font-size:0.75rem;opacity:0.75;">Los tests se crean directamente en la suite actual.</p>
                     </div>
-                    <button id="gemini-tc-close" style="background:rgba(0,0,0,0.25);border:none;color:white;width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:1.1rem;">&times;</button>
+                    <button id="gemini-tc-close" style="background:var(--apple-fill);border:none;color:var(--apple-label);width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:1.1rem;">&times;</button>
                 </div>
-                <div style="padding:10px 24px;background:rgba(0,0,0,0.3);border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;gap:12px;flex-shrink:0;">
-                    <label style="font-size:0.68rem;font-weight:800;color:#818cf8;white-space:nowrap;text-transform:uppercase;">🔑 API Key</label>
+                <div style="padding:10px 24px;background:var(--apple-fill);border-bottom:1px solid var(--apple-separator);display:flex;align-items:center;gap:12px;flex-shrink:0;">
+                    <label style="font-size:0.68rem;font-weight:800;color:var(--apple-purple);white-space:nowrap;text-transform:uppercase;">🔑 API Key</label>
                     <input id="gemini-tc-key" type="password" placeholder="AIza..." value="${savedKey}"
-                        style="flex:1;padding:6px 10px;border-radius:7px;border:1px solid rgba(99,102,241,0.4);background:rgba(255,255,255,0.05);color:white;font-family:monospace;font-size:0.78rem;outline:none;"/>
-                    <a href="https://aistudio.google.com/app/apikey" target="_blank" style="font-size:0.68rem;color:#818cf8;white-space:nowrap;text-decoration:none;">Obtener →</a>
+                        style="flex:1;padding:6px 10px;border-radius:var(--apple-radius-sm);border:1px solid var(--apple-separator-opaque);background:var(--apple-bg-tertiary);color:var(--apple-label);font-family:monospace;font-size:0.78rem;outline:none;"/>
+                    <a href="https://aistudio.google.com/app/apikey" target="_blank" style="font-size:0.68rem;color:var(--apple-purple);white-space:nowrap;text-decoration:none;">Obtener →</a>
                 </div>
                 <div style="flex:1;overflow-y:auto;padding:20px 24px;display:flex;flex-direction:column;gap:16px;">
                     <div>
-                        <div style="font-size:0.68rem;font-weight:800;color:#818cf8;text-transform:uppercase;margin-bottom:6px;">📋 Historia de Usuario / Contexto</div>
+                        <div style="font-size:0.68rem;font-weight:800;color:var(--apple-purple);text-transform:uppercase;margin-bottom:6px;">📋 Historia de Usuario / Contexto</div>
                         <textarea id="gemini-tc-hu" placeholder="Pegá aquí el texto de la HU, criterios de aceptación, reglas de negocio..."
-                            style="width:100%;min-height:130px;padding:14px;border-radius:10px;border:1px solid rgba(99,102,241,0.3);background:rgba(255,255,255,0.04);color:white;font-family:inherit;font-size:0.88rem;line-height:1.6;resize:vertical;outline:none;box-sizing:border-box;"></textarea>
+                            style="width:100%;min-height:130px;padding:14px;border-radius:var(--apple-radius-md);border:1px solid var(--apple-separator-opaque);background:var(--apple-bg-tertiary);color:var(--apple-label);font-family:inherit;font-size:0.88rem;line-height:1.6;resize:vertical;outline:none;box-sizing:border-box;"></textarea>
                     </div>
                     <div>
-                        <div style="font-size:0.68rem;font-weight:800;color:#818cf8;text-transform:uppercase;margin-bottom:6px;">🖼️ Imágenes <span style="font-weight:400;color:#64748b;">(opcional — Ctrl+V, drag & drop o click)</span></div>
+                        <div style="font-size:0.68rem;font-weight:800;color:var(--apple-purple);text-transform:uppercase;margin-bottom:6px;">🖼️ Imágenes <span style="font-weight:400;color:var(--apple-label-tertiary);">(opcional — Ctrl+V, drag & drop o click)</span></div>
                         <div id="gemini-tc-dropzone"
-                            style="min-height:80px;border:2px dashed rgba(99,102,241,0.4);border-radius:10px;background:rgba(99,102,241,0.04);display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px;cursor:pointer;transition:border-color 0.2s;"
-                            ondragover="event.preventDefault();this.style.borderColor='#3b82f6';" ondragleave="this.style.borderColor='rgba(59,130,246,0.4)';"
+                            style="min-height:80px;border:2px dashed var(--apple-separator-opaque);border-radius:var(--apple-radius-md);background:var(--apple-fill-tertiary);display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px;cursor:pointer;transition:border-color 0.2s;"
+                            ondragover="event.preventDefault();this.style.borderColor='var(--apple-blue)';" ondragleave="this.style.borderColor='var(--apple-separator-opaque)';"
                             ondrop="window._geminiTcDrop(event)">
-                            <div id="gemini-tc-placeholder" style="color:#64748b;font-size:0.78rem;width:100%;text-align:center;">📎 Arrastrá imágenes aquí, hacé click o Ctrl+V</div>
+                            <div id="gemini-tc-placeholder" style="color:var(--apple-label-tertiary);font-size:0.78rem;width:100%;text-align:center;">📎 Arrastrá imágenes aquí, hacé click o Ctrl+V</div>
                             <div id="gemini-tc-previews" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
                         </div>
                         <input type="file" id="gemini-tc-file" accept="image/*" multiple style="display:none;" />
@@ -1155,8 +1155,8 @@ export const TestSuitesTab = {
                     <div id="gemini-tc-status" style="display:none;font-size:0.8rem;padding:10px 14px;border-radius:8px;font-weight:600;"></div>
                     <div id="gemini-tc-analysis" style="display:none;"></div>
                 </div>
-                <div style="padding:14px 24px;background:rgba(0,0,0,0.25);border-top:1px solid rgba(255,255,255,0.06);display:flex;justify-content:flex-end;gap:10px;flex-shrink:0;">
-                    <button id="gemini-tc-cancel" style="padding:9px 18px;border-radius:9px;border:1px solid rgba(255,255,255,0.1);background:transparent;color:#64748b;font-weight:600;cursor:pointer;font-size:0.85rem;">Cancelar</button>
+                <div style="padding:14px 24px;background:var(--apple-fill);border-top:1px solid var(--apple-separator);display:flex;justify-content:flex-end;gap:10px;flex-shrink:0;">
+                    <button id="gemini-tc-cancel" style="padding:9px 18px;border-radius:var(--apple-radius-md);border:1px solid var(--apple-separator);background:transparent;color:var(--apple-label-secondary);font-weight:600;cursor:pointer;font-size:0.85rem;">Cancelar</button>
                     <button id="gemini-tc-submit" style="padding:9px 24px;border-radius:9px;border:none;background:linear-gradient(to right,#2563eb,#3b82f6);color:white;font-weight:800;cursor:pointer;font-size:0.9rem;display:flex;align-items:center;gap:8px;">
                         <span id="gemini-tc-btn-icon">✨</span><span id="gemini-tc-btn-label">Generar Tests</span>
                     </button>
@@ -1221,8 +1221,8 @@ export const TestSuitesTab = {
         placeholder.style.display = this._geminiImages.length ? 'none' : 'block';
         container.innerHTML = this._geminiImages.map((img, i) => `
             <div style="position:relative;width:70px;height:70px;">
-                <img src="data:${img.mimeType};base64,${img.base64}" style="width:70px;height:70px;object-fit:cover;border-radius:8px;border:1px solid rgba(99,102,241,0.4);" />
-                <button onclick="window._geminiRmImg(${i})" style="position:absolute;top:-5px;right:-5px;background:#ef4444;border:none;color:white;border-radius:50%;width:17px;height:17px;cursor:pointer;font-size:0.6rem;padding:0;">&times;</button>
+                <img src="data:${img.mimeType};base64,${img.base64}" style="width:70px;height:70px;object-fit:cover;border-radius:var(--apple-radius-sm);border:1px solid var(--apple-separator-opaque);" />
+                <button onclick="window._geminiRmImg(${i})" style="position:absolute;top:-5px;right:-5px;background:var(--apple-red);border:none;color:white;border-radius:50%;width:17px;height:17px;cursor:pointer;font-size:0.6rem;padding:0;">&times;</button>
             </div>`).join('');
         window._geminiRmImg = (i) => { this._geminiImages.splice(i, 1); this._renderGeminiPreviews(); };
     },
@@ -1232,7 +1232,7 @@ export const TestSuitesTab = {
         if (!el) return;
         el.textContent = msg;
         el.style.display = msg ? 'block' : 'none';
-        const map = { info: ['rgba(99,102,241,0.15)', '#818cf8'], error: ['rgba(239,68,68,0.15)', '#ef4444'], ok: ['rgba(34,197,94,0.15)', '#22c55e'] };
+        const map = { info: ['var(--apple-purple-soft)', 'var(--apple-purple)'], error: ['var(--apple-red-soft)', 'var(--apple-red)'], ok: ['var(--apple-green-soft)', 'var(--apple-green)'] };
         const [bg, color] = map[type] || map.info;
         el.style.background = bg; el.style.color = color; el.style.border = `1px solid ${color}33`;
     },
@@ -1437,17 +1437,17 @@ const container = document.getElementById('tab-content');
         if (!analysisEl) return;
 
         const sevColor = (sev) => ({ Alta: '#ef4444', Media: '#f59e0b', Baja: '#22c55e' }[sev] || '#818cf8');
-        const sevBg = (sev) => ({ Alta: 'rgba(239,68,68,0.15)', Media: 'rgba(245,158,11,0.15)', Baja: 'rgba(34,197,94,0.15)' }[sev] || 'rgba(99,102,241,0.15)');
+        const sevBg = (sev) => ({ Alta: 'var(--apple-red-soft)', Media: 'var(--apple-orange-soft)', Baja: 'var(--apple-green-soft)' }[sev] || 'var(--apple-purple-soft)');
 
         let html = '';
 
         if (inconsistencies.length > 0) {
             html += `<div style="margin-top:12px;">
-                <div style="font-size:0.65rem;font-weight:800;color:#ef4448;text-transform:uppercase;margin-bottom:8px;">⚠️ Inconsistencias detectadas (${inconsistencies.length})</div>`;
+                <div style="font-size:0.65rem;font-weight:800;color:var(--apple-red);text-transform:uppercase;margin-bottom:8px;">⚠️ Inconsistencias detectadas (${inconsistencies.length})</div>`;
             inconsistencies.forEach(inc => {
                 html += `<div style="margin-bottom:8px;padding:10px 12px;border-radius:8px;background:${sevBg(inc.severity)};border-left:4px solid ${sevColor(inc.severity)};">
                     <div style="font-size:0.82rem;font-weight:700;color:white;">${inc.title}</div>
-                    <div style="font-size:0.72rem;color:#94a3b8;margin-top:4px;line-height:1.5;">${inc.description || ''}</div>
+                    <div style="font-size:0.72rem;color:var(--apple-label-secondary);margin-top:4px;line-height:1.5;">${inc.description || ''}</div>
                     <div style="display:inline-block;font-size:0.62rem;color:${sevColor(inc.severity)};margin-top:5px;font-weight:800;padding:2px 8px;border-radius:4px;background:${sevColor(inc.severity)}22;">${inc.severity}</div>
                 </div>`;
             });

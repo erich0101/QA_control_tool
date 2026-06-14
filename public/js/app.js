@@ -22,6 +22,10 @@ import { Modals } from './components/modals.js';
 async function init() {
     console.log("🚀 Inicializando Manual QA Tool JIRA Edition...");
     
+    // Apply saved theme
+    const savedTheme = localStorage.getItem('theme') || 'dark';
+    document.documentElement.setAttribute('data-theme', savedTheme);
+    
     const topbar = document.getElementById('topbar');
     const tabbar = document.getElementById('tabbar');
     const content = document.getElementById('tab-content');

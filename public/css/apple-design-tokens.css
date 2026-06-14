@@ -1,0 +1,192 @@
+/* ══════════════════════════════════════════════════════════════
+   Apple macOS Design Tokens
+   Basado en Apple Human Interface Guidelines (macOS)
+   ══════════════════════════════════════════════════════════════ */
+
+:root {
+    /* ─── Backgrounds (Dark Mode) ─── */
+    --apple-bg:                #000000;
+    --apple-bg-elevated:       #1c1c1e;
+    --apple-bg-secondary:      #2c2c2e;
+    --apple-bg-tertiary:       #3a3a3c;
+    --apple-bg-quaternary:     #48484a;
+
+    /* ─── Labels (Text) ─── */
+    --apple-label:             #ffffff;
+    --apple-label-secondary:   #98989d;
+    --apple-label-tertiary:    #8E9399;
+    --apple-label-quaternary:  #636366;
+
+    /* ─── System Colors ─── */
+    --apple-blue:              #007AFF;
+    --apple-blue-hover:        #0a84ff;
+    --apple-blue-soft:         rgba(0, 122, 255, 0.12);
+    --apple-green:             #30D158;
+    --apple-green-soft:        rgba(48, 209, 88, 0.15);
+    --apple-orange:            #FF9F0A;
+    --apple-orange-soft:       rgba(255, 159, 10, 0.15);
+    --apple-red:               #FF453A;
+    --apple-red-soft:          rgba(255, 69, 58, 0.15);
+    --apple-purple:            #BF5AF2;
+    --apple-purple-soft:       rgba(191, 90, 242, 0.15);
+    --apple-teal:              #64D2FF;
+    --apple-teal-soft:         rgba(100, 210, 255, 0.15);
+    --apple-yellow:            #FFD60A;
+    --apple-pink:              #FF375F;
+    --apple-indigo:            #5E5CE6;
+    --apple-indigo-soft:       rgba(94, 92, 230, 0.12);
+
+    /* ─── Semantic Text Colors ─── */
+    --apple-text-error:        #FF453A;
+    --apple-text-success:      #30D158;
+    --apple-text-warning:      #FF9F0A;
+    --apple-text-info:         #007AFF;
+
+    /* ─── Separators ─── */
+    --apple-separator:         rgba(255, 255, 255, 0.1);
+    --apple-separator-opaque:  #38383a;
+
+    /* ─── Fill ─── */
+    --apple-fill:              rgba(120, 120, 128, 0.2);
+    --apple-fill-secondary:    rgba(120, 120, 128, 0.16);
+    --apple-fill-tertiary:     rgba(120, 120, 128, 0.12);
+
+    /* ─── Material (Vibrancy) ─── */
+    --apple-material:          rgba(28, 28, 30, 0.72);
+    --apple-material-thick:    rgba(28, 28, 30, 0.9);
+    --apple-material-thin:     rgba(28, 28, 30, 0.5);
+
+    /* ─── Shadows ─── */
+    --apple-shadow-sm:         0 1px 3px rgba(0, 0, 0, 0.3);
+    --apple-shadow-md:         0 4px 14px rgba(0, 0, 0, 0.4);
+    --apple-shadow-lg:         0 8px 30px rgba(0, 0, 0, 0.5);
+    --apple-shadow-xl:         0 12px 40px rgba(0, 0, 0, 0.6);
+
+    /* ─── Border Radius ─── */
+    --apple-radius-xs:         4px;
+    --apple-radius-sm:         6px;
+    --apple-radius-md:         10px;
+    --apple-radius-lg:         12px;
+    --apple-radius-xl:         16px;
+    --apple-radius-full:       9999px;
+
+    /* ─── Spacing ─── */
+    --apple-space-xs:          4px;
+    --apple-space-sm:          8px;
+    --apple-space-md:          12px;
+    --apple-space-lg:          16px;
+    --apple-space-xl:          20px;
+    --apple-space-2xl:         24px;
+    --apple-space-3xl:         32px;
+
+    /* ─── Typography ─── */
+    --apple-font-family:       -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', system-ui, sans-serif;
+    --apple-font-mono:         'SF Mono', SFMono-Regular, ui-monospace, Menlo, monospace;
+
+    /* Font sizes */
+    --apple-text-caption:      11px;
+    --apple-text-footnote:     13px;
+    --apple-text-body:         15px;
+    --apple-text-title3:       20px;
+    --apple-text-title2:       22px;
+    --apple-text-title1:       28px;
+    --apple-text-large-title:  34px;
+
+    /* Font weights */
+    --apple-weight-regular:    400;
+    --apple-weight-medium:     500;
+    --apple-weight-semibold:   600;
+    --apple-weight-bold:       700;
+
+    /* ─── Transitions ─── */
+    --apple-transition-fast:   0.15s ease;
+    --apple-transition:        0.2s ease;
+    --apple-transition-slow:   0.3s ease;
+    --apple-spring:            cubic-bezier(0.25, 0.1, 0.25, 1);
+
+    /* ─── Z-Index ─── */
+    --apple-z-base:            1;
+    --apple-z-dropdown:        100;
+    --apple-z-sticky:          200;
+    --apple-z-overlay:         500;
+    --apple-z-modal:           1000;
+    --apple-z-toast:           1100;
+
+    /* ─── Inconsistency Panel ─── */
+    --inc-bg:                  rgba(0, 0, 0, 0.15);
+    --inc-bg-hover:            rgba(0, 0, 0, 0.2);
+    --inc-border:              rgba(255, 255, 255, 0.2);
+    --inc-text:                #f1f5f9;
+    --inc-text-secondary:      #cbd5e1;
+    --inc-text-muted:          #8b949e;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   Apple macOS Light Mode
+   ══════════════════════════════════════════════════════════════ */
+
+[data-theme="light"] {
+    /* Backgrounds */
+    --apple-bg:                #f2f2f7;
+    --apple-bg-elevated:       #ffffff;
+    --apple-bg-secondary:      #f2f2f7;
+    --apple-bg-tertiary:       #e5e5ea;
+    --apple-bg-quaternary:     #d1d1d6;
+
+    /* Labels */
+    --apple-label:             #000000;
+    --apple-label-secondary:   #3c3c43;
+    --apple-label-tertiary:    #636366;
+    --apple-label-quaternary:  #aeaeb2;
+
+    /* System Colors */
+    --apple-blue:              #007AFF;
+    --apple-blue-hover:        #0063d1;
+    --apple-blue-soft:         rgba(0, 122, 255, 0.08);
+    --apple-green:             #34C759;
+    --apple-green-soft:        rgba(52, 199, 89, 0.12);
+    --apple-orange:            #FF9500;
+    --apple-orange-soft:       rgba(255, 149, 0, 0.12);
+    --apple-red:               #FF3B30;
+    --apple-red-soft:          rgba(255, 59, 48, 0.12);
+    --apple-purple:            #AF52DE;
+    --apple-purple-soft:       rgba(175, 82, 222, 0.12);
+    --apple-teal:              #5AC8FA;
+    --apple-teal-soft:         rgba(90, 200, 250, 0.12);
+    --apple-indigo:            #5856D6;
+    --apple-indigo-soft:       rgba(88, 86, 214, 0.08);
+
+    /* Semantic Text Colors */
+    --apple-text-error:        #FF3B30;
+    --apple-text-success:      #34C759;
+    --apple-text-warning:      #FF9500;
+    --apple-text-info:         #007AFF;
+
+    /* Separators */
+    --apple-separator:         rgba(0, 0, 0, 0.1);
+    --apple-separator-opaque:  #c6c6c8;
+
+    /* Fill */
+    --apple-fill:              rgba(120, 120, 128, 0.12);
+    --apple-fill-secondary:    rgba(120, 120, 128, 0.08);
+    --apple-fill-tertiary:     rgba(120, 120, 128, 0.04);
+
+    /* Material */
+    --apple-material:          rgba(255, 255, 255, 0.72);
+    --apple-material-thick:    rgba(255, 255, 255, 0.9);
+    --apple-material-thin:     rgba(255, 255, 255, 0.5);
+
+    /* Shadows */
+    --apple-shadow-sm:         0 1px 3px rgba(0, 0, 0, 0.08);
+    --apple-shadow-md:         0 4px 14px rgba(0, 0, 0, 0.1);
+    --apple-shadow-lg:         0 8px 30px rgba(0, 0, 0, 0.12);
+    --apple-shadow-xl:         0 12px 40px rgba(0, 0, 0, 0.15);
+
+    /* Inconsistency Panel */
+    --inc-bg:                  rgba(0, 0, 0, 0.04);
+    --inc-bg-hover:            rgba(0, 0, 0, 0.06);
+    --inc-border:              rgba(0, 0, 0, 0.1);
+    --inc-text:                #1c1c1e;
+    --inc-text-secondary:      #48484a;
+    --inc-text-muted:          #636366;
+}

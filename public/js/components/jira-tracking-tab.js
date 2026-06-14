@@ -97,11 +97,11 @@ export const JiraTrackingTab = {
         
         // Fila de la Épica
         rows.push(`
-            <tr class="epic-row" data-epic="${group.key}" style="background: rgba(0, 82, 204, 0.03); cursor: pointer;">
+            <tr class="epic-row" data-epic="${group.key}" style="background: var(--apple-fill-tertiary); cursor: pointer;">
                 <td colspan="5" style="padding: 12px 16px;">
                     <div style="display: flex; align-items: center; gap: 12px;">
                         <span style="font-size: 0.7rem; transition: transform 0.2s; transform: ${isExpanded ? 'rotate(90deg)' : 'rotate(0)'}">▶</span>
-                        <div style="background: #8777D9; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.65rem; font-weight: 800;">EPIC</div>
+                        <div style="background: var(--apple-purple); color: white; padding: 2px 8px; border-radius: var(--apple-radius-xs); font-size: 0.65rem; font-weight: 800;">EPIC</div>
                         <span style="font-weight: 700; color: var(--text-main);">${UI.escapeHTML(group.key)} — ${UI.escapeHTML(group.name)}</span>
                         <span style="color: var(--text-muted); font-size: 0.75rem;">(${group.tickets.length} tickets)</span>
                     </div>
@@ -152,7 +152,7 @@ export const JiraTrackingTab = {
 
     renderStatusPill(status) {
         let color = 'var(--text-secondary)';
-        let bg = 'rgba(0,0,0,0.05)';
+        let bg = 'var(--apple-fill)';
         
         const s = status.toUpperCase();
         if (s.includes('DONE') || s.includes('FIXED') || s.includes('CERRADO')) {
@@ -209,7 +209,7 @@ export const JiraTrackingTab = {
                     </div>
                     <h3 style="margin: 0; font-size: 1.1rem; line-height: 1.4;">${UI.escapeHTML(ticket.title)}</h3>
                     <div style="margin-top: 16px;">
-                        <a href="${ticket.jira_url}" target="_blank" class="btn btn-primary" style="width: 100%; background: #0052cc; color: white; text-align: center; text-decoration: none; font-weight: 700;">
+                        <a href="${ticket.jira_url}" target="_blank" class="btn btn-primary" style="width: 100%; background: var(--apple-blue); color: white; text-align: center; text-decoration: none; font-weight: 700;">
                             🔗 ABRIR EN JIRA
                         </a>
                     </div>

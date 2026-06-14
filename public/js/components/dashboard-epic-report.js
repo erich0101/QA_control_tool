@@ -77,7 +77,7 @@ export const DashboardEpicReport = {
     renderReport() {
         if (!this.data || this.data.error) {
             return `
-                <div style="background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.3); border-radius: 12px; padding: 24px; text-align: center;">
+                <div style="background: var(--apple-red-soft); border: 1px solid var(--apple-red-soft); border-radius: var(--apple-radius-lg); padding: 24px; text-align: center;">
                     <p style="color: var(--error); font-weight: 600;">${this.data?.error || 'Error al cargar datos'}</p>
                 </div>
             `;
@@ -87,8 +87,8 @@ export const DashboardEpicReport = {
         const { summary, statusBreakdown, priorityBreakdown, trend, avgAgeByStatus, agingBuckets, insights, healthScore, riskScore, riskLabel, sla, qaMetrics } = d;
 
         const riskColors = { low: '#10b981', moderate: '#f59e0b', high: '#ef4444' };
-        const riskBgColors = { low: 'rgba(16,185,129,0.1)', moderate: 'rgba(245,158,11,0.1)', high: 'rgba(239,68,68,0.1)' };
-        const insightColors = { success: { bg: 'rgba(16,185,129,0.1)', border: 'rgba(16,185,129,0.3)', text: '#10b981' }, warning: { bg: 'rgba(245,158,11,0.1)', border: 'rgba(245,158,11,0.3)', text: '#f59e0b' }, critical: { bg: 'rgba(239,68,68,0.1)', border: 'rgba(239,68,68,0.3)', text: '#ef4444' } };
+        const riskBgColors = { low: 'var(--apple-green-soft)', moderate: 'var(--apple-orange-soft)', high: 'var(--apple-red-soft)' };
+        const insightColors = { success: { bg: 'var(--apple-green-soft)', border: 'var(--apple-green-soft)', text: 'var(--apple-green)' }, warning: { bg: 'var(--apple-orange-soft)', border: 'var(--apple-orange-soft)', text: 'var(--apple-orange)' }, critical: { bg: 'var(--apple-red-soft)', border: 'var(--apple-red-soft)', text: 'var(--apple-red)' } };
 
         const totalBugs = Object.values(statusBreakdown).reduce((a, b) => a + b, 0);
         const maxTrend = Math.max(...trend.map(w => Math.max(w.created, w.resolved, w.backlogEnd)), 1);
@@ -163,8 +163,8 @@ export const DashboardEpicReport = {
                     </div>
 
                     <!-- KPI: Open -->
-                    <div style="background: rgba(239,68,68,0.06); border: 1px solid rgba(239,68,68,0.2); border-radius: 16px; padding: 14px; text-align: center;">
-                        <div style="font-size: 1.8rem; font-weight: 900; color: #ef4444;">${summary.open}</div>
+                    <div style="background: var(--apple-red-soft); border: 1px solid var(--apple-red-soft); border-radius: var(--apple-radius-lg); padding: 14px; text-align: center;">
+                        <div style="font-size: 1.8rem; font-weight: 900; color: var(--apple-red);">${summary.open}</div>
                         <div style="font-size: 0.6rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-top: 4px;">Abiertos</div>
                         <div style="font-size: 0.65rem; color: var(--text-muted); margin-top: 2px;">sin resolver</div>
                     </div>
@@ -194,7 +194,7 @@ export const DashboardEpicReport = {
                             <div style="font-size: 0.6rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700;">Ejecuciones</div>
                         </div>
                         <div style="text-align: center; padding: 12px; background: var(--bg-main); border-radius: 12px;">
-                            <div style="font-size: 1.6rem; font-weight: 900; color: #f59e0b;">${qaMetrics.executionTime.totalMinutes >= 60 ? Math.floor(qaMetrics.executionTime.totalMinutes / 60) + 'h ' + Math.round(qaMetrics.executionTime.totalMinutes % 60) + 'm' : Math.round(qaMetrics.executionTime.totalMinutes) + 'm'}</div>
+                            <div style="font-size: 1.6rem; font-weight: 900; color: var(--apple-orange);">${qaMetrics.executionTime.totalMinutes >= 60 ? Math.floor(qaMetrics.executionTime.totalMinutes / 60) + 'h ' + Math.round(qaMetrics.executionTime.totalMinutes % 60) + 'm' : Math.round(qaMetrics.executionTime.totalMinutes) + 'm'}</div>
                             <div style="font-size: 0.6rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700;">Tiempo Total</div>
                         </div>
                     </div>
@@ -206,20 +206,20 @@ export const DashboardEpicReport = {
                             <div style="font-size: 0.7rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 10px;">Distribución de Ejecuciones</div>
                             ${qaMetrics.totalExecutions > 0 ? `
                             <div style="display: flex; height: 24px; border-radius: 8px; overflow: hidden; margin-bottom: 8px;">
-                                ${qaMetrics.executionsByStatus.PASS > 0 ? `<div style="width: ${(qaMetrics.executionsByStatus.PASS / qaMetrics.totalExecutions * 100)}%; background: #10b981;" title="PASS: ${qaMetrics.executionsByStatus.PASS}"></div>` : ''}
-                                ${qaMetrics.executionsByStatus.FAIL > 0 ? `<div style="width: ${(qaMetrics.executionsByStatus.FAIL / qaMetrics.totalExecutions * 100)}%; background: #ef4444;" title="FAIL: ${qaMetrics.executionsByStatus.FAIL}"></div>` : ''}
-                                ${qaMetrics.executionsByStatus.BLOCK > 0 ? `<div style="width: ${(qaMetrics.executionsByStatus.BLOCK / qaMetrics.totalExecutions * 100)}%; background: #dc2626;" title="BLOCK: ${qaMetrics.executionsByStatus.BLOCK}"></div>` : ''}
-                                ${qaMetrics.executionsByStatus.BLOCKED > 0 ? `<div style="width: ${(qaMetrics.executionsByStatus.BLOCKED / qaMetrics.totalExecutions * 100)}%; background: #f59e0b;" title="BLOCKED: ${qaMetrics.executionsByStatus.BLOCKED}"></div>` : ''}
-                                ${qaMetrics.executionsByStatus.PENDING > 0 ? `<div style="width: ${(qaMetrics.executionsByStatus.PENDING / qaMetrics.totalExecutions * 100)}%; background: #6b7280;" title="PENDING: ${qaMetrics.executionsByStatus.PENDING}"></div>` : ''}
-                                ${qaMetrics.executionsByStatus.SKIP > 0 ? `<div style="width: ${(qaMetrics.executionsByStatus.SKIP / qaMetrics.totalExecutions * 100)}%; background: #9ca3af;" title="SKIP: ${qaMetrics.executionsByStatus.SKIP}"></div>` : ''}
+                                ${qaMetrics.executionsByStatus.PASS > 0 ? `<div style="width: ${(qaMetrics.executionsByStatus.PASS / qaMetrics.totalExecutions * 100)}%; background: var(--apple-green);" title="PASS: ${qaMetrics.executionsByStatus.PASS}"></div>` : ''}
+                                ${qaMetrics.executionsByStatus.FAIL > 0 ? `<div style="width: ${(qaMetrics.executionsByStatus.FAIL / qaMetrics.totalExecutions * 100)}%; background: var(--apple-red);" title="FAIL: ${qaMetrics.executionsByStatus.FAIL}"></div>` : ''}
+                                ${qaMetrics.executionsByStatus.BLOCK > 0 ? `<div style="width: ${(qaMetrics.executionsByStatus.BLOCK / qaMetrics.totalExecutions * 100)}%; background: var(--apple-red);" title="BLOCK: ${qaMetrics.executionsByStatus.BLOCK}"></div>` : ''}
+                                ${qaMetrics.executionsByStatus.BLOCKED > 0 ? `<div style="width: ${(qaMetrics.executionsByStatus.BLOCKED / qaMetrics.totalExecutions * 100)}%; background: var(--apple-orange);" title="BLOCKED: ${qaMetrics.executionsByStatus.BLOCKED}"></div>` : ''}
+                                ${qaMetrics.executionsByStatus.PENDING > 0 ? `<div style="width: ${(qaMetrics.executionsByStatus.PENDING / qaMetrics.totalExecutions * 100)}%; background: var(--apple-label-secondary);" title="PENDING: ${qaMetrics.executionsByStatus.PENDING}"></div>` : ''}
+                                ${qaMetrics.executionsByStatus.SKIP > 0 ? `<div style="width: ${(qaMetrics.executionsByStatus.SKIP / qaMetrics.totalExecutions * 100)}%; background: var(--apple-label-tertiary);" title="SKIP: ${qaMetrics.executionsByStatus.SKIP}"></div>` : ''}
                             </div>
                             <div style="display: flex; gap: 12px; flex-wrap: wrap;">
-                                <span style="display: flex; align-items: center; gap: 4px; font-size: 0.7rem;"><span style="width: 10px; height: 10px; border-radius: 2px; background: #10b981;"></span> PASS: ${qaMetrics.executionsByStatus.PASS}</span>
-                                <span style="display: flex; align-items: center; gap: 4px; font-size: 0.7rem;"><span style="width: 10px; height: 10px; border-radius: 2px; background: #ef4444;"></span> FAIL: ${qaMetrics.executionsByStatus.FAIL}</span>
-                                ${(qaMetrics.executionsByStatus.BLOCK || 0) > 0 ? `<span style="display: flex; align-items: center; gap: 4px; font-size: 0.7rem;"><span style="width: 10px; height: 10px; border-radius: 2px; background: #dc2626;"></span> BLOCK: ${qaMetrics.executionsByStatus.BLOCK}</span>` : ''}
-                                ${(qaMetrics.executionsByStatus.BLOCKED || 0) > 0 ? `<span style="display: flex; align-items: center; gap: 4px; font-size: 0.7rem;"><span style="width: 10px; height: 10px; border-radius: 2px; background: #f59e0b;"></span> BLOCKED: ${qaMetrics.executionsByStatus.BLOCKED}</span>` : ''}
-                                <span style="display: flex; align-items: center; gap: 4px; font-size: 0.7rem;"><span style="width: 10px; height: 10px; border-radius: 2px; background: #6b7280;"></span> PENDING: ${qaMetrics.executionsByStatus.PENDING}</span>
-                                ${(qaMetrics.executionsByStatus.SKIP || 0) > 0 ? `<span style="display: flex; align-items: center; gap: 4px; font-size: 0.7rem;"><span style="width: 10px; height: 10px; border-radius: 2px; background: #9ca3af;"></span> SKIP: ${qaMetrics.executionsByStatus.SKIP}</span>` : ''}
+                                <span style="display: flex; align-items: center; gap: 4px; font-size: 0.7rem;"><span style="width: 10px; height: 10px; border-radius: 2px; background: var(--apple-green);"></span> PASS: ${qaMetrics.executionsByStatus.PASS}</span>
+                                <span style="display: flex; align-items: center; gap: 4px; font-size: 0.7rem;"><span style="width: 10px; height: 10px; border-radius: 2px; background: var(--apple-red);"></span> FAIL: ${qaMetrics.executionsByStatus.FAIL}</span>
+                                ${(qaMetrics.executionsByStatus.BLOCK || 0) > 0 ? `<span style="display: flex; align-items: center; gap: 4px; font-size: 0.7rem;"><span style="width: 10px; height: 10px; border-radius: 2px; background: var(--apple-red);"></span> BLOCK: ${qaMetrics.executionsByStatus.BLOCK}</span>` : ''}
+                                ${(qaMetrics.executionsByStatus.BLOCKED || 0) > 0 ? `<span style="display: flex; align-items: center; gap: 4px; font-size: 0.7rem;"><span style="width: 10px; height: 10px; border-radius: 2px; background: var(--apple-orange);"></span> BLOCKED: ${qaMetrics.executionsByStatus.BLOCKED}</span>` : ''}
+                                <span style="display: flex; align-items: center; gap: 4px; font-size: 0.7rem;"><span style="width: 10px; height: 10px; border-radius: 2px; background: var(--apple-label-secondary);"></span> PENDING: ${qaMetrics.executionsByStatus.PENDING}</span>
+                                ${(qaMetrics.executionsByStatus.SKIP || 0) > 0 ? `<span style="display: flex; align-items: center; gap: 4px; font-size: 0.7rem;"><span style="width: 10px; height: 10px; border-radius: 2px; background: var(--apple-label-tertiary);"></span> SKIP: ${qaMetrics.executionsByStatus.SKIP}</span>` : ''}
                             </div>
                             ` : '<div style="color: var(--text-muted); font-size: 0.8rem; text-align: center; padding: 20px;">Sin ejecuciones registradas</div>'}
                         </div>
@@ -231,7 +231,7 @@ export const DashboardEpicReport = {
                             <div style="display: flex; flex-direction: column; gap: 8px;">
                                 ${Object.entries(qaMetrics.defectsBySeverity).map(([severity, count]) => {
                                     const pct = (count / qaMetrics.defectsFound * 100);
-                                    const colors = { 'Crítica': '#ef4444', 'Alta': '#f59e0b', 'Media': '#3b82f6', 'Baja': '#10b981' };
+                                    const colors = { 'Crítica': 'var(--apple-red)', 'Alta': 'var(--apple-orange)', 'Media': 'var(--apple-blue)', 'Baja': 'var(--apple-green)' };
                                     return `
                                     <div>
                                         <div style="display: flex; justify-content: space-between; font-size: 0.75rem; margin-bottom: 3px;">
@@ -263,7 +263,7 @@ export const DashboardEpicReport = {
                                 <div style="font-size: 0.6rem; color: var(--text-muted);">Mediana (días)</div>
                             </div>
                             <div style="text-align: center;">
-                                <div style="font-size: 1.3rem; font-weight: 900; color: #f59e0b;">${sla.p90}</div>
+                                <div style="font-size: 1.3rem; font-weight: 900; color: var(--apple-orange);">${sla.p90}</div>
                                 <div style="font-size: 0.6rem; color: var(--text-muted);">P90 (días)</div>
                             </div>
                             <div style="text-align: center;">
@@ -310,8 +310,8 @@ export const DashboardEpicReport = {
                             </svg>
                         </div>
                         <div style="display: flex; gap: 16px; margin-top: 10px; justify-content: center;">
-                            <span style="display: flex; align-items: center; gap: 4px; font-size: 0.65rem; color: var(--text-muted);"><span style="width: 10px; height: 10px; border-radius: 2px; background: #ef4444; display: inline-block;"></span> Creados</span>
-                            <span style="display: flex; align-items: center; gap: 4px; font-size: 0.65rem; color: var(--text-muted);"><span style="width: 10px; height: 10px; border-radius: 2px; background: #10b981; display: inline-block;"></span> Resueltos</span>
+                            <span style="display: flex; align-items: center; gap: 4px; font-size: 0.65rem; color: var(--apple-label-tertiary);"><span style="width: 10px; height: 10px; border-radius: 2px; background: var(--apple-red); display: inline-block;"></span> Creados</span>
+                            <span style="display: flex; align-items: center; gap: 4px; font-size: 0.65rem; color: var(--apple-label-tertiary);"><span style="width: 10px; height: 10px; border-radius: 2px; background: var(--apple-green); display: inline-block;"></span> Resueltos</span>
                             <span style="display: flex; align-items: center; gap: 4px; font-size: 0.65rem; color: var(--text-muted);"><span style="width: 10px; height: 10px; border-radius: 50%; background: var(--brand); display: inline-block;"></span> Backlog</span>
                         </div>
                     </div>
@@ -369,8 +369,8 @@ export const DashboardEpicReport = {
                         <thead>
                             <tr style="border-bottom: 1px solid var(--border);">
                                 <th style="text-align: left; padding: 8px 12px; color: var(--text-muted); font-weight: 700;">Semana</th>
-                                <th style="text-align: right; padding: 8px 12px; color: #ef4444; font-weight: 700;">Creados</th>
-                                <th style="text-align: right; padding: 8px 12px; color: #10b981; font-weight: 700;">Resueltos</th>
+                                <th style="text-align: right; padding: 8px 12px; color: var(--apple-red); font-weight: 700;">Creados</th>
+                                <th style="text-align: right; padding: 8px 12px; color: var(--apple-green); font-weight: 700;">Resueltos</th>
                                 <th style="text-align: right; padding: 8px 12px; color: var(--brand); font-weight: 700;">Backlog Final</th>
                                 <th style="text-align: right; padding: 8px 12px; font-weight: 700;">Delta</th>
                             </tr>
@@ -379,8 +379,8 @@ export const DashboardEpicReport = {
                             ${trend.map(w => `
                                 <tr style="border-bottom: 1px solid var(--border);">
                                     <td style="padding: 8px 12px; color: var(--text-main);">${w.label}</td>
-                                    <td style="padding: 8px 12px; text-align: right; color: #ef4444; font-weight: 600;">${w.created}</td>
-                                    <td style="padding: 8px 12px; text-align: right; color: #10b981; font-weight: 600;">${w.resolved}</td>
+                                    <td style="padding: 8px 12px; text-align: right; color: var(--apple-red); font-weight: 600;">${w.created}</td>
+                                    <td style="padding: 8px 12px; text-align: right; color: var(--apple-green); font-weight: 600;">${w.resolved}</td>
                                     <td style="padding: 8px 12px; text-align: right; color: var(--brand); font-weight: 700;">${w.backlogEnd}</td>
                                     <td style="padding: 8px 12px; text-align: right; font-weight: 700; color: ${(w.delta || 0) <= 0 ? '#10b981' : '#ef4444'};">${w.delta > 0 ? '+' : ''}${w.delta || 0}</td>
                                 </tr>

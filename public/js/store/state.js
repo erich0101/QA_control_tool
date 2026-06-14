@@ -6,6 +6,9 @@ const STORAGE_KEY = 'qa_app_state';
 
 export const Store = {
     state: {
+        // Theme
+        theme: localStorage.getItem('theme') || 'dark',
+
         // Proyecto
         projects: [],
         activeProjectId: localStorage.getItem('activeProjectId') || null,
@@ -53,6 +56,17 @@ export const Store = {
         localStorage.setItem('activeTab', this.state.activeTab || '');
         localStorage.setItem('selectedUseCaseId', this.state.selectedUseCaseId || '');
         localStorage.setItem('selectedUSId', this.state.selectedUSId || '');
+    },
+
+    setTheme(theme) {
+        // Add transition class for smooth animation
+        document.documentElement.classList.add('theme-transition');
+        document.documentElement.setAttribute('data-theme', theme);
+        this.state.theme = theme;
+        localStorage.setItem('theme', theme);
+        this.notify();
+        // Remove transition class after animation
+        setTimeout(() => document.documentElement.classList.remove('theme-transition'), 350);
     },
 
     setState(newState) {

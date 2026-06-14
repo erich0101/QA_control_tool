@@ -204,17 +204,17 @@ export const HistoryTab = {
                 <td>
                     <div class="tt-progress-mini">
                         <div class="tt-progress-bar" style="width: 100%; display: flex; height: 6px; border-radius: 3px; overflow: hidden; background: var(--bg-hover);">
-                            <div title="PASS: ${pass}" style="width: ${passPct}%; background: #52c41a;"></div>
-                            <div title="FAIL: ${fail}" style="width: ${failPct}%; background: #ff4d4f;"></div>
-                            <div title="BLOCK: ${block}" style="width: ${blockPct}%; background: #fadb14;"></div>
-                            <div title="SKIP: ${skip}" style="width: ${skipPct}%; background: #595959;"></div>
-                            <div title="WARN: ${warn}" style="width: ${warnPct}%; background: #faad14;"></div>
+                            <div title="PASS: ${pass}" style="width: ${passPct}%; background: var(--apple-green);"></div>
+                            <div title="FAIL: ${fail}" style="width: ${failPct}%; background: var(--apple-red);"></div>
+                            <div title="BLOCK: ${block}" style="width: ${blockPct}%; background: var(--apple-orange);"></div>
+                            <div title="SKIP: ${skip}" style="width: ${skipPct}%; background: var(--apple-label-tertiary);"></div>
+                            <div title="WARN: ${warn}" style="width: ${warnPct}%; background: var(--apple-orange);"></div>
                         </div>
                         <div style="display: flex; justify-content: center; gap: 8px; margin-top: 6px; font-size: 9px; font-weight: 700; flex-wrap: wrap;">
-                            <span style="color: #52c41a;">${pass} OK</span>
-                            <span style="color: #ff4d4f;">${fail} FAIL</span>
-                            <span style="color: #fadb14;">${block} BLOCK</span>
-                            <span style="color: #595959;">${skip} SKIP</span>
+                            <span style="color: var(--apple-green);">${pass} OK</span>
+                            <span style="color: var(--apple-red);">${fail} FAIL</span>
+                            <span style="color: var(--apple-orange);">${block} BLOCK</span>
+                            <span style="color: var(--apple-label-tertiary);">${skip} SKIP</span>
                         </div>
                     </div>
                 </td>
@@ -496,14 +496,14 @@ export const HistoryTab = {
 
                 <div class="bug-result-compare" style="display: grid; grid-template-columns: 1fr; gap: 16px;">
                     <div class="field-group">
-                        <div class="result-box-title" style="color: #52c41a; font-size: 0.65rem;">✔️ RESULTADO ESPERADO</div>
-                        <div style="padding: 12px; background: rgba(82, 196, 26, 0.05); border: 1px solid rgba(82, 196, 26, 0.2); border-radius: 8px; min-height: 80px; font-size: 0.8rem;">
+                        <div class="result-box-title" style="color: var(--apple-green); font-size: 0.65rem;">✔️ RESULTADO ESPERADO</div>
+                        <div style="padding: 12px; background: var(--apple-green-soft); border: 1px solid var(--apple-green-soft); border-radius: var(--apple-radius-sm); min-height: 80px; font-size: 0.8rem;">
                             ${UI.escapeHTML(bug.expected_result || '—')}
                         </div>
                     </div>
                     <div class="field-group">
-                        <div class="result-box-title" style="color: #ff4d4f; font-size: 0.65rem;">❌ RESULTADO ACTUAL</div>
-                        <div style="padding: 12px; background: rgba(255, 77, 79, 0.05); border: 1px solid rgba(255, 77, 79, 0.2); border-radius: 8px; min-height: 80px; font-size: 0.8rem;">
+                        <div class="result-box-title" style="color: var(--apple-red); font-size: 0.65rem;">❌ RESULTADO ACTUAL</div>
+                        <div style="padding: 12px; background: var(--apple-red-soft); border: 1px solid var(--apple-red-soft); border-radius: var(--apple-radius-sm); min-height: 80px; font-size: 0.8rem;">
                             ${UI.escapeHTML(bug.actual_result || '—')}
                         </div>
                     </div>
@@ -535,10 +535,10 @@ export const HistoryTab = {
                 <!-- Sección Jira Integration (Persistida o Nueva) -->
                 <div id="jira-custom-fields-container" style="margin-top: 16px; display: none;"></div>
 
-                <div id="jira-integration-container" style="margin-top: 24px; padding: 20px; background: rgba(0, 82, 204, 0.05); border: 1px solid rgba(0, 82, 204, 0.2); border-radius: 16px; display: ${bug.jira_key ? 'none' : 'block'};">
+                <div id="jira-integration-container" style="margin-top: 24px; padding: 20px; background: var(--apple-blue-soft); border: 1px solid var(--apple-blue-soft); border-radius: var(--apple-radius-xl); display: ${bug.jira_key ? 'none' : 'block'};">
                     <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 16px;">
                         <img src="https://wac-cdn.atlassian.com/assets/img/favicons/atlassian/favicon.png" style="width: 16px; height: 16px;">
-                        <span style="font-size: 0.75rem; font-weight: 800; color: #0052cc; text-transform: uppercase; letter-spacing: 0.05em;">Integración con Jira</span>
+                        <span style="font-size: 0.75rem; font-weight: 800; color: var(--apple-blue); text-transform: uppercase; letter-spacing: 0.05em;">Integración con Jira</span>
                     </div>
                     
                     <div class="field-group" style="margin-bottom: 16px;">
@@ -563,14 +563,14 @@ export const HistoryTab = {
                         </div>
                     </div>
 
-                    <button id="btn-create-jira" class="btn btn-primary" style="width: 100%; background: #0052cc; border: none; font-weight: 700; font-size: 0.8rem; height: 40px; color: white;">
+                    <button id="btn-create-jira" class="btn btn-primary" style="width: 100%; background: var(--apple-blue); border: none; font-weight: 700; font-size: 0.8rem; height: 40px; color: white;">
                         🚀 CREAR TICKET EN JIRA
                     </button>
                 </div>
 
-                <div id="jira-success-container" style="margin-top: 24px; padding: 16px; background: rgba(82, 196, 26, 0.1); border: 1px solid var(--ok); border-radius: 12px; display: ${bug.jira_key ? 'block' : 'none'}; text-align: center;">
+                <div id="jira-success-container" style="margin-top: 24px; padding: 16px; background: var(--apple-green-soft); border: 1px solid var(--apple-green); border-radius: var(--apple-radius-lg); display: ${bug.jira_key ? 'block' : 'none'}; text-align: center;">
                     <div style="font-size: 0.8rem; font-weight: 700; color: var(--ok); margin-bottom: 8px;">✅ Ticket de Jira vinculado</div>
-                    <a id="jira-ticket-link" href="${bug.jira_url || '#'}" target="_blank" style="font-size: 0.9rem; font-weight: 800; color: #0052cc; text-decoration: underline;">
+                    <a id="jira-ticket-link" href="${bug.jira_url || '#'}" target="_blank" style="font-size: 0.9rem; font-weight: 800; color: var(--apple-blue); text-decoration: underline;">
                         ${bug.jira_key || 'BUG-XXX'}
                     </a>
                 </div>

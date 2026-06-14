@@ -62,8 +62,8 @@ export const Modals = {
                 margin: auto;
             }
             .modal-native::backdrop {
-                background: rgba(0, 0, 0, 0.6);
-                backdrop-filter: blur(8px);
+                background: rgba(0, 0, 0, 0.5);
+                backdrop-filter: blur(20px) saturate(180%);
             }
         `;
         if (!document.getElementById('modal-native-styles')) {
@@ -257,7 +257,7 @@ getStartRunWizardContent({ suite, suites, cuTitle }) {
                     </div>
                 </div>
 
-                <div id="custom-filters-area" style="display: none; background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 12px; padding: 16px;">
+                <div id="custom-filters-area" style="display: none; background: var(--apple-fill-tertiary); border: 1px solid var(--apple-separator); border-radius: var(--apple-radius-lg); padding: 16px;">
                     <span class="field-label" style="display: block; margin-bottom: 12px; color: var(--brand);">Filtros Personalizados</span>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
                         <div class="field-group">
@@ -311,7 +311,7 @@ getStartRunWizardContent({ suite, suites, cuTitle }) {
                     </div>
                 </div>
                 ` : `
-                <div style="background: rgba(99,102,241,0.08); border: 1px solid rgba(99,102,241,0.3); border-radius: 12px; padding: 16px; margin-bottom: 8px;">
+                <div style="background: var(--apple-indigo-soft); border: 1px solid var(--apple-indigo-soft); border-radius: var(--apple-radius-lg); padding: 16px; margin-bottom: 8px;">
                     <div style="font-size: 0.75rem; font-weight: 700; color: var(--brand); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px;">📁 Suites a ejecutar (${suiteList.length})</div>
                     <div style="display: flex; flex-direction: column; gap: 6px;">
                         ${suiteList.map(s => `
@@ -325,7 +325,7 @@ getStartRunWizardContent({ suite, suites, cuTitle }) {
                 </div>
                 `}
 
-                <div class="field-group" style="background: rgba(34,197,94,0.08); border: 1px solid rgba(34,197,94,0.3); border-radius: 12px; padding: 14px; text-align: center;">
+                <div class="field-group" style="background: var(--apple-green-soft); border: 1px solid var(--apple-green-soft); border-radius: var(--apple-radius-lg); padding: 14px; text-align: center;">
                     <span style="font-size: 0.75rem; font-weight: 700; color: var(--ok); text-transform: uppercase; letter-spacing: 0.05em;">Tests a ejecutar</span>
                     <div style="font-size: 2rem; font-weight: 900; color: var(--ok); margin-top: 4px;"><span id="preview-count">${isBulk ? suiteList.reduce((acc, s) => acc + (s.test_cases || []).filter(t => t.is_regression).length, 0) : (suite?.test_cases || []).filter(t => t.is_regression).length}</span></div>
                 </div>

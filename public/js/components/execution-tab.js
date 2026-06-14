@@ -410,16 +410,16 @@ export const ExecutionTab = {
 
     getStatusColor(status) {
         const colors = {
-            'PASS': '#22c55e',
-            'OK': '#22c55e',
-            'FAIL': '#ef4444',
-            'BLOCK': '#f59e0b',
-            'BLOCKED': '#f59e0b',
-            'SKIP': '#6b7280',
-            'SKIPPED': '#6b7280',
-            'PENDING': '#6b7280'
+            'PASS': 'var(--apple-green)',
+            'OK': 'var(--apple-green)',
+            'FAIL': 'var(--apple-red)',
+            'BLOCK': 'var(--apple-orange)',
+            'BLOCKED': 'var(--apple-orange)',
+            'SKIP': 'var(--apple-label-secondary)',
+            'SKIPPED': 'var(--apple-label-secondary)',
+            'PENDING': 'var(--apple-label-secondary)'
         };
-        return colors[status] || '#6b7280';
+        return colors[status] || 'var(--apple-label-secondary)';
     },
 
     startTimers() {
@@ -566,7 +566,7 @@ export const ExecutionTab = {
             zone.onclick = () => fileInput.click();
             fileInput.onchange = (e) => uploadFile(e.target.files[0]);
 
-            zone.ondragover = (e) => { e.preventDefault(); zone.style.borderColor = 'var(--brand)'; zone.style.background = 'rgba(59, 130, 246, 0.05)'; };
+            zone.ondragover = (e) => { e.preventDefault(); zone.style.borderColor = 'var(--apple-blue)'; zone.style.background = 'var(--apple-blue-soft)'; };
             zone.ondragleave = () => { zone.style.borderColor = 'var(--border)'; zone.style.background = 'transparent'; };
             zone.ondrop = (e) => { e.preventDefault(); uploadFile(e.dataTransfer.files[0]); };
         });

@@ -177,7 +177,7 @@ export const UserStories = {
 
         return `
             <tr class="us-suite-row ${isActive ? 'selected' : ''}" data-id="${us.id}"
-                style="border-bottom: 1px solid rgba(255,255,255,0.04); cursor: pointer;">
+                style="border-bottom: 1px solid var(--apple-separator); cursor: pointer;">
                 <td>
                     <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 2px;">
                         <span class="us-id">${UI.escapeHTML(us.key_id)}</span>
@@ -209,7 +209,7 @@ export const UserStories = {
                 </div>
                 <div style="display: flex; gap: 6px; align-items: center; flex-shrink: 0;">
                     <button class="btn btn-ghost btn-sm goto-suites" data-us-id="${us.id}" style="padding: 4px 8px; font-size: 0.72rem;">🧪 Ver Suites</button>
-                    <button class="btn btn-sm delete-us" data-id="${us.id}" style="padding: 4px 8px; background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.3);">🗑️</button>
+                    <button class="btn btn-sm delete-us" data-id="${us.id}" style="padding: 4px 8px; background: var(--apple-red-soft); color: var(--apple-red); border: 1px solid var(--apple-red-soft);">🗑️</button>
                     <div style="width: 1px; height: 18px; background: var(--border);"></div>
                     <button class="btn btn-ghost btn-sm cancel-edit" style="padding: 4px 8px; font-size: 0.72rem;">Cancelar</button>
                     <button class="btn btn-primary btn-sm save-us" data-id="${us.id}" style="padding: 4px 10px; font-size: 0.72rem;">💾 Guardar</button>
@@ -301,10 +301,10 @@ export const UserStories = {
         const items = us.inconsistencies || [];
         return `
             <div style="display: flex; flex-direction: column; gap: 12px;">
-                <div style="padding: 12px 16px; background: ${items.length > 0 ? 'rgba(245,158,11,0.07)' : 'rgba(34,197,94,0.06)'}; border: 1px solid ${items.length > 0 ? '#f59e0b33' : '#22c55e33'}; border-radius: 10px; border-left: 4px solid ${items.length > 0 ? '#f59e0b' : '#22c55e'};">
+                <div style="padding: 12px 16px; background: ${items.length > 0 ? 'var(--apple-orange-soft)' : 'var(--apple-green-soft)'}; border: 1px solid ${items.length > 0 ? 'var(--apple-orange-soft)' : 'var(--apple-green-soft)'}; border-radius: var(--apple-radius-md); border-left: 4px solid ${items.length > 0 ? 'var(--apple-orange)' : 'var(--apple-green)'};">
                     <div style="display: flex; align-items: center; gap: 8px;">
                         <span>${items.length > 0 ? '⚠️' : '✅'}</span>
-                        <span style="font-size: 0.72rem; font-weight: 800; color: ${items.length > 0 ? '#f59e0b' : '#22c55e'}; text-transform: uppercase; letter-spacing: 0.05em;">
+                        <span style="font-size: 0.72rem; font-weight: 800; color: ${items.length > 0 ? 'var(--apple-orange)' : 'var(--apple-green)'}; text-transform: uppercase; letter-spacing: 0.05em;">
                             ${items.length > 0 ? `Inconsistencias detectadas (${items.length})` : 'Sin inconsistencias — HU consistente'}
                         </span>
                     </div>
@@ -314,10 +314,10 @@ export const UserStories = {
                     const color = SEVERITY_COLORS[severity] || '#ef4444';
                     const icon = SEVERITY_ICONS[severity] || '🔴';
                     return `
-                    <div style="display: flex; align-items: flex-start; gap: 10px; padding: 8px 12px; background: rgba(0,0,0,0.15); border-radius: 8px;">
+                    <div style="display: flex; align-items: flex-start; gap: 10px; padding: 8px 12px; background: var(--inc-bg); border-radius: 8px;">
                         <span style="font-size: 0.65rem; font-weight: 800; color: ${color}; white-space: nowrap; margin-top: 1px;">${icon}</span>
-                        <span style="font-size: 0.78rem; color: var(--text-main); font-weight: 500; flex: 1; word-break: break-word; line-height: 1.4;">${UI.escapeHTML(item.title)}</span>
-                        <button class="resolve-inc-btn-hu" data-id="${item.id}" title="Resolver inconsistencia" style="background:none;border:none;color:#22c55e;cursor:pointer;font-size:0.75rem;padding:2px 6px;">✅</button>
+                        <span style="font-size: 0.78rem; color: var(--inc-text); font-weight: 500; flex: 1; word-break: break-word; line-height: 1.4;">${UI.escapeHTML(item.title)}</span>
+                        <button class="resolve-inc-btn-hu" data-id="${item.id}" title="Resolver inconsistencia" style="background:none;border:none;color:var(--apple-green);cursor:pointer;font-size:0.75rem;padding:2px 6px;">✅</button>
                     </div>`;
                 }).join('')}</div>` : ''}
             </div>
@@ -333,7 +333,7 @@ export const UserStories = {
         return `
             <div style="display: flex; flex-direction: column; gap: 6px;">
                 ${items.map((item, i) => `
-                    <div style="display: flex; align-items: flex-start; gap: 12px; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.04);">
+                    <div style="display: flex; align-items: flex-start; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--apple-separator);">
                         <span style="font-size: 0.75rem; font-weight: 800; color: var(--brand); white-space: nowrap; margin-top: 1px;">💡</span>
                         <span style="font-size: 0.82rem; color: var(--text-main); flex: 1; line-height: 1.5;">${UI.escapeHTML(item.title || item.description || item)}</span>
                     </div>
@@ -348,10 +348,10 @@ export const UserStories = {
         return `
             <div style="display: flex; flex-direction: column; gap: 6px;">
                 ${scenarios.map((s, i) => `
-                    <div data-id="${s.id}" style="display: flex; align-items: center; gap: 12px; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.04);">
+                    <div data-id="${s.id}" style="display: flex; align-items: center; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--apple-separator);">
                         <span style="min-width: 28px; text-align: center; font-size: 0.72rem; font-weight: 800; color: var(--brand);">E${i+1}</span>
                         <input type="text" class="scenario-edit-field us-edit-field" data-id="${us.id}" data-scenario-id="${s.id}" data-field="title" value="${UI.escapeHTML(s.title)}" placeholder="Título del escenario..." style="flex: 1; border: none; background: transparent; outline: none; font-size: 0.85rem; color: var(--text-main); padding: 4px 0;">
-                        <button class="btn-icon delete-scenario" data-id="${s.id}" title="Eliminar Escenario" style="background: none; border: none; color: #ef4444; cursor: pointer; font-size: 12px; padding: 4px;">🗑️</button>
+                        <button class="btn-icon delete-scenario" data-id="${s.id}" title="Eliminar Escenario" style="background: none; border: none; color: var(--apple-red); cursor: pointer; font-size: 12px; padding: 4px;">🗑️</button>
                     </div>
                 `).join('')}
                 ${scenarios.length === 0 ? '<div style="text-align: center; opacity: 0.5; padding: 30px; font-size: 0.82rem;">No hay escenarios vinculados</div>' : ''}

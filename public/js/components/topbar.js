@@ -8,7 +8,7 @@ import { UI } from '../utils/ui-utils.js';
  */
 export const TopBar = {
     render(container) {
-        const { projects, activeProjectId } = Store.state;
+        const { projects, activeProjectId, theme } = Store.state;
 
         container.innerHTML = `
             <div class="topbar-brand">
@@ -19,6 +19,7 @@ export const TopBar = {
                 </div>
             </div>
             <div class="topbar-actions">
+                <button class="btn-icon" id="btn-theme-toggle" title="Cambiar tema" style="font-size: 1rem; border: 1px solid var(--border); padding: 4px 8px; cursor: pointer;">${theme === 'dark' ? '☀️' : '🌙'}</button>
                 ${Store.state.user ? `
                     <div style="display: flex; align-items: center; gap: 8px; margin-right: 16px;">
                         <span style="font-size: 0.85rem; color: var(--text-muted);">${UI.escapeHTML(Store.state.user.name)}</span>
@@ -61,6 +62,11 @@ export const TopBar = {
             }
             
             UI.hideLoading();
+        });
+
+        container.querySelector('#btn-theme-toggle')?.addEventListener('click', () => {
+            const newTheme = Store.state.theme === 'dark' ? 'light' : 'dark';
+            Store.setTheme(newTheme);
         });
 
         container.querySelector('#btn-new-project')?.addEventListener('click', () => {

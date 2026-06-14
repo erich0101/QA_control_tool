@@ -10,19 +10,20 @@ export const UI = {
             position: fixed;
             bottom: 32px;
             right: 32px;
-            background: rgba(30, 41, 59, 0.95);
-            backdrop-filter: blur(10px);
-            border: 1px solid ${type === 'ok' ? 'var(--ok)' : 'var(--fail)'};
-            padding: 16px 24px;
-            border-radius: 16px;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
-            color: var(--text);
+            background: var(--apple-material-thick);
+            backdrop-filter: blur(20px) saturate(180%);
+            border: 1px solid ${type === 'ok' ? 'var(--apple-green)' : type === 'error' ? 'var(--apple-red)' : 'var(--apple-orange)'};
+            padding: 14px 22px;
+            border-radius: var(--apple-radius-lg);
+            box-shadow: var(--apple-shadow-lg);
+            color: var(--apple-label);
             font-size: 0.875rem;
             font-weight: 500;
+            font-family: var(--apple-font-family);
             z-index: 10000;
             transform: translateY(100px);
             opacity: 0;
-            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            transition: all 0.4s cubic-bezier(0.25, 0.1, 0.25, 1);
         `;
         toast.innerText = message;
         document.body.appendChild(toast);
@@ -48,14 +49,14 @@ export const UI = {
         loader.style.cssText = `
             position: fixed;
             inset: 0;
-            background: rgba(11, 15, 26, 0.7);
-            backdrop-filter: blur(5px);
+            background: var(--apple-material);
+            backdrop-filter: blur(20px);
             display: flex;
             align-items: center;
             justify-content: center;
             z-index: 20000;
         `;
-        loader.innerHTML = `<div class="loader-spinner" style="width:40px; height:40px; border:3px solid var(--glass); border-top-color:var(--accent); border-radius:50%; animation: spin 1s linear infinite;"></div>
+        loader.innerHTML = `<div class="loader-spinner" style="width:40px; height:40px; border:3px solid var(--apple-fill); border-top-color:var(--apple-blue); border-radius:50%; animation: spin 1s linear infinite;"></div>
             <style>@keyframes spin { to { transform: rotate(360deg); } }</style>`;
         document.body.appendChild(loader);
     },
