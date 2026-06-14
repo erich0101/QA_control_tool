@@ -9,6 +9,8 @@ export const DashboardTab = {
     stats: [],
     overview: null,
     activeSubTab: 'overview', // 'overview', 'performance', 'daily', 'team', 'epic-report'
+    dateFrom: null,
+    dateTo: null,
 
     async render(container) {
         const scrollPos = container.scrollTop;
@@ -180,10 +182,23 @@ export const DashboardTab = {
         `;
     },
 
+    defaultDateFrom() {
+        const d = new Date();
+        d.setDate(d.getDate() - 30);
+        return d.toISOString().split('T')[0];
+    },
+
+    defaultDateTo() {
+        return new Date().toISOString().split('T')[0];
+    },
+
     async renderPerformanceStats(projectId) {
+        this.dateFrom = this.dateFrom || this.defaultDateFrom();
+        this.dateTo = this.dateTo || this.defaultDateTo();
+
         UI.showLoading();
         try {
-            const res = await ApiService.getSuiteStats(projectId);
+            const res = await ApiService.getSuiteStats(projectId, this.dateFrom, this.dateTo);
             this.stats = res.stats || [];
         } catch (err) {
             UI.toast(err.message, 'error');
@@ -194,7 +209,13 @@ export const DashboardTab = {
             <div class="dashboard-grid" style="display: grid; grid-template-columns: 1fr; gap: 24px; padding: 24px;">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                     <h2 style="font-size: 0.85rem; font-weight: 800; color: var(--text-main); text-transform: uppercase; letter-spacing: 0.1em; margin: 0;">Métricas de Rendimiento y Ciclo de Vida</h2>
-                    <button class="btn btn-ghost btn-sm" id="btn-refresh-stats">🔄 Recargar Datos</button>
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <label style="font-size: 0.7rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Desde</label>
+                        <input type="date" id="perf-date-from" value="${this.dateFrom}" style="padding: 8px 12px; border-radius: 10px; background: var(--bg-input); border: 1px solid var(--border); color: var(--text-main); font-size: 0.85rem;">
+                        <label style="font-size: 0.7rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Hasta</label>
+                        <input type="date" id="perf-date-to" value="${this.dateTo}" style="padding: 8px 12px; border-radius: 10px; background: var(--bg-input); border: 1px solid var(--border); color: var(--text-main); font-size: 0.85rem;">
+                        <button class="btn btn-ghost btn-sm" id="perf-apply-dates">🔄 Aplicar</button>
+                    </div>
                 </div>
 
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
@@ -220,7 +241,6 @@ export const DashboardTab = {
                                 <th style="padding: 12px 24px; font-size: 0.7rem; color: var(--text-muted); text-align: center;">EJECUCIONES</th>
                                 <th style="padding: 12px 24px; font-size: 0.7rem; color: var(--text-muted); text-align: center;">PROMEDIO</th>
                                 <th style="padding: 12px 24px; font-size: 0.7rem; color: var(--text-muted); text-align: center;">TOTAL ACUMULADO</th>
-                                <th style="padding: 12px 24px; font-size: 0.7rem; color: var(--text-muted);">RENDIMIENTO</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -233,11 +253,6 @@ export const DashboardTab = {
                                     <td style="padding: 16px 24px; text-align: center; font-weight: 800; color: var(--brand);">${s.total_runs}</td>
                                     <td style="padding: 16px 24px; text-align: center; color: var(--warning); font-family: monospace;">${this.formatTime(s.avg_minutes)}</td>
                                     <td style="padding: 16px 24px; text-align: center; color: var(--ok); font-family: monospace; font-weight: 700;">${this.formatTime(s.total_minutes)}</td>
-                                    <td style="padding: 16px 24px; width: 200px;">
-                                        <div style="height: 6px; background: var(--bg-main); border-radius: 3px; overflow: hidden; border: 1px solid var(--border);">
-                                            <div style="height: 100%; background: var(--brand); width: ${Math.min(100, (s.total_minutes / (this.stats[0]?.total_minutes || 1)) * 100)}%; opacity: 0.7;"></div>
-                                        </div>
-                                    </td>
                                 </tr>
                             `).join('')}
                         </tbody>
@@ -271,6 +286,18 @@ export const DashboardTab = {
         });
 
         container.querySelector('#btn-refresh-stats')?.addEventListener('click', () => {
+            this.render(container);
+        });
+
+        container.querySelector('#perf-date-from')?.addEventListener('change', e => {
+            this.dateFrom = e.target.value;
+        });
+
+        container.querySelector('#perf-date-to')?.addEventListener('change', e => {
+            this.dateTo = e.target.value;
+        });
+
+        container.querySelector('#perf-apply-dates')?.addEventListener('click', () => {
             this.render(container);
         });
     }

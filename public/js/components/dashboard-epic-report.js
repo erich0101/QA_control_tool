@@ -84,7 +84,7 @@ export const DashboardEpicReport = {
         }
 
         const d = this.data;
-        const { summary, statusBreakdown, priorityBreakdown, trend, avgAgeByStatus, agingBuckets, insights, healthScore, riskScore, riskLabel, sla } = d;
+        const { summary, statusBreakdown, priorityBreakdown, trend, avgAgeByStatus, agingBuckets, insights, healthScore, riskScore, riskLabel, sla, qaMetrics } = d;
 
         const riskColors = { low: '#10b981', moderate: '#f59e0b', high: '#ef4444' };
         const riskBgColors = { low: 'rgba(16,185,129,0.1)', moderate: 'rgba(245,158,11,0.1)', high: 'rgba(239,68,68,0.1)' };
@@ -169,6 +169,86 @@ export const DashboardEpicReport = {
                         <div style="font-size: 0.65rem; color: var(--text-muted); margin-top: 2px;">sin resolver</div>
                     </div>
                 </div>
+
+                <!-- QA TESTING METRICS -->
+                ${qaMetrics ? `
+                <div style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: 16px; padding: 20px; margin-bottom: 24px;">
+                    <div style="font-size: 0.75rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 16px;">🧪 Métricas de Testing</div>
+                    
+                    <!-- QA KPIs -->
+                    <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 20px;">
+                        <div style="text-align: center; padding: 12px; background: var(--bg-main); border-radius: 12px;">
+                            <div style="font-size: 1.6rem; font-weight: 900; color: var(--brand);">${qaMetrics.totalTestCases}</div>
+                            <div style="font-size: 0.6rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700;">Test Cases</div>
+                        </div>
+                        <div style="text-align: center; padding: 12px; background: var(--bg-main); border-radius: 12px;">
+                            <div style="font-size: 1.6rem; font-weight: 900; color: ${qaMetrics.passRate >= 80 ? '#10b981' : qaMetrics.passRate >= 50 ? '#f59e0b' : '#ef4444'};">${qaMetrics.passRate}%</div>
+                            <div style="font-size: 0.6rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700;">Pass Rate</div>
+                        </div>
+                        <div style="text-align: center; padding: 12px; background: var(--bg-main); border-radius: 12px;">
+                            <div style="font-size: 1.6rem; font-weight: 900; color: ${qaMetrics.defectDensity > 0.5 ? '#ef4444' : '#10b981'};">${qaMetrics.defectDensity}%</div>
+                            <div style="font-size: 0.6rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700;">Defect Density</div>
+                        </div>
+                        <div style="text-align: center; padding: 12px; background: var(--bg-main); border-radius: 12px;">
+                            <div style="font-size: 1.6rem; font-weight: 900; color: var(--brand);">${qaMetrics.totalExecutions}</div>
+                            <div style="font-size: 0.6rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700;">Ejecuciones</div>
+                        </div>
+                        <div style="text-align: center; padding: 12px; background: var(--bg-main); border-radius: 12px;">
+                            <div style="font-size: 1.6rem; font-weight: 900; color: #f59e0b;">${qaMetrics.executionTime.totalMinutes >= 60 ? Math.floor(qaMetrics.executionTime.totalMinutes / 60) + 'h ' + Math.round(qaMetrics.executionTime.totalMinutes % 60) + 'm' : Math.round(qaMetrics.executionTime.totalMinutes) + 'm'}</div>
+                            <div style="font-size: 0.6rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700;">Tiempo Total</div>
+                        </div>
+                    </div>
+
+                    <!-- Pass/Fail Bar + Defects by Severity -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                        <!-- Pass/Fail Distribution -->
+                        <div>
+                            <div style="font-size: 0.7rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 10px;">Distribución de Ejecuciones</div>
+                            ${qaMetrics.totalExecutions > 0 ? `
+                            <div style="display: flex; height: 24px; border-radius: 8px; overflow: hidden; margin-bottom: 8px;">
+                                ${qaMetrics.executionsByStatus.PASS > 0 ? `<div style="width: ${(qaMetrics.executionsByStatus.PASS / qaMetrics.totalExecutions * 100)}%; background: #10b981;" title="PASS: ${qaMetrics.executionsByStatus.PASS}"></div>` : ''}
+                                ${qaMetrics.executionsByStatus.FAIL > 0 ? `<div style="width: ${(qaMetrics.executionsByStatus.FAIL / qaMetrics.totalExecutions * 100)}%; background: #ef4444;" title="FAIL: ${qaMetrics.executionsByStatus.FAIL}"></div>` : ''}
+                                ${qaMetrics.executionsByStatus.BLOCK > 0 ? `<div style="width: ${(qaMetrics.executionsByStatus.BLOCK / qaMetrics.totalExecutions * 100)}%; background: #dc2626;" title="BLOCK: ${qaMetrics.executionsByStatus.BLOCK}"></div>` : ''}
+                                ${qaMetrics.executionsByStatus.BLOCKED > 0 ? `<div style="width: ${(qaMetrics.executionsByStatus.BLOCKED / qaMetrics.totalExecutions * 100)}%; background: #f59e0b;" title="BLOCKED: ${qaMetrics.executionsByStatus.BLOCKED}"></div>` : ''}
+                                ${qaMetrics.executionsByStatus.PENDING > 0 ? `<div style="width: ${(qaMetrics.executionsByStatus.PENDING / qaMetrics.totalExecutions * 100)}%; background: #6b7280;" title="PENDING: ${qaMetrics.executionsByStatus.PENDING}"></div>` : ''}
+                                ${qaMetrics.executionsByStatus.SKIP > 0 ? `<div style="width: ${(qaMetrics.executionsByStatus.SKIP / qaMetrics.totalExecutions * 100)}%; background: #9ca3af;" title="SKIP: ${qaMetrics.executionsByStatus.SKIP}"></div>` : ''}
+                            </div>
+                            <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                                <span style="display: flex; align-items: center; gap: 4px; font-size: 0.7rem;"><span style="width: 10px; height: 10px; border-radius: 2px; background: #10b981;"></span> PASS: ${qaMetrics.executionsByStatus.PASS}</span>
+                                <span style="display: flex; align-items: center; gap: 4px; font-size: 0.7rem;"><span style="width: 10px; height: 10px; border-radius: 2px; background: #ef4444;"></span> FAIL: ${qaMetrics.executionsByStatus.FAIL}</span>
+                                ${(qaMetrics.executionsByStatus.BLOCK || 0) > 0 ? `<span style="display: flex; align-items: center; gap: 4px; font-size: 0.7rem;"><span style="width: 10px; height: 10px; border-radius: 2px; background: #dc2626;"></span> BLOCK: ${qaMetrics.executionsByStatus.BLOCK}</span>` : ''}
+                                ${(qaMetrics.executionsByStatus.BLOCKED || 0) > 0 ? `<span style="display: flex; align-items: center; gap: 4px; font-size: 0.7rem;"><span style="width: 10px; height: 10px; border-radius: 2px; background: #f59e0b;"></span> BLOCKED: ${qaMetrics.executionsByStatus.BLOCKED}</span>` : ''}
+                                <span style="display: flex; align-items: center; gap: 4px; font-size: 0.7rem;"><span style="width: 10px; height: 10px; border-radius: 2px; background: #6b7280;"></span> PENDING: ${qaMetrics.executionsByStatus.PENDING}</span>
+                                ${(qaMetrics.executionsByStatus.SKIP || 0) > 0 ? `<span style="display: flex; align-items: center; gap: 4px; font-size: 0.7rem;"><span style="width: 10px; height: 10px; border-radius: 2px; background: #9ca3af;"></span> SKIP: ${qaMetrics.executionsByStatus.SKIP}</span>` : ''}
+                            </div>
+                            ` : '<div style="color: var(--text-muted); font-size: 0.8rem; text-align: center; padding: 20px;">Sin ejecuciones registradas</div>'}
+                        </div>
+
+                        <!-- Defects by Severity -->
+                        <div>
+                            <div style="font-size: 0.7rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 10px;">Defectos por Severidad</div>
+                            ${qaMetrics.defectsFound > 0 ? `
+                            <div style="display: flex; flex-direction: column; gap: 8px;">
+                                ${Object.entries(qaMetrics.defectsBySeverity).map(([severity, count]) => {
+                                    const pct = (count / qaMetrics.defectsFound * 100);
+                                    const colors = { 'Crítica': '#ef4444', 'Alta': '#f59e0b', 'Media': '#3b82f6', 'Baja': '#10b981' };
+                                    return `
+                                    <div>
+                                        <div style="display: flex; justify-content: space-between; font-size: 0.75rem; margin-bottom: 3px;">
+                                            <span style="color: var(--text-main); font-weight: 600;">${severity}</span>
+                                            <span style="color: var(--text-muted);">${count} (${pct.toFixed(0)}%)</span>
+                                        </div>
+                                        <div style="height: 8px; background: var(--bg-main); border-radius: 4px; overflow: hidden;">
+                                            <div style="height: 100%; width: ${pct}%; background: ${colors[severity] || '#6b7280'}; border-radius: 4px;"></div>
+                                        </div>
+                                    </div>`;
+                                }).join('')}
+                            </div>
+                            ` : `<div style="color: var(--text-muted); font-size: 0.8rem; text-align: center; padding: 20px;">${qaMetrics.totalTestCases > 0 ? 'Sin defectos registrados' : 'Sin datos de testing'}</div>`}
+                        </div>
+                    </div>
+                </div>
+                ` : ''}
 
                 <!-- SECOND ROW: SLA + Aging Buckets + Trend Chart -->
                 <div style="display: grid; grid-template-columns: 280px 1fr 1fr; gap: 16px; margin-bottom: 24px;">

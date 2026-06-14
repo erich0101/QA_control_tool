@@ -133,8 +133,10 @@ export const ApiService = {
     async deleteTestSuite(id) {
         return fetch(`/api/test-suites/${id}`, { method: 'DELETE' }).then(json);
     },
-    async getSuiteStats(projectId) {
-        const url = `/api/stats/suites?project_id=${projectId}`;
+    async getSuiteStats(projectId, dateFrom = null, dateTo = null) {
+        let url = `/api/stats/suites?project_id=${projectId}`;
+        if (dateFrom) url += `&date_from=${dateFrom}`;
+        if (dateTo) url += `&date_to=${dateTo}`;
         return fetch(url).then(json);
     },
     async getOverviewStats(projectId) {
@@ -186,6 +188,9 @@ export const ApiService = {
     },
     async getProjectDefects(projectId) {
         return fetch(`/api/defects?project_id=${projectId}`).then(json);
+    },
+    async getDefectsJiraStatus(projectId) {
+        return fetch(`/api/defects/jira-status?project_id=${projectId}`).then(json);
     },
     async assignDefect(id, userId) {
         return fetch(`/api/defects/${id}/assign`, { method: 'PUT', body: JSON.stringify({ assigned_to: userId }), headers }).then(json);

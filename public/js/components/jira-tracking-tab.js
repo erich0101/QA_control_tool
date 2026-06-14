@@ -77,12 +77,11 @@ export const JiraTrackingTab = {
             <table class="tt-table">
                 <thead>
                     <tr>
-                        <th style="width: 350px">ÉPICA / TICKET</th>
-                        <th>ASIGNADO</th>
-                        <th style="width: 150px">FECHA CREACIÓN</th>
-                        <th style="width: 150px">PRIORIDAD</th>
-                        <th style="text-align: center; width: 150px;">ESTADO JIRA</th>
-                        <th style="text-align: right; width: 100px;">ACCIONES</th>
+                        <th style="min-width: 200px;">ÉPICA / TICKET</th>
+                        <th style="width: 150px; white-space: nowrap;">ASIGNADO</th>
+                        <th style="width: 110px; white-space: nowrap;">FECHA CREACIÓN</th>
+                        <th style="text-align: center; width: 120px; white-space: nowrap;">ESTADO JIRA</th>
+                        <th style="text-align: right; width: 100px; white-space: nowrap;">ACCIONES</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -99,7 +98,7 @@ export const JiraTrackingTab = {
         // Fila de la Épica
         rows.push(`
             <tr class="epic-row" data-epic="${group.key}" style="background: rgba(0, 82, 204, 0.03); cursor: pointer;">
-                <td colspan="6" style="padding: 12px 16px;">
+                <td colspan="5" style="padding: 12px 16px;">
                     <div style="display: flex; align-items: center; gap: 12px;">
                         <span style="font-size: 0.7rem; transition: transform 0.2s; transform: ${isExpanded ? 'rotate(90deg)' : 'rotate(0)'}">▶</span>
                         <div style="background: #8777D9; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.65rem; font-weight: 800;">EPIC</div>
@@ -123,20 +122,17 @@ export const JiraTrackingTab = {
                                 </div>
                             </div>
                         </td>
-                        <td>
+                        <td style="max-width: 180px;">
                             <div style="display: flex; align-items: center; gap: 8px;">
                                 ${ticket.jira_avatar ? 
                                     `<img src="${ticket.jira_avatar}" style="width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--border);">` : 
                                     `<div style="width: 24px; height: 24px; border-radius: 50%; background: var(--brand); color: white; display: flex; align-items: center; justify-content: center; font-size: 0.6rem; font-weight: 800;">${ticket.jira_assignee.charAt(0).toUpperCase()}</div>`
                                 }
-                                <span style="font-size: 0.8rem;">${UI.escapeHTML(ticket.jira_assignee)}</span>
+                                <span style="font-size: 0.8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${UI.escapeHTML(ticket.jira_assignee)}</span>
                             </div>
                         </td>
                         <td style="font-size: 0.75rem; color: var(--text-secondary);">
                             ${new Date(ticket.created_at).toLocaleDateString()}
-                        </td>
-                        <td>
-                            <span style="font-size: 0.75rem; font-weight: 700;">${ticket.jira_priority}</span>
                         </td>
                         <td style="text-align: center;">
                             ${this.renderStatusPill(ticket.jira_status)}

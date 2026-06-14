@@ -687,8 +687,8 @@ app.get('/api/jira/projects/:id/epic-stats', requireAuth, async (req, res) => {
             else agingBuckets['+15d']++;
         });
 
-        // === SLA ADVANCED ===
-        const resolutionDays = resolved.map(b => {
+        // === SLA ADVANCED (solo bugs del período) ===
+        const resolutionDays = resolvedInPeriod.map(b => {
             return (new Date(b.fields.resolutiondate) - new Date(b.fields.created)) / (1000 * 60 * 60 * 24);
         }).filter(d => d >= 0);
 
@@ -744,10 +744,10 @@ app.get('/api/jira/projects/:id/epic-stats', requireAuth, async (req, res) => {
             ? Math.round(((lastWeek.backlogEnd - firstWeek.backlogStart) / firstWeek.backlogStart) * 100) 
             : 0;
 
-        // === RESOLUTION RATE ===
+        // === RESOLUTION RATE (solo bugs del período) ===
         const bugResolutionRate = bugsInPeriod.length > 0 
             ? Math.round((resolvedInPeriod.length / bugsInPeriod.length) * 100) 
-            : resolved.length > 0 ? 100 : 0;
+            : 0;
 
         // === STATUS BREAKDOWN ===
         const statusBreakdown = { 'To Do': 0, 'In Progress': 0, 'In Review': 0, 'Done': 0, 'Other': 0 };
@@ -823,6 +823,110 @@ app.get('/api/jira/projects/:id/epic-stats', requireAuth, async (req, res) => {
             insights.push({ type: 'warning', text: `${agingBuckets['+15d']} bug(s) con más de 15 días sin resolver — possible deuda técnica` });
         }
 
+        // === QA METRICS (local testing data) ===
+        const qaCasesRes = await query(`
+            SELECT tc.id, tc.title, tc.assigned_to
+            FROM qa_test_cases tc
+            JOIN qa_test_suites s ON tc.suite_id = s.id
+            WHERE s.jira_epic_key = ?
+        `, [epicKey]);
+
+        const qaCaseIds = qaCasesRes.rows.map(c => c.id);
+
+        let qaExecsByStatus = { PASS: 0, FAIL: 0, PENDING: 0, BLOCKED: 0 };
+        let qaTotalExecutions = 0;
+        let qaTotalMinutes = 0;
+        let qaRunCount = 0;
+
+        if (qaCaseIds.length > 0) {
+            const qaExecsRes = await query(`
+                SELECT e.status, COUNT(*)::INT as cnt
+                FROM qa_executions e
+                WHERE e.tc_id = ANY(?)
+                GROUP BY e.status
+            `, [qaCaseIds]);
+
+            qaExecsRes.rows.forEach(r => {
+                qaExecsByStatus[r.status] = (qaExecsByStatus[r.status] || 0) + r.cnt;
+                qaTotalExecutions += r.cnt;
+            });
+
+            const qaRunsRes = await query(`
+                SELECT r.accumulated_seconds, r.started_at, r.finished_at
+                FROM qa_test_runs r
+                JOIN qa_test_suites s ON r.suite_id = s.id
+                WHERE s.jira_epic_key = ? AND r.status = 'FINISHED'
+            `, [epicKey]);
+
+            qaRunCount = qaRunsRes.rows.length;
+            qaRunsRes.rows.forEach(r => {
+                if (r.accumulated_seconds && r.accumulated_seconds > 0) {
+                    qaTotalMinutes += r.accumulated_seconds / 60;
+                } else if (r.started_at && r.finished_at) {
+                    const diff = (new Date(r.finished_at) - new Date(r.started_at)) / 60000;
+                    if (diff > 0) qaTotalMinutes += diff;
+                }
+            });
+        }
+
+        // Defects found during QA
+        let qaDefectsRes = { rows: [] };
+        if (qaCaseIds.length > 0) {
+            qaDefectsRes = await query(`
+                SELECT d.id, d.title, d.severity
+                FROM qa_defects d
+                JOIN qa_executions e ON d.execution_id = e.id
+                WHERE e.tc_id = ANY(?)
+            `, [qaCaseIds]);
+        }
+
+        const qaPassRate = (qaExecsByStatus.PASS + qaExecsByStatus.FAIL) > 0
+            ? Math.round((qaExecsByStatus.PASS / (qaExecsByStatus.PASS + qaExecsByStatus.FAIL)) * 100)
+            : 0;
+
+        const qaDefectDensity = (qaExecsByStatus.PASS + qaExecsByStatus.FAIL) > 0
+            ? parseFloat(((qaDefectsRes?.rows?.length || 0) / (qaExecsByStatus.PASS + qaExecsByStatus.FAIL) * 100).toFixed(1))
+            : 0;
+
+        const qaDefectsBySeverity = {};
+        if (qaCaseIds.length > 0) {
+            const qaDefectsBySevRes = await query(`
+                SELECT d.severity, COUNT(*)::INT as cnt
+                FROM qa_defects d
+                JOIN qa_executions e ON d.execution_id = e.id
+                WHERE e.tc_id = ANY(?)
+                GROUP BY d.severity
+            `, [qaCaseIds]);
+            qaDefectsBySevRes.rows.forEach(r => {
+                qaDefectsBySeverity[r.severity] = r.cnt;
+            });
+        }
+
+        // QA Insights
+        if (qaTotalExecutions > 0) {
+            if (qaPassRate < 50) {
+                insights.push({ type: 'critical', text: `Pass rate de QA al ${qaPassRate}% — calidad comprometida` });
+            } else if (qaPassRate < 80) {
+                insights.push({ type: 'warning', text: `Pass rate de QA al ${qaPassRate}% — revisar casos fallidos` });
+            } else if (qaPassRate >= 95) {
+                insights.push({ type: 'success', text: `Pass rate de QA al ${qaPassRate}% — excelente calidad` });
+            }
+            if (qaDefectDensity > 0.5) {
+                insights.push({ type: 'warning', text: `Defect density: ${qaDefectDensity}% — alta tasa de defectos por ejecución` });
+            }
+        } else if (qaCaseIds.length > 0) {
+            insights.push({ type: 'warning', text: `${qaCaseIds.length} casos de prueba definidos sin ejecuciones registradas` });
+        }
+
+        // Actualizar health score con QA
+        const healthScoreQA = Math.max(0, Math.min(100, Math.round(
+            (slaCompliance * 0.20) +
+            (Math.min(bugResolutionRate, 100) * 0.20) +
+            (qaPassRate * 0.25) +
+            (Math.max(0, 100 - riskScore) * 0.20) +
+            (Math.max(0, 100 - (criticalOpen.count * 10)) * 0.15)
+        )));
+
         res.json({
             summary: {
                 total: bugsInPeriod.length,
@@ -838,7 +942,7 @@ app.get('/api/jira/projects/:id/epic-stats', requireAuth, async (req, res) => {
                 backlogDelta,
                 backlogDeltaPercent
             },
-            healthScore,
+            healthScore: healthScoreQA,
             riskScore,
             riskLabel,
             statusBreakdown,
@@ -854,6 +958,20 @@ app.get('/api/jira/projects/:id/epic-stats', requireAuth, async (req, res) => {
                 compliance: slaCompliance,
                 withinSLA,
                 total: resolutionDays.length
+            },
+            qaMetrics: {
+                totalTestCases: qaCaseIds.length,
+                executionsByStatus: qaExecsByStatus,
+                passRate: qaPassRate,
+                defectDensity: qaDefectDensity,
+                totalExecutions: qaTotalExecutions,
+                executionTime: {
+                    totalMinutes: parseFloat(qaTotalMinutes.toFixed(1)),
+                    avgMinutes: qaTotalExecutions > 0 ? parseFloat((qaTotalMinutes / qaRunCount).toFixed(1)) : 0,
+                    runCount: qaRunCount
+                },
+                defectsFound: qaDefectsRes?.rows?.length || 0,
+                defectsBySeverity: qaDefectsBySeverity
             }
         });
     } catch (err) {
@@ -2845,8 +2963,20 @@ app.get('/api/test-suites/:id', requireAuth, async (req, res) => {
 
 app.get('/api/stats/suites', requireAuth, async (req, res) => {
     try {
-        const { project_id } = req.query;
+        const { project_id, date_from, date_to } = req.query;
         if (!project_id) return res.status(400).json({ error: 'project_id requerido' });
+
+        let dateFilter = '';
+        const params = [project_id];
+
+        if (date_from) {
+            dateFilter += ' AND r.started_at >= ?';
+            params.push(date_from);
+        }
+        if (date_to) {
+            dateFilter += ' AND r.started_at <= ?::timestamp + interval \'1 day\'';
+            params.push(date_to);
+        }
 
         const stats = await query(`
             SELECT 
@@ -2858,10 +2988,10 @@ app.get('/api/stats/suites', requireAuth, async (req, res) => {
             FROM qa_test_suites s
             JOIN qa_use_cases uc ON s.use_case_id = uc.id
             LEFT JOIN qa_test_runs r ON s.id = r.suite_id
-            WHERE uc.project_id = ?
+            WHERE uc.project_id = ? ${dateFilter}
             GROUP BY s.id, s.title
             ORDER BY total_minutes DESC
-        `, [project_id]);
+        `, params);
 
         res.json({ stats: stats.rows });
     } catch (err) {
@@ -3232,6 +3362,62 @@ app.get('/api/defects', requireAuth, async (req, res) => {
         res.json({ defects: result.rows });
     } catch (err) {
         res.status(500).json({ error: err.message });
+    }
+});
+
+app.get('/api/defects/jira-status', requireAuth, async (req, res) => {
+    try {
+        const { project_id } = req.query;
+        if (!project_id) return res.status(400).json({ error: 'project_id requerido' });
+
+        const defectsRes = await query(`
+            SELECT DISTINCT d.jira_key
+            FROM qa_defects d
+            JOIN qa_executions e ON d.execution_id = e.id
+            JOIN qa_test_cases tc ON e.tc_id = tc.id
+            JOIN qa_test_suites s ON tc.suite_id = s.id
+            JOIN qa_use_cases cu ON s.use_case_id = cu.id
+            WHERE cu.project_id = ? AND d.jira_key IS NOT NULL
+            UNION
+            SELECT d.jira_key
+            FROM qa_defects d
+            WHERE d.project_id = ? AND d.jira_key IS NOT NULL
+        `, [project_id, project_id]);
+
+        if (defectsRes.rows.length === 0) return res.json({ statuses: {} });
+
+        const configRes = await query(`
+            SELECT jira_domain, jira_project_key FROM qa_jira_configs WHERE project_id = ?
+        `, [project_id]);
+
+        if (configRes.rows.length === 0) return res.json({ statuses: {} });
+        const config = configRes.rows[0];
+
+        const userCreds = await getJiraUserCredentials(project_id, req.user.id);
+        if (userCreds.error) return res.json({ statuses: {} });
+
+        const keys = defectsRes.rows.map(d => d.jira_key);
+        const jql = `key in (${keys.map(k => `"${k}"`).join(',')})`;
+        const issues = await JiraService.searchIssues(
+            userCreds.userCredentials,
+            config.jira_domain,
+            jql,
+            null,
+            ['status', 'statusCategory']
+        );
+
+        const statuses = {};
+        for (const issue of issues) {
+            statuses[issue.key] = {
+                status: issue.fields.status?.name || 'Unknown',
+                statusCategory: issue.fields.statusCategory?.name || 'Unknown'
+            };
+        }
+
+        res.json({ statuses });
+    } catch (err) {
+        console.error('Error fetching JIRA statuses:', err.message);
+        res.json({ statuses: {} });
     }
 });
 

@@ -27,6 +27,15 @@ export const HistoryTab = {
             } else {
                 const res = await ApiService.getProjectDefects(activeProjectId);
                 this.bugs = res.defects || [];
+
+                const jiraRes = await ApiService.getDefectsJiraStatus(activeProjectId);
+                const jiraStatuses = jiraRes.statuses || {};
+                for (const bug of this.bugs) {
+                    if (bug.jira_key && jiraStatuses[bug.jira_key]) {
+                        bug.jira_status = jiraStatuses[bug.jira_key].status;
+                        bug.jira_statusCategory = jiraStatuses[bug.jira_key].statusCategory;
+                    }
+                }
             }
         } catch (err) {
             UI.toast(err.message, 'error');
@@ -129,7 +138,20 @@ export const HistoryTab = {
                                 </span>
                             </td>
                             <td>
-                                <span class="status-pill ${bug.status === 'FIXED' ? 'ok' : 'warn'}" style="font-size: 0.65rem;">${UI.escapeHTML(bug.status)}</span>
+                                ${bug.jira_key ? `
+                                    <div style="display: flex; align-items: center; gap: 6px;">
+                                        <a href="${UI.escapeHTML(bug.jira_url)}" target="_blank" rel="noopener" style="font-size: 0.65rem; font-weight: 600; color: var(--brand); text-decoration: none; font-family: 'SFMono-Regular', Consolas, monospace;" title="Abrir en JIRA">
+                                            ${UI.escapeHTML(bug.jira_key)}
+                                        </a>
+                                        ${bug.jira_status ? `
+                                            <span class="status-pill ${bug.jira_statusCategory === 'Done' ? 'ok' : bug.jira_statusCategory === 'In Progress' ? 'active' : 'pending'}" style="font-size: 0.6rem;">
+                                                ${UI.escapeHTML(bug.jira_status)}
+                                            </span>
+                                        ` : ''}
+                                    </div>
+                                ` : `
+                                    <span class="status-pill ${bug.status === 'FIXED' ? 'ok' : 'warn'}" style="font-size: 0.65rem;">${UI.escapeHTML(bug.status)}</span>
+                                `}
                             </td>
                             <td>
                                 <div style="font-size: 0.75rem;">${UI.escapeHTML(bug.tester_name || '—')}</div>
