@@ -121,6 +121,7 @@ pids/
 *.pid.lock
 nul
 execution-tab.yml
+.mimocode/
 
 # ============================================================
 # UPLOADS / ARCHIVOS TEMPORALES DEL SERVIDOR

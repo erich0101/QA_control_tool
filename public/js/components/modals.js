@@ -1067,10 +1067,9 @@ getStartRunWizardContent({ suite, suites, cuTitle }) {
 
         content.querySelector('#btn-volver-jira-config')?.addEventListener('click', async () => {
             close();
-            const { config } = options;
             UI.showLoading();
             try {
-                const { userHasToken } = await ApiService.getJiraConfig(Store.state.activeProjectId);
+                const { config, userHasToken } = await ApiService.getJiraConfig(Store.state.activeProjectId);
                 Modals.render('jira-config', { config: config || {}, userHasToken: !!userHasToken });
             } catch (err) {
                 UI.toast(err.message || 'Error al volver a configuración', 'error');

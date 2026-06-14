@@ -38,7 +38,8 @@ const noIdTables = [
     'qa_use_case_users',
     'qa_suite_users',
     'qa_project_sequences',
-    'qa_tc_preconditions'
+    'qa_tc_preconditions',
+    'qa_jira_configs'
 ];
 
 function buildSql(sql, params) {

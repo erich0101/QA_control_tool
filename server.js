@@ -1053,7 +1053,8 @@ app.post('/api/jira/defects/:id/create-ticket', requireAuth, async (req, res) =>
         if (evidenceRes.rows.length > 0) {
             for (const ev of evidenceRes.rows) {
                 try {
-                    await JiraService.attachFile(creds.userCredentials, creds.domain, jiraResult.key, ev.file_name, ev.file_data, ev.mime_type);
+                    const fileBuffer = Buffer.from(ev.file_data.replace(/^\\x/, ''), 'hex');
+                    await JiraService.attachFile(creds.userCredentials, creds.domain, jiraResult.key, ev.file_name, fileBuffer, ev.mime_type);
                     attachmentCount++;
                 } catch (attachErr) {
                     attachmentErrors.push({ file: ev.file_name, error: attachErr.message });
@@ -3413,7 +3414,8 @@ app.post('/api/jira/hallazgos/:id/create-ticket', requireAuth, async (req, res) 
         if (evidenceRes.rows.length > 0) {
             for (const ev of evidenceRes.rows) {
                 try {
-                    await JiraService.attachFile(creds.userCredentials, creds.domain, jiraResult.key, ev.file_name, ev.file_data, ev.mime_type);
+                    const fileBuffer = Buffer.from(ev.file_data.replace(/^\\x/, ''), 'hex');
+                    await JiraService.attachFile(creds.userCredentials, creds.domain, jiraResult.key, ev.file_name, fileBuffer, ev.mime_type);
                     attachmentCount++;
                 } catch (attachErr) {
                     attachmentErrors.push({ file: ev.file_name, error: attachErr.message });
