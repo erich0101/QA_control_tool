@@ -401,11 +401,11 @@ getStartRunWizardContent({ suite, suites, cuTitle }) {
                 </div>
                 <div class="field-group">
                     <label class="field-label">Severidad</label>
-                    <select id="bug-severity" style="width: 100%; padding: 12px; background: #2a2a2a; border: 1px solid var(--border); border-radius: 12px; color: white; cursor: pointer;">
-                        <option value="Baja" style="background: #2a2a2a; color: white;">Baja</option>
-                        <option value="Media" selected style="background: #2a2a2a; color: white;">Media</option>
-                        <option value="Alta" style="background: #2a2a2a; color: white;">Alta</option>
-                        <option value="Crítica" style="background: #2a2a2a; color: white;">Crítica</option>
+                    <select id="bug-severity" class="st-select" style="width: 100%; padding: 12px;">
+                        <option value="Baja">Baja</option>
+                        <option value="Media" selected>Media</option>
+                        <option value="Alta">Alta</option>
+                        <option value="Crítica">Crítica</option>
                     </select>
                 </div>
                 <div style="display: flex; gap: 12px; margin-top: 12px;">
@@ -592,28 +592,28 @@ getStartRunWizardContent({ suite, suites, cuTitle }) {
                         <p>No se encontraron bugs registrados en este ciclo.</p>
                     </div>
                 ` : bugs.map(bug => `
-                    <div style="background: var(--bg-surface-elevated); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; display: flex; flex-direction: column;">
-                        <div style="padding: 16px; background: rgba(239, 68, 68, 0.05); display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border);">
+                    <div style="background: var(--apple-bg-elevated); border: 1px solid var(--apple-separator); border-radius: var(--apple-radius-lg); overflow: hidden; display: flex; flex-direction: column;">
+                        <div style="padding: 16px; background: var(--apple-red-soft); display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--apple-separator);">
                             <div style="display: flex; align-items: center; gap: 12px;">
-                                <span style="background: var(--fail); color: white; padding: 4px 8px; border-radius: 6px; font-size: 0.7rem; font-weight: 800;">BUG #${bug.id}</span>
-                                <span style="font-weight: 700; color: var(--text-main);">${UI.escapeHTML(bug.title)}</span>
+                                <span style="background: var(--apple-red); color: white; padding: 4px 8px; border-radius: var(--apple-radius-sm); font-size: 0.7rem; font-weight: 800;">BUG #${bug.id}</span>
+                                <span style="font-weight: 700; color: var(--apple-label);">${UI.escapeHTML(bug.title)}</span>
                             </div>
                             <span class="status-pill ${bug.status === 'FIXED' ? 'ok' : 'warn'}" style="font-size: 0.65rem;">${UI.escapeHTML(bug.status)}</span>
                         </div>
-                        <div style="display: grid; grid-template-columns: 1fr 1.5fr; gap: 1px; background: var(--border);">
-                            <div style="background: var(--bg-surface-elevated); padding: 16px;">
-                                <div style="font-size: 0.65rem; color: var(--text-muted); font-weight: 800; text-transform: uppercase; margin-bottom: 8px;">Contexto del Test</div>
-                                <div style="font-size: 0.85rem; font-weight: 600; color: var(--brand);">${UI.escapeHTML(bug.tc_title)}</div>
-                                <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 4px;">Asignado a: ${UI.escapeHTML(bug.tester_name || 'Desconocido')}</div>
+                        <div style="display: grid; grid-template-columns: 1fr 1.5fr; gap: 1px; background: var(--apple-separator);">
+                            <div style="background: var(--apple-bg-elevated); padding: 16px;">
+                                <div style="font-size: 0.65rem; color: var(--apple-label-tertiary); font-weight: 800; text-transform: uppercase; margin-bottom: 8px;">Contexto del Test</div>
+                                <div style="font-size: 0.85rem; font-weight: 600; color: var(--apple-blue);">${UI.escapeHTML(bug.tc_title)}</div>
+                                <div style="font-size: 0.75rem; color: var(--apple-label-secondary); margin-top: 4px;">Asignado a: ${UI.escapeHTML(bug.tester_name || 'Desconocido')}</div>
                                 <div style="margin-top: 12px; font-size: 0.7rem; display: flex; gap: 8px;">
-                                    <span style="color: var(--fail); font-weight: 800;">${UI.escapeHTML(bug.severity)}</span>
-                                    <span style="color: var(--text-muted);">•</span>
-                                    <span style="color: var(--text-muted);">${new Date(bug.created_at).toLocaleDateString()}</span>
+                                    <span style="color: var(--apple-red); font-weight: 800;">${UI.escapeHTML(bug.severity)}</span>
+                                    <span style="color: var(--apple-label-tertiary);">•</span>
+                                    <span style="color: var(--apple-label-tertiary);">${new Date(bug.created_at).toLocaleDateString()}</span>
                                 </div>
                             </div>
-                            <div style="background: var(--bg-surface-elevated); padding: 16px; border-left: 1px solid var(--border);">
-                                <div style="font-size: 0.65rem; color: var(--text-muted); font-weight: 800; text-transform: uppercase; margin-bottom: 8px;">Descripción y Detalles</div>
-                                <div style="font-size: 0.85rem; color: var(--text-main); line-height: 1.5; white-space: pre-wrap;">${UI.escapeHTML(bug.description || 'Sin descripción adicional.')}</div>
+                            <div style="background: var(--apple-bg-elevated); padding: 16px; border-left: 1px solid var(--apple-separator);">
+                                <div style="font-size: 0.65rem; color: var(--apple-label-tertiary); font-weight: 800; text-transform: uppercase; margin-bottom: 8px;">Descripción y Detalles</div>
+                                <div style="font-size: 0.85rem; color: var(--apple-label); line-height: 1.5; white-space: pre-wrap;">${UI.escapeHTML(bug.description || 'Sin descripción adicional.')}</div>
                             </div>
                         </div>
                     </div>
@@ -935,10 +935,10 @@ getStartRunWizardContent({ suite, suites, cuTitle }) {
                     <label class="field-label">Key del Proyecto Jira</label>
                     <input type="text" id="jira-project-key" placeholder="Ej: PROJ" value="${UI.escapeHTML(config?.jira_project_key || '')}">
                 </div>
-                <div style="background: rgba(99,102,241,0.08); border: 1px solid rgba(99,102,241,0.3); border-radius: 12px; padding: 14px;">
-                    <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 8px;">
+                <div style="background: var(--apple-indigo-soft); border: 1px solid var(--apple-indigo-soft); border-radius: var(--apple-radius-lg); padding: 14px;">
+                    <div style="font-size: 0.75rem; color: var(--apple-label-secondary); margin-bottom: 8px;">
                         🔐 Cada usuario debe configurar su propio token de Jira en su perfil.
-                        ${userHasToken ? '<span style="color: var(--ok); font-weight: 600;"> Token configurado ✓</span>' : '<span style="color: var(--error); font-weight: 600;"> Sin token</span>'}
+                        ${userHasToken ? '<span style="color: var(--apple-green); font-weight: 600;"> Token configurado ✓</span>' : '<span style="color: var(--apple-red); font-weight: 600;"> Sin token</span>'}
                     </div>
                     <button class="btn btn-ghost" id="btn-config-user-jira" style="font-size: 0.75rem; padding: 8px 12px; width: 100%;">
                         ${userHasToken ? '🔄 Cambiar mi Token' : '➕ Configurar mi Token'}
@@ -1223,11 +1223,11 @@ getStartRunWizardContent({ suite, suites, cuTitle }) {
                     <style>
                         .toggle-switch { position: relative; display: inline-block; width: 42px; height: 24px; flex-shrink: 0; }
                         .toggle-switch input { display: none; }
-                        .toggle-slider { position: absolute; inset: 0; background: var(--bg-input); border: 1px solid var(--border); border-radius: 24px; cursor: pointer; transition: 0.25s ease; }
-                        .toggle-slider::before { content: ''; position: absolute; height: 18px; width: 18px; left: 2px; bottom: 2px; background: #6b7280; border-radius: 50%; transition: 0.25s ease; }
-                        .toggle-switch input:checked + .toggle-slider { background: var(--brand); border-color: var(--brand); }
-                        .toggle-switch input:checked + .toggle-slider::before { transform: translateX(18px); background: #fff; }
-                        .toggle-row:hover .toggle-slider { border-color: var(--brand); }
+                        .toggle-slider { position: absolute; inset: 0; background: var(--apple-fill); border: 1px solid var(--apple-separator); border-radius: 24px; cursor: pointer; transition: 0.25s ease; }
+                        .toggle-slider::before { content: ''; position: absolute; height: 18px; width: 18px; left: 2px; bottom: 2px; background: var(--apple-label-secondary); border-radius: 50%; transition: 0.25s ease; }
+                        .toggle-switch input:checked + .toggle-slider { background: var(--apple-blue); border-color: var(--apple-blue); }
+                        .toggle-switch input:checked + .toggle-slider::before { transform: translateX(18px); background: white; }
+                        .toggle-row:hover .toggle-slider { border-color: var(--apple-blue); }
                     </style>
                 </div>
 
@@ -1343,23 +1343,23 @@ getStartRunWizardContent({ suite, suites, cuTitle }) {
 
             <div class="bug-result-compare" style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px;">
                 <div class="field-group">
-                    <div class="result-box-title" style="color: #52c41a; font-size: 0.75rem; font-weight: 800; margin-bottom: 8px;">✔️ RESULTADO ESPERADO</div>
-                    <div style="padding: 12px; background: rgba(82, 196, 26, 0.05); border: 1px solid rgba(82, 196, 26, 0.2); border-radius: 8px; min-height: 100px; font-size: 0.85rem;">
+                    <div class="result-box-title" style="color: var(--apple-green); font-size: 0.75rem; font-weight: 800; margin-bottom: 8px;">✔️ RESULTADO ESPERADO</div>
+                    <div style="padding: 12px; background: var(--apple-green-soft); border: 1px solid var(--apple-green-soft); border-radius: var(--apple-radius-sm); min-height: 100px; font-size: 0.85rem;">
                         ${UI.escapeHTML(bug.expected_result || '—')}
                     </div>
                 </div>
                 <div class="field-group">
-                    <div class="result-box-title" style="color: #ff4d4f; font-size: 0.75rem; font-weight: 800; margin-bottom: 8px;">❌ RESULTADO ACTUAL</div>
-                    <div style="padding: 12px; background: rgba(255, 77, 79, 0.05); border: 1px solid rgba(255, 77, 79, 0.2); border-radius: 8px; min-height: 100px; font-size: 0.85rem;">
+                    <div class="result-box-title" style="color: var(--apple-red); font-size: 0.75rem; font-weight: 800; margin-bottom: 8px;">❌ RESULTADO ACTUAL</div>
+                    <div style="padding: 12px; background: var(--apple-red-soft); border: 1px solid var(--apple-red-soft); border-radius: var(--apple-radius-sm); min-height: 100px; font-size: 0.85rem;">
                         ${UI.escapeHTML(bug.actual_result || '—')}
                     </div>
                 </div>
             </div>
 
-            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; background: var(--bg-hover); padding: 20px; border-radius: 16px; margin-bottom: 32px;">
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; background: var(--apple-fill-tertiary); padding: 20px; border-radius: var(--apple-radius-lg); margin-bottom: 32px;">
                 <div class="field-group">
                     <label class="field-label">Severidad</label>
-                    <span style="font-weight: 800; color: var(--fail);">${UI.escapeHTML(bug.severity)}</span>
+                    <span style="font-weight: 800; color: var(--apple-red);">${UI.escapeHTML(bug.severity)}</span>
                 </div>
                 <div class="field-group">
                     <label class="field-label">Frecuencia</label>
@@ -1381,13 +1381,13 @@ getStartRunWizardContent({ suite, suites, cuTitle }) {
             <div style="text-align: center; margin-bottom: 24px;">
                 <div style="font-size: 2.5rem; margin-bottom: 12px;">🖼️</div>
                 <h3 style="margin-bottom: 8px;">Cargar Evidencia</h3>
-                <p style="color: var(--text-muted); font-size: 0.85rem;">Sube una captura o video para respaldar el resultado.</p>
+                <p style="color: var(--apple-label-secondary); font-size: 0.85rem;">Sube una captura o video para respaldar el resultado.</p>
             </div>
 
             <div style="display: flex; flex-direction: column; gap: 20px;">
                 <div class="field-group">
                     <label class="field-label">Categoría de Evidencia</label>
-                    <select id="modal-evidence-category" style="width: 100%; padding: 10px; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 8px; color: var(--text-main);">
+                    <select id="modal-evidence-category" class="st-select" style="width: 100%; padding: 10px;">
                         <option value="GENERAL">Evidencia General</option>
                         <option value="FIGMA">Diseño (Figma)</option>
                         <option value="DEV">Desarrollo (Sistema)</option>
@@ -1397,9 +1397,9 @@ getStartRunWizardContent({ suite, suites, cuTitle }) {
 
                 <div class="field-group">
                     <label class="field-label">Seleccionar Archivo</label>
-                    <div id="drop-zone" style="border: 2px dashed var(--border); border-radius: 12px; padding: 30px; text-align: center; cursor: pointer; transition: all 0.2s;">
+                    <div id="drop-zone" style="border: 2px dashed var(--apple-separator-opaque); border-radius: var(--apple-radius-lg); padding: 30px; text-align: center; cursor: pointer; transition: all 0.2s;">
                         <input type="file" id="modal-evidence-file" style="display: none;" accept="image/*,video/*">
-                        <div id="file-info" style="font-size: 0.85rem; color: var(--text-muted);">
+                        <div id="file-info" style="font-size: 0.85rem; color: var(--apple-label-secondary);">
                             Haga clic o arrastre un archivo aquí
                         </div>
                     </div>
@@ -1520,12 +1520,12 @@ getStartRunWizardContent({ suite, suites, cuTitle }) {
             <div style="text-align: center; margin-bottom: 24px;">
                 <div style="font-size: 2.5rem; margin-bottom: 12px;">📊</div>
                 <h3 style="margin-bottom: 8px;">Importación Segura (XLSX / CSV)</h3>
-                <p style="color: var(--text-muted); font-size: 0.85rem;">Carga Historias de Usuario y sus Tests asociados de forma segura.</p>
+                <p style="color: var(--apple-label-secondary); font-size: 0.85rem;">Carga Historias de Usuario y sus Tests asociados de forma segura.</p>
             </div>
 
-            <div style="background: rgba(59, 130, 246, 0.05); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: 12px; padding: 16px; margin-bottom: 24px;">
-                <div style="font-size: 0.75rem; color: var(--brand); font-weight: 800; margin-bottom: 8px;">FORMATOS SOPORTADOS:</div>
-                <ul style="font-size: 0.75rem; color: var(--text-secondary); padding-left: 16px; margin: 0;">
+            <div style="background: var(--apple-blue-soft); border: 1px solid var(--apple-blue-soft); border-radius: var(--apple-radius-lg); padding: 16px; margin-bottom: 24px;">
+                <div style="font-size: 0.75rem; color: var(--apple-blue); font-weight: 800; margin-bottom: 8px;">FORMATOS SOPORTADOS:</div>
+                <ul style="font-size: 0.75rem; color: var(--apple-label-secondary); padding-left: 16px; margin: 0;">
                     <li><b>Unificado (recomendado):</b> 1 hoja con columnas: CU Vinculado, Suite, HU, Escenario, Pasos, Resultado Esperado, etc.</li>
                     <li><b>Dual (legacy):</b> XLSX con 2 hojas: "historia de usuario" y "Casos de Prueba".</li>
                     <li><b>CSV:</b> Un solo archivo con columnas de HU y Tests.</li>
@@ -1535,9 +1535,9 @@ getStartRunWizardContent({ suite, suites, cuTitle }) {
 
             <div class="field-group">
                 <label class="field-label">Seleccionar Archivo (.xlsx, .csv)</label>
-                <div id="import-drop-zone" style="border: 2px dashed var(--border); border-radius: 12px; padding: 30px; text-align: center; cursor: pointer;">
+                <div id="import-drop-zone" style="border: 2px dashed var(--apple-separator-opaque); border-radius: var(--apple-radius-lg); padding: 30px; text-align: center; cursor: pointer;">
                     <input type="file" id="modal-import-file" style="display: none;" accept=".xlsx, .csv">
-                    <div id="import-file-info" style="font-size: 0.85rem; color: var(--text-muted);">
+                    <div id="import-file-info" style="font-size: 0.85rem; color: var(--apple-label-secondary);">
                         Haga clic para seleccionar archivo
                     </div>
                 </div>

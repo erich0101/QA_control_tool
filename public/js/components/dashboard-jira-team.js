@@ -64,37 +64,37 @@ export const DashboardJiraTeam = {
                     </div>
                 </div>
 
-                <!-- MÉTRICAS DE CARGA -->
+                <!-- MÉTRICAS DE CARGA (macOS Cards) -->
                 <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 24px;">
-                    <div style="background: var(--bg-main); padding: 12px; border-radius: 12px; border: 1px solid var(--border-light);">
-                        <div style="font-size: 0.6rem; font-weight: 800; color: var(--text-muted); margin-bottom: 4px; text-transform: uppercase;">Resueltos</div>
-                        <div style="font-size: 1.1rem; font-weight: 900; color: #36B37E;">${user.resolved} <span style="font-size: 0.7rem; opacity: 0.7;">✔</span></div>
-                        <div style="font-size: 0.55rem; color: var(--text-muted); font-weight: 600;">En 30 días</div>
+                    <div style="background: var(--apple-fill-tertiary); padding: 16px; border-radius: var(--apple-radius-md); border: 1px solid var(--apple-separator);">
+                        <div style="font-size: 0.6rem; font-weight: 800; color: var(--apple-label-secondary); margin-bottom: 6px; text-transform: uppercase;">Resueltos</div>
+                        <div style="font-size: 1.2rem; font-weight: 900; color: var(--apple-green);">${user.resolved} <span style="font-size: 0.7rem; opacity: 0.7;">✔</span></div>
+                        <div style="font-size: 0.55rem; color: var(--apple-label-tertiary); font-weight: 600;">En 30 días</div>
                     </div>
-                    <div style="background: var(--bg-main); padding: 12px; border-radius: 12px; border: 1px solid var(--border-light);">
-                        <div style="font-size: 0.6rem; font-weight: 800; color: var(--text-muted); margin-bottom: 4px; text-transform: uppercase;">Ciclo Medio</div>
-                        <div style="font-size: 1.1rem; font-weight: 900; color: var(--text-main);">${user.avgDays} <span style="font-size: 0.7rem; opacity: 0.7;">d</span></div>
-                        <div style="font-size: 0.55rem; color: var(--text-muted); font-weight: 600;">Velocidad cierre</div>
+                    <div style="background: var(--apple-fill-tertiary); padding: 16px; border-radius: var(--apple-radius-md); border: 1px solid var(--apple-separator);">
+                        <div style="font-size: 0.6rem; font-weight: 800; color: var(--apple-label-secondary); margin-bottom: 6px; text-transform: uppercase;">Ciclo Medio</div>
+                        <div style="font-size: 1.2rem; font-weight: 900; color: var(--apple-label);">${user.avgDays} <span style="font-size: 0.7rem; opacity: 0.7;">d</span></div>
+                        <div style="font-size: 0.55rem; color: var(--apple-label-tertiary); font-weight: 600;">Velocidad cierre</div>
                     </div>
-                    <div style="background: var(--bg-main); padding: 12px; border-radius: 12px; border: 1px solid ${user.avgOpenAge > 14 ? 'rgba(255, 86, 48, 0.3)' : 'var(--border-light)'}; background: ${user.avgOpenAge > 14 ? 'rgba(255, 86, 48, 0.05)' : 'var(--bg-main)'};">
-                        <div style="font-size: 0.6rem; font-weight: 800; color: var(--text-muted); margin-bottom: 4px; text-transform: uppercase;">Aging Pend.</div>
-                        <div style="font-size: 1.1rem; font-weight: 900; color: ${user.avgOpenAge > 14 ? '#FF5630' : 'var(--text-main)'};">
+                    <div style="background: ${user.avgOpenAge > 14 ? 'var(--apple-red-soft)' : 'var(--apple-fill-tertiary)'}; padding: 16px; border-radius: var(--apple-radius-md); border: 1px solid ${user.avgOpenAge > 14 ? 'var(--apple-red-soft)' : 'var(--apple-separator)'};">
+                        <div style="font-size: 0.6rem; font-weight: 800; color: var(--apple-label-secondary); margin-bottom: 6px; text-transform: uppercase;">Aging Pend.</div>
+                        <div style="font-size: 1.2rem; font-weight: 900; color: ${user.avgOpenAge > 14 ? 'var(--apple-red)' : 'var(--apple-label)'};">
                             ${user.avgOpenAge} <span style="font-size: 0.7rem; opacity: 0.7;">d</span>
                             ${user.avgOpenAge > 14 ? ' ⚠️' : ''}
                         </div>
-                        <div style="font-size: 0.55rem; color: var(--text-muted); font-weight: 600;">Tiempo espera</div>
+                        <div style="font-size: 0.55rem; color: var(--apple-label-tertiary); font-weight: 600;">Tiempo espera</div>
                     </div>
                 </div>
 
-                <!-- RATIO DE RESOLUCIÓN -->
+                <!-- RATIO DE RESOLUCIÓN (macOS Progress Bar) -->
                 <div>
-                    <div style="display: flex; justify-content: space-between; font-size: 0.7rem; font-weight: 800; color: var(--text-muted); margin-bottom: 8px;">
+                    <div style="display: flex; justify-content: space-between; font-size: 0.7rem; font-weight: 800; color: var(--apple-label-secondary); margin-bottom: 10px;">
                         <span>RATIO DE FINALIZACIÓN</span>
                         <span>${resolutionPct}%</span>
                     </div>
-                    <div style="height: 8px; background: var(--bg-hover); border-radius: 4px; overflow: hidden; display: flex;">
-                        <div style="width: ${resolutionPct}%; background: #36B37E; height: 100%;"></div>
-                        <div style="width: ${100 - resolutionPct}%; background: #FFAB00; height: 100%; opacity: 0.3;"></div>
+                    <div style="height: 8px; background: var(--apple-fill); border-radius: var(--apple-radius-full); overflow: hidden; display: flex;">
+                        <div style="width: ${resolutionPct}%; background: var(--apple-green); height: 100%;"></div>
+                        <div style="width: ${100 - resolutionPct}%; background: var(--apple-orange); height: 100%; opacity: 0.3;"></div>
                     </div>
                 </div>
             </div>

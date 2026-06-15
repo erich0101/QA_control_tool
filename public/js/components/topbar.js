@@ -9,6 +9,7 @@ import { UI } from '../utils/ui-utils.js';
 export const TopBar = {
     render(container) {
         const { projects, activeProjectId, theme } = Store.state;
+        const user = Store.state.user;
 
         container.innerHTML = `
             <div class="topbar-brand">
@@ -17,27 +18,32 @@ export const TopBar = {
                     <h1>Manual QA</h1>
                     <div class="topbar-brand-sub">JIRA Edition</div>
                 </div>
-            </div>
-            <div class="topbar-actions">
-                <button class="btn-icon" id="btn-theme-toggle" title="Cambiar tema" style="font-size: 1rem; border: 1px solid var(--border); padding: 4px 8px; cursor: pointer;">${theme === 'dark' ? '☀️' : '🌙'}</button>
-                ${Store.state.user ? `
-                    <div style="display: flex; align-items: center; gap: 8px; margin-right: 16px;">
-                        <span style="font-size: 0.85rem; color: var(--text-muted);">${UI.escapeHTML(Store.state.user.name)}</span>
-                        <button class="btn-icon" id="btn-logout" title="Cerrar Sesión" style="font-size: 0.8rem; border: 1px solid var(--border); padding: 4px;">🚪</button>
+                ${user ? `
+                    <div style="display: flex; align-items: center; gap: 8px; margin-left: 20px; padding-left: 20px; border-left: 1px solid var(--apple-separator);">
+                        <div style="width: 28px; height: 28px; border-radius: 50%; background: var(--apple-blue); display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700; color: white;">${user.name.charAt(0).toUpperCase()}</div>
+                        <span style="font-size: 0.85rem; font-weight: 500; color: var(--apple-label);">${UI.escapeHTML(user.name)}</span>
                     </div>
                 ` : ''}
-                <select id="project-select">
-                    ${projects.length === 0
-                        ? '<option value="">Sin proyectos</option>'
-                        : projects.map(p => `
-                            <option value="${p.id}" ${p.id === activeProjectId ? 'selected' : ''}>${UI.escapeHTML(p.name)}</option>
-                        `).join('')
-                    }
-                </select>
-                ${activeProjectId && Store.state.user?.perfil === 'admin' ? `<button class="btn-icon" id="btn-edit-project" title="Editar Nombre Proyecto" style="font-size: 0.8rem; border: 1px solid var(--border); padding: 4px;">✏️</button>` : ''}
-                ${activeProjectId && Store.state.user?.perfil === 'admin' ? `<button class="btn-icon" id="btn-jira-config" title="Configurar Jira" style="font-size: 0.8rem; border: 1px solid var(--border); padding: 4px;">🏢</button>` : ''}
-                ${activeProjectId ? `<button class="btn-icon" id="btn-export-project" title="Exportar Todo el Proyecto" style="font-size: 0.8rem; border: 1px solid var(--border); padding: 4px;">📦</button>` : ''}
-                ${Store.state.user?.perfil === 'admin' ? `<button class="btn btn-primary btn-sm" id="btn-new-project">+ Proyecto</button>` : ''}
+            </div>
+            <div class="topbar-actions">
+                <div class="topbar-project-actions">
+                    ${activeProjectId && user?.perfil === 'admin' ? `<button class="btn btn-ghost btn-sm" id="btn-edit-project">Editar Proyecto</button>` : ''}
+                    ${activeProjectId && user?.perfil === 'admin' ? `<button class="btn btn-ghost btn-sm" id="btn-jira-config">Configurar JIRA</button>` : ''}
+                    ${activeProjectId ? `<button class="btn btn-ghost btn-sm" id="btn-export-project">Exportar Matriz</button>` : ''}
+                </div>
+                <div class="topbar-controls">
+                    <select id="project-select" class="st-select">
+                        ${projects.length === 0
+                            ? '<option value="">Sin proyectos</option>'
+                            : projects.map(p => `
+                                <option value="${p.id}" ${p.id === activeProjectId ? 'selected' : ''}>${UI.escapeHTML(p.name)}</option>
+                            `).join('')
+                        }
+                    </select>
+                    ${user?.perfil === 'admin' ? `<button class="btn btn-primary btn-sm" id="btn-new-project">+ Proyecto</button>` : ''}
+                    <button class="btn btn-ghost btn-sm" id="btn-theme-toggle">${theme === 'dark' ? '☀️ Claro' : '🌙 Oscuro'}</button>
+                    ${user ? `<button class="btn btn-ghost btn-sm" id="btn-logout">Salir</button>` : ''}
+                </div>
             </div>
         `;
 

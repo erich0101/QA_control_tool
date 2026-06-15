@@ -50,9 +50,9 @@ export const SBS = {
 
         return `
             <div class="test-card glass-card" data-idx="${index}" style="margin-bottom: 12px; border-radius: 16px; overflow: hidden;">
-                <div class="test-card-header" style="padding: 12px 20px; border-bottom: ${expanded ? '1px solid var(--border)' : 'none'}; display: flex; align-items: center; gap: 16px; background: rgba(0,0,0,0.1);">
+                <div class="test-card-header" style="padding: 12px 20px; border-bottom: ${expanded ? '1px solid var(--apple-separator)' : 'none'}; display: flex; align-items: center; gap: 16px; background: var(--apple-fill-tertiary);">
                     <div class="status-indicator" style="background: ${statusColor}; width: 8px; height: 8px; border-radius: 50%; box-shadow: 0 0 10px ${statusColor};"></div>
-                    <select class="test-status-select" data-idx="${index}" style="padding: 4px 8px; font-size: 0.7rem; border-radius: 8px; background: rgba(255,255,255,0.05); font-weight: 700; color: ${statusColor}; border-color: ${statusColor}33;">
+                    <select class="test-status-select" data-idx="${index}" style="padding: 4px 8px; font-size: 0.7rem; border-radius: var(--apple-radius-sm); background: var(--apple-fill); font-weight: 700; color: ${statusColor}; border-color: ${statusColor}33;">
                         <option value="PENDING" ${test.status === 'PENDING' ? 'selected' : ''}>PEND</option>
                         <option value="OK" ${test.status === 'OK' ? 'selected' : ''}>PASS</option>
                         <option value="WARNING" ${test.status === 'WARNING' ? 'selected' : ''}>WARN</option>
@@ -67,7 +67,7 @@ export const SBS = {
                     </div>
                 </div>
                 
-                <div class="test-card-body" style="padding: 20px; display: ${expanded ? 'grid' : 'none'}; grid-template-columns: 1fr 1fr; gap: 20px; background: rgba(0,0,0,0.05);">
+                <div class="test-card-body" style="padding: 20px; display: ${expanded ? 'grid' : 'none'}; grid-template-columns: 1fr 1fr; gap: 20px; background: var(--apple-fill-tertiary);">
                     ${this.getUploadZoneHtml(test, index, 'figma')}
                     ${this.getUploadZoneHtml(test, index, 'dev')}
                 </div>
@@ -88,7 +88,7 @@ export const SBS = {
             return `
                 <div class="upload-zone-filled" style="position: relative; aspect-ratio: 16/9; border-radius: 12px; overflow: hidden; border: 1px solid var(--border);">
                     <img src="${fullSrc}" style="width: 100%; height: 100%; object-fit: cover; cursor: pointer;" onclick="UI.showImageZoom('${fullSrc}')">
-                    <div style="position: absolute; bottom: 0; left: 0; right: 0; padding: 8px; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); display: flex; justify-content: space-between; align-items: center;">
+                    <div style="position: absolute; bottom: 0; left: 0; right: 0; padding: 8px; background: var(--apple-material); backdrop-filter: blur(4px); display: flex; justify-content: space-between; align-items: center;">
                         <span style="font-size: 0.65rem; font-weight: 700; color: ${color};">${label}</span>
                         <button class="clear-file" data-idx="${index}" data-type="${type}" style="background: var(--fail); border: none; border-radius: 4px; color: white; font-size: 0.6rem; padding: 2px 6px; cursor: pointer;">Borrar</button>
                     </div>

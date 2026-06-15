@@ -105,8 +105,8 @@ export const TestSuitesTab = {
                                 <button class="btn btn-primary btn-sm" id="btn-new-suite" ${!selectedUseCaseId ? 'disabled' : ''} style="flex: 1;">+ Nueva</button>
                             </div>
                             <div style="display: flex; gap: 6px;">
-                                <button class="btn btn-ghost btn-sm" id="btn-sidebar-import-xlsx" ${!selectedUseCaseId ? 'disabled' : ''} style="flex: 1; font-size: 0.72rem;">📥</button>
-                                <button class="btn btn-success btn-sm" id="btn-export-matrix" ${!selectedUseCaseId ? 'disabled' : ''} style="flex: 1; font-size: 0.72rem; background: var(--apple-green); border: none; color: white;">📊</button>
+                                <button class="btn btn-ghost btn-sm" id="btn-sidebar-import-xlsx" ${!selectedUseCaseId ? 'disabled' : ''} style="flex: 1; font-size: 0.72rem;">📥 Importar</button>
+                                <button class="btn btn-success btn-sm" id="btn-export-matrix" ${!selectedUseCaseId ? 'disabled' : ''} style="flex: 1; font-size: 0.72rem; background: var(--apple-green); border: none; color: white;">📊 Exportar</button>
                             </div>
                         </div>
                     </div>
@@ -165,7 +165,7 @@ export const TestSuitesTab = {
 
                         return `
                             <tr class="ts-suite-row ${isActive ? 'selected' : ''}" data-id="${suite.id}"
-                                style="border-bottom: 1px solid rgba(255,255,255,0.04); cursor: pointer;">
+                                style="border-bottom: 1px solid var(--apple-separator); cursor: pointer;">
                                 <td>
                                     <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 2px;">
                                         <span class="suite-id">SUITE #${suite.id}</span>
@@ -253,14 +253,14 @@ export const TestSuitesTab = {
                     ${suite.jira_epic_key ? `<span class="tab-badge" style="background: var(--apple-blue-soft); color: var(--apple-blue); font-size: 0.65rem; margin-top: 2px; display: inline-block;">Épica: ${UI.escapeHTML(suite.jira_epic_key)}</span>` : ''}
                 </div>
                 <div style="display: flex; gap: 6px; align-items: center; flex-shrink: 0;">
-                    <button class="btn btn-ghost btn-sm edit-suite" data-id="${suite.id}" title="Editar Suite" style="padding: 4px 8px;">✏️</button>
-                    <button class="btn btn-sm delete-suite" data-id="${suite.id}" title="Eliminar Suite" style="padding: 4px 8px; background: var(--apple-red-soft); color: var(--apple-red); border: 1px solid var(--apple-red-soft);">🗑️</button>
+                    <button class="btn btn-ghost btn-sm edit-suite" data-id="${suite.id}" title="Editar Suite" style="padding: 4px 8px;">✏️ Editar</button>
+                    <button class="btn btn-sm delete-suite" data-id="${suite.id}" title="Eliminar Suite" style="padding: 4px 8px; background: var(--apple-red-soft); color: var(--apple-red); border: 1px solid var(--apple-red-soft);">🗑️ Eliminar</button>
                     <div style="width: 1px; height: 18px; background: var(--border);"></div>
                     <button class="btn btn-success btn-sm run-suite" data-id="${suite.id}" style="padding: 4px 10px; font-size: 0.72rem;">▶ EJECUTAR</button>
                     <button class="btn btn-sm" id="btn-ai-gen-tc" data-suite-id="${suite.id}" style="background: linear-gradient(135deg,#2563eb,#3b82f6); color: white; border: none; padding: 4px 10px; font-size: 0.72rem;">✨ AI Tool</button>
                     <button class="btn btn-primary btn-sm" id="btn-new-tc" data-suite-id="${suite.id}" style="padding: 4px 10px; font-size: 0.72rem;">+ Nuevo TC</button>
                     <div style="width: 1px; height: 18px; background: var(--border);"></div>
-                    <select class="suite-assign-all-select" data-suite-id="${suite.id}" style="padding: 4px 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-surface); color: var(--text-main); font-size: 0.72rem; max-width: 170px;">
+                    <select class="suite-assign-all-select st-select" data-suite-id="${suite.id}" style="max-width: 170px;">
                         <option value="">👤 Asignar todos...</option>
                         <option value="0">— Sin asignar —</option>
                         ${(Store.state.team || []).map(u => `<option value="${u.id}">${UI.escapeHTML(u.name)}</option>`).join('')}
@@ -327,14 +327,14 @@ export const TestSuitesTab = {
         const lastExec = tc.last_execution_at ? this._formatDate(tc.last_execution_at) : '—';
         const assignee = (Store.state.team || []).find(u => u.id === tc.assigned_to);
 
-        const typeColors = { Epic: '#a78bfa', Bug: '#f87171', Task: '#60a5fa', Story: '#34d399' };
-        const typeColor = typeColors['Task'] || '#60a5fa';
+        const typeColors = { Epic: 'var(--apple-purple)', Bug: 'var(--apple-red)', Task: 'var(--apple-blue)', Story: 'var(--apple-green)' };
+        const typeColor = typeColors['Task'] || 'var(--apple-blue)';
 
         return `
             <tr class="ts-grid-row ${isSelected ? 'selected' : ''}" data-tc-id="${tc.id}"
-                style="border-bottom: 1px solid rgba(255,255,255,0.04); cursor: pointer; transition: background 0.15s;"
-                onmouseover="this.style.background='rgba(99,102,241,0.08)'"
-                onmouseout="this.style.background='${isSelected ? 'rgba(99,102,241,0.12)' : 'transparent'}'">
+                style="border-bottom: 1px solid var(--apple-separator); cursor: pointer; transition: background 0.15s;"
+                onmouseover="this.style.background='var(--apple-indigo-soft)'"
+                onmouseout="this.style.background='${isSelected ? 'var(--apple-indigo-soft)' : 'transparent'}'">
                 <td style="padding: 10px 12px; font-weight: 800; color: var(--brand); font-size: 0.75rem; width: 90px; white-space: nowrap;">${UI.escapeHTML(tc.key_id || 'TC')}</td>
                 <td style="padding: 10px 12px; color: var(--text-main); font-weight: 500; flex: 1;">
                     <div style="display: flex; align-items: center; gap: 8px;">
@@ -354,7 +354,7 @@ export const TestSuitesTab = {
                 <td style="padding: 10px 12px; text-align: center; width: 60px;">
                     <div style="display: flex; gap: 6px; justify-content: center;">
                         ${(isAssignedToMe || isAdmin) && !activeRunId ? `
-                            <button class="btn btn-success btn-sm run-tc-grid" data-id="${tc.id}" title="Ejecutar" style="padding: 3px 10px; font-size: 0.65rem; font-weight: 800;">▶</button>
+                            <button class="btn btn-success btn-sm run-tc-grid" data-id="${tc.id}" title="Ejecutar" style="padding: 3px 10px; font-size: 0.65rem; font-weight: 800;">▶ Ejecutar</button>
                         ` : ''}
                         ${isAdmin ? `
                             <button class="btn btn-sm delete-tc-grid" data-tc-id="${tc.id}" title="Eliminar" style="padding: 3px 10px; font-size: 0.65rem; font-weight: 800; opacity: ${activeRunId ? '0.3' : '1'}; cursor: ${activeRunId ? 'not-allowed' : 'pointer'}; background: var(--apple-red-soft); color: var(--apple-red); border: 1px solid var(--apple-red-soft);">🗑️</button>
@@ -383,7 +383,7 @@ export const TestSuitesTab = {
                         <div style="display: flex; align-items: center; gap: 10px;">
                             <span style="font-size: 0.72rem; font-weight: 800; color: var(--brand); white-space: nowrap;">${UI.escapeHTML(tc.key_id || 'TC')}</span>
                             ${isEditing ? `
-                                <input type="text" class="tc-title-input" data-tc-id="${tc.id}" value="${UI.escapeHTML(tc.title)}" placeholder="Título del Test Case" style="flex: 1; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--brand); background: var(--bg-surface); color: var(--text-main); font-size: 0.88rem; font-weight: 700; outline: none; box-sizing: border-box;" />
+                                <input type="text" class="tc-title-input" data-tc-id="${tc.id}" value="${UI.escapeHTML(tc.title)}" placeholder="Título del Test Case" style="flex: 1;" />
                             ` : `
                                 <span style="font-size: 0.88rem; font-weight: 700; color: var(--text-main); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;">${UI.escapeHTML(tc.title)}</span>
                             `}
@@ -476,18 +476,18 @@ export const TestSuitesTab = {
                     <div style="display: flex; flex-direction: column; gap: 16px;">
                         <div class="field-group">
                             <label class="field-label">Precondiciones</label>
-                            <textarea class="tc-edit-field ${readOnlyClass}" data-field="preconditions" ${readOnlyAttr} style="min-height: 60px;">${UI.escapeHTML(tc.preconditions || '')}</textarea>
+                            <textarea class="tc-edit-field ${readOnlyClass}" data-field="preconditions" ${readOnlyAttr}>${UI.escapeHTML(tc.preconditions || '')}</textarea>
                         </div>
                         <div class="field-group">
                             <label class="field-label">Pasos del Test</label>
                             <div class="highlighter-container">
                                 <div class="highlighter-backdrop">${UI.highlightSteps(tc.steps)}</div>
-                                <textarea class="tc-edit-field highlighted-textarea ${readOnlyClass}" data-field="steps" ${readOnlyAttr} style="min-height: 180px;">${UI.escapeHTML(tc.steps || '')}</textarea>
+                                <textarea class="tc-edit-field highlighted-textarea ${readOnlyClass}" data-field="steps" ${readOnlyAttr}>${UI.escapeHTML(tc.steps || '')}</textarea>
                             </div>
                         </div>
                         <div class="field-group">
                             <label class="field-label">Datos de Prueba</label>
-                            <textarea class="tc-edit-field ${readOnlyClass}" data-field="test_data" ${readOnlyAttr} style="min-height: 60px;">${UI.escapeHTML(tc.test_data || '')}</textarea>
+                            <textarea class="tc-edit-field ${readOnlyClass}" data-field="test_data" ${readOnlyAttr}>${UI.escapeHTML(tc.test_data || '')}</textarea>
                         </div>
                     </div>
                 `;
@@ -497,15 +497,15 @@ export const TestSuitesTab = {
                     <div style="display: flex; flex-direction: column; gap: 16px;">
                         <div class="field-group">
                             <label class="field-label">Resultado Esperado</label>
-                            <textarea class="tc-edit-field ${readOnlyClass}" data-field="expected_result" ${readOnlyAttr} style="min-height: 100px;">${UI.escapeHTML(tc.expected_result || '')}</textarea>
+                            <textarea class="tc-edit-field ${readOnlyClass}" data-field="expected_result" ${readOnlyAttr}>${UI.escapeHTML(tc.expected_result || '')}</textarea>
                         </div>
                         <div class="field-group">
                             <label class="field-label">Criterios de Aceptación</label>
-                            <textarea class="tc-edit-field ${readOnlyClass}" data-field="acceptance_criteria" ${readOnlyAttr} style="min-height: 100px;">${UI.escapeHTML(tc.acceptance_criteria || '')}</textarea>
+                            <textarea class="tc-edit-field ${readOnlyClass}" data-field="acceptance_criteria" ${readOnlyAttr}>${UI.escapeHTML(tc.acceptance_criteria || '')}</textarea>
                         </div>
                         <div class="field-group">
                             <label class="field-label">Suposiciones</label>
-                            <textarea class="tc-edit-field ${readOnlyClass}" data-field="assumptions" ${readOnlyAttr} style="min-height: 60px;">${UI.escapeHTML(tc.assumptions || '')}</textarea>
+                            <textarea class="tc-edit-field ${readOnlyClass}" data-field="assumptions" ${readOnlyAttr}>${UI.escapeHTML(tc.assumptions || '')}</textarea>
                         </div>
                     </div>
                 `;
@@ -516,7 +516,7 @@ export const TestSuitesTab = {
                         <div class="tt-editor-grid" style="grid-template-columns: 1fr 1fr; gap: 12px;">
                             <div class="field-group">
                                 <label class="field-label">Historia de Usuario</label>
-                                <select class="tc-us-select-detail ${readOnlyClass}" data-tc-id="${tc.id}" ${readOnlyAttr}>
+                                <select class="tc-us-select-detail ${readOnlyClass}" data-tc-id="${tc.id}" ${readOnlyAttr} style="max-width: 180px;">
                                     <option value="">— No vinculada —</option>
                                     ${Store.state.userStories.map(us => {
                                         const fullTitle = `${us.key_id} - ${us.title}`;
@@ -604,7 +604,7 @@ export const TestSuitesTab = {
                             const statusClass = (exec.status || 'pending').toLowerCase();
                             const attachments = exec.attachments || [];
                             return `
-                                <div style="border-bottom: 1px solid rgba(255,255,255,0.05); padding: 12px 0;">
+                                <div style="border-bottom: 1px solid var(--apple-separator); padding: 12px 0;">
                                     <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
                                         <span class="status-pill ${statusClass}" style="font-size: 8px; width: 55px; text-align: center; justify-content: center; font-weight: 700; display: inline-flex; padding: 2px 5px;">${execStatus}</span>
                                         <span style="font-size: 0.75rem; color: var(--text-muted);">${execDate}</span>
@@ -1184,7 +1184,7 @@ export const TestSuitesTab = {
         window._geminiTcDrop = (e) => {
             e.preventDefault();
             e.stopPropagation();
-            document.getElementById('gemini-tc-dropzone').style.borderColor = 'rgba(99,102,241,0.4)';
+            document.getElementById('gemini-tc-dropzone').style.borderColor = 'var(--apple-separator-opaque)';
             this._addGeminiImages(Array.from(e.dataTransfer.files));
         };
 

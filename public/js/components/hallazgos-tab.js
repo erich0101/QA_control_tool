@@ -289,9 +289,9 @@ export const HallazgosTab = {
                         <select id="h-jira-assignee" style="width:100%; padding:8px; border-radius:8px; background:var(--bg-input); border:1px solid var(--border); color:var(--text-main); font-size:0.8rem; margin-bottom:8px;"><option value="">Cargando...</option></select>
                         <select id="h-jira-priority" style="width:100%; padding:8px; border-radius:8px; background:var(--bg-input); border:1px solid var(--border); color:var(--text-main); font-size:0.8rem; margin-bottom:8px;"><option value="">Cargando...</option></select>
                         <div id="h-jira-custom-fields"></div>
-                        <button class="btn btn-primary" id="h-btn-create-jira" style="width:100%; background:var(--brand);">🚀 CREAR TICKET EN JIRA</button>
-                        <div id="h-jira-success" style="display:none; padding:12px; background:rgba(34,197,94,0.1); border-radius:8px; margin-top:8px;">
-                            ✅ Ticket creado: <a href="#" id="h-jira-link" target="_blank" style="color:var(--brand);"></a>
+                        <button class="btn btn-primary" id="h-btn-create-jira" style="width:100%; background:var(--apple-blue);">🚀 CREAR TICKET EN JIRA</button>
+                        <div id="h-jira-success" style="display:none; padding:12px; background:var(--apple-green-soft); border-radius:var(--apple-radius-sm); margin-top:8px;">
+                            ✅ Ticket creado: <a href="#" id="h-jira-link" target="_blank" style="color:var(--apple-blue);"></a>
                         </div>
                     </div>
                 </div>`}

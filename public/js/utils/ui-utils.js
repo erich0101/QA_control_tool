@@ -81,7 +81,7 @@ export const UI = {
         let escaped = this.escapeHTML(text);
         // Regex: inicio de línea o después de un salto, texto seguido de : o . y espacio
         // Detecta: "Dado: ", "1. ", "Paso 1: ", "Cuando. "
-        return escaped.replace(/^([^:\n\.]+[:\.])\s/gm, '<span style="color: #4096ff; font-weight: 800;">$1</span> ');
+        return escaped.replace(/^([^:\n\.]+[:\.])\s/gm, '<span style="color: var(--apple-blue); font-weight: 800;">$1</span> ');
     },
 
     autoResizeTextarea(textarea) {

@@ -101,111 +101,111 @@ export const DashboardEpicReport = {
                     <p style="color: var(--text-muted); font-size: 0.8rem; margin: 4px 0 0;">Período: ${this.dateFrom} al ${this.dateTo}</p>
                 </div>
 
-                <!-- INSIGHTS -->
+                <!-- INSIGHTS (macOS Banner Style) -->
                 ${insights && insights.length > 0 ? `
                 <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 24px;">
                     ${insights.map(i => {
                         const c = insightColors[i.type] || insightColors.warning;
-                        return `<div style="background: ${c.bg}; border: 1px solid ${c.border}; border-radius: 10px; padding: 10px 16px; display: flex; align-items: center; gap: 10px;">
+                        return `<div style="background: ${c.bg}; border-left: 4px solid ${c.text}; border-radius: 0 var(--apple-radius-sm) var(--apple-radius-sm) 0; padding: 12px 16px; display: flex; align-items: center; gap: 12px;">
                             <span style="font-size: 1rem;">${i.type === 'success' ? '✅' : i.type === 'critical' ? '🚨' : '⚠️'}</span>
-                            <span style="color: ${c.text}; font-size: 0.85rem; font-weight: 600;">${i.text}</span>
+                            <span style="color: ${c.text}; font-size: 0.85rem; font-weight: 500;">${i.text}</span>
                         </div>`;
                     }).join('')}
                 </div>` : ''}
 
-                <!-- TOP ROW: Health Score + Risk + Key Metrics -->
-                <div style="display: grid; grid-template-columns: 140px 160px repeat(4, 1fr); gap: 12px; margin-bottom: 24px;">
+                <!-- TOP ROW: Health Score + Risk + Key Metrics (macOS Cards) -->
+                <div style="display: grid; grid-template-columns: 140px 160px repeat(4, 1fr); gap: 16px; margin-bottom: 24px;">
 
-                    <!-- Health Score Gauge -->
-                    <div style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: 16px; padding: 16px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
-                        <div style="position: relative; width: 90px; height: 90px; margin-bottom: 8px;">
+                    <!-- Health Score Gauge (macOS Glass Card) -->
+                    <div style="background: var(--apple-bg-elevated); border: 1px solid var(--apple-separator); border-radius: var(--apple-radius-xl); padding: 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: var(--apple-shadow-sm);">
+                        <div style="position: relative; width: 90px; height: 90px; margin-bottom: 10px;">
                             <svg width="90" height="90" viewBox="0 0 90 90" style="transform: rotate(-90deg);">
-                                <circle cx="45" cy="45" r="38" fill="none" stroke="var(--bg-main)" stroke-width="6"/>
-                                <circle cx="45" cy="45" r="38" fill="none" stroke="${healthScore >= 70 ? '#10b981' : healthScore >= 40 ? '#f59e0b' : '#ef4444'}" stroke-width="6"
+                                <circle cx="45" cy="45" r="38" fill="none" stroke="var(--apple-fill)" stroke-width="6"/>
+                                <circle cx="45" cy="45" r="38" fill="none" stroke="${healthScore >= 70 ? 'var(--apple-green)' : healthScore >= 40 ? 'var(--apple-orange)' : 'var(--apple-red)'}" stroke-width="6"
                                     stroke-dasharray="${(healthScore / 100) * 238.76} 238.76" stroke-linecap="round"/>
                             </svg>
                             <div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; flex-direction: column;">
-                                <span style="font-size: 1.4rem; font-weight: 900; color: var(--text-main);">${healthScore}</span>
-                                <span style="font-size: 0.55rem; color: var(--text-muted); font-weight: 600;">/ 100</span>
+                                <span style="font-size: 1.4rem; font-weight: 900; color: var(--apple-label);">${healthScore}</span>
+                                <span style="font-size: 0.55rem; color: var(--apple-label-tertiary); font-weight: 600;">/ 100</span>
                             </div>
                         </div>
-                        <div style="font-size: 0.65rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em;">QA Health</div>
+                        <div style="font-size: 0.65rem; font-weight: 800; color: var(--apple-label-secondary); text-transform: uppercase; letter-spacing: 0.05em;">QA Health</div>
                     </div>
 
-                    <!-- Release Risk -->
-                    <div style="background: ${riskBgColors[riskLabel]}; border: 1px solid ${riskColors[riskLabel]}40; border-radius: 16px; padding: 16px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
-                        <div style="font-size: 0.6rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;">Release Risk</div>
+                    <!-- Release Risk (macOS Status Card) -->
+                    <div style="background: ${riskBgColors[riskLabel]}; border: 1px solid ${riskBgColors[riskLabel]}; border-radius: var(--apple-radius-xl); padding: 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: var(--apple-shadow-sm);">
+                        <div style="font-size: 0.6rem; font-weight: 800; color: var(--apple-label-secondary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;">Release Risk</div>
                         <div style="font-size: 1.5rem; font-weight: 900; color: ${riskColors[riskLabel]}; text-transform: uppercase;">${riskLabel}</div>
-                        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Score: ${riskScore}/100</div>
-                        <div style="margin-top: 8px; width: 100%; height: 6px; background: var(--bg-main); border-radius: 3px; overflow: hidden;">
+                        <div style="font-size: 0.75rem; color: var(--apple-label-secondary); margin-top: 4px;">Score: ${riskScore}/100</div>
+                        <div style="margin-top: 10px; width: 100%; height: 6px; background: var(--apple-fill); border-radius: 3px; overflow: hidden;">
                             <div style="height: 100%; width: ${riskScore}%; background: ${riskColors[riskLabel]}; border-radius: 3px;"></div>
                         </div>
                     </div>
 
-                    <!-- KPI: Total -->
-                    <div style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: 16px; padding: 14px; text-align: center;">
-                        <div style="font-size: 1.8rem; font-weight: 900; color: var(--brand);">${summary.total}</div>
-                        <div style="font-size: 0.6rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-top: 4px;">Total Bugs</div>
+                    <!-- KPI: Total (macOS Glass Card) -->
+                    <div style="background: var(--apple-bg-elevated); border: 1px solid var(--apple-separator); border-radius: var(--apple-radius-xl); padding: 18px; text-align: center; box-shadow: var(--apple-shadow-sm); transition: transform 0.2s, box-shadow 0.2s;">
+                        <div style="font-size: 2rem; font-weight: 900; color: var(--apple-blue);">${summary.total}</div>
+                        <div style="font-size: 0.6rem; color: var(--apple-label-secondary); text-transform: uppercase; font-weight: 700; margin-top: 6px;">Total Bugs</div>
                     </div>
 
-                    <!-- KPI: Resolution Rate -->
-                    <div style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: 16px; padding: 14px; text-align: center;">
-                        <div style="font-size: 1.8rem; font-weight: 900; color: ${summary.bugResolutionRate >= 100 ? '#10b981' : summary.bugResolutionRate >= 50 ? '#f59e0b' : '#ef4444'};">${summary.bugResolutionRate}%</div>
-                        <div style="font-size: 0.6rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-top: 4px;">Resolution Rate</div>
-                        <div style="font-size: 0.65rem; color: var(--text-muted); margin-top: 2px;">${summary.resolved}/${summary.total}</div>
+                    <!-- KPI: Resolution Rate (macOS Glass Card) -->
+                    <div style="background: var(--apple-bg-elevated); border: 1px solid var(--apple-separator); border-radius: var(--apple-radius-xl); padding: 18px; text-align: center; box-shadow: var(--apple-shadow-sm); transition: transform 0.2s, box-shadow 0.2s;">
+                        <div style="font-size: 2rem; font-weight: 900; color: ${summary.bugResolutionRate >= 100 ? 'var(--apple-green)' : summary.bugResolutionRate >= 50 ? 'var(--apple-orange)' : 'var(--apple-red)'};">${summary.bugResolutionRate}%</div>
+                        <div style="font-size: 0.6rem; color: var(--apple-label-secondary); text-transform: uppercase; font-weight: 700; margin-top: 6px;">Resolution Rate</div>
+                        <div style="font-size: 0.65rem; color: var(--apple-label-tertiary); margin-top: 2px;">${summary.resolved}/${summary.total}</div>
                     </div>
 
-                    <!-- KPI: Backlog Trend -->
-                    <div style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: 16px; padding: 14px; text-align: center;">
-                        <div style="font-size: 1.8rem; font-weight: 900; color: ${summary.backlogDelta <= 0 ? '#10b981' : '#ef4444'};">${summary.backlogDelta > 0 ? '+' : ''}${summary.backlogDelta}</div>
-                        <div style="font-size: 0.6rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-top: 4px;">Backlog Delta</div>
-                        <div style="font-size: 0.65rem; color: ${summary.backlogDeltaPercent > 0 ? '#ef4444' : '#10b981'}; margin-top: 2px;">${summary.backlogDelta > 0 ? '+' : ''}${summary.backlogDeltaPercent}%</div>
+                    <!-- KPI: Backlog Trend (macOS Glass Card) -->
+                    <div style="background: var(--apple-bg-elevated); border: 1px solid var(--apple-separator); border-radius: var(--apple-radius-xl); padding: 18px; text-align: center; box-shadow: var(--apple-shadow-sm); transition: transform 0.2s, box-shadow 0.2s;">
+                        <div style="font-size: 2rem; font-weight: 900; color: ${summary.backlogDelta <= 0 ? 'var(--apple-green)' : 'var(--apple-red)'};">${summary.backlogDelta > 0 ? '+' : ''}${summary.backlogDelta}</div>
+                        <div style="font-size: 0.6rem; color: var(--apple-label-secondary); text-transform: uppercase; font-weight: 700; margin-top: 6px;">Backlog Delta</div>
+                        <div style="font-size: 0.65rem; color: ${summary.backlogDeltaPercent > 0 ? 'var(--apple-red)' : 'var(--apple-green)'}; margin-top: 2px;">${summary.backlogDelta > 0 ? '+' : ''}${summary.backlogDeltaPercent}%</div>
                     </div>
 
-                    <!-- KPI: Open -->
-                    <div style="background: var(--apple-red-soft); border: 1px solid var(--apple-red-soft); border-radius: var(--apple-radius-lg); padding: 14px; text-align: center;">
-                        <div style="font-size: 1.8rem; font-weight: 900; color: var(--apple-red);">${summary.open}</div>
-                        <div style="font-size: 0.6rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-top: 4px;">Abiertos</div>
-                        <div style="font-size: 0.65rem; color: var(--text-muted); margin-top: 2px;">sin resolver</div>
+                    <!-- KPI: Open (macOS Alert Card) -->
+                    <div style="background: var(--apple-red-soft); border: 1px solid var(--apple-red-soft); border-radius: var(--apple-radius-xl); padding: 18px; text-align: center; box-shadow: var(--apple-shadow-sm);">
+                        <div style="font-size: 2rem; font-weight: 900; color: var(--apple-red);">${summary.open}</div>
+                        <div style="font-size: 0.6rem; color: var(--apple-label-secondary); text-transform: uppercase; font-weight: 700; margin-top: 6px;">Abiertos</div>
+                        <div style="font-size: 0.65rem; color: var(--apple-label-tertiary); margin-top: 2px;">sin resolver</div>
                     </div>
                 </div>
 
-                <!-- QA TESTING METRICS -->
+                <!-- QA TESTING METRICS (macOS Card) -->
                 ${qaMetrics ? `
-                <div style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: 16px; padding: 20px; margin-bottom: 24px;">
-                    <div style="font-size: 0.75rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 16px;">🧪 Métricas de Testing</div>
+                <div style="background: var(--apple-bg-elevated); border: 1px solid var(--apple-separator); border-radius: var(--apple-radius-xl); padding: 24px; margin-bottom: 24px; box-shadow: var(--apple-shadow-sm);">
+                    <div style="font-size: 0.75rem; font-weight: 800; color: var(--apple-label-secondary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 20px;">🧪 Métricas de Testing</div>
                     
-                    <!-- QA KPIs -->
-                    <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 20px;">
-                        <div style="text-align: center; padding: 12px; background: var(--bg-main); border-radius: 12px;">
-                            <div style="font-size: 1.6rem; font-weight: 900; color: var(--brand);">${qaMetrics.totalTestCases}</div>
-                            <div style="font-size: 0.6rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700;">Test Cases</div>
+                    <!-- QA KPIs (macOS Glass Cards) -->
+                    <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin-bottom: 24px;">
+                        <div style="text-align: center; padding: 16px; background: var(--apple-fill-tertiary); border-radius: var(--apple-radius-md);">
+                            <div style="font-size: 1.8rem; font-weight: 900; color: var(--apple-blue);">${qaMetrics.totalTestCases}</div>
+                            <div style="font-size: 0.6rem; color: var(--apple-label-secondary); text-transform: uppercase; font-weight: 700; margin-top: 4px;">Test Cases</div>
                         </div>
-                        <div style="text-align: center; padding: 12px; background: var(--bg-main); border-radius: 12px;">
-                            <div style="font-size: 1.6rem; font-weight: 900; color: ${qaMetrics.passRate >= 80 ? '#10b981' : qaMetrics.passRate >= 50 ? '#f59e0b' : '#ef4444'};">${qaMetrics.passRate}%</div>
-                            <div style="font-size: 0.6rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700;">Pass Rate</div>
+                        <div style="text-align: center; padding: 16px; background: var(--apple-fill-tertiary); border-radius: var(--apple-radius-md);">
+                            <div style="font-size: 1.8rem; font-weight: 900; color: ${qaMetrics.passRate >= 80 ? 'var(--apple-green)' : qaMetrics.passRate >= 50 ? 'var(--apple-orange)' : 'var(--apple-red)'};">${qaMetrics.passRate}%</div>
+                            <div style="font-size: 0.6rem; color: var(--apple-label-secondary); text-transform: uppercase; font-weight: 700; margin-top: 4px;">Pass Rate</div>
                         </div>
-                        <div style="text-align: center; padding: 12px; background: var(--bg-main); border-radius: 12px;">
-                            <div style="font-size: 1.6rem; font-weight: 900; color: ${qaMetrics.defectDensity > 0.5 ? '#ef4444' : '#10b981'};">${qaMetrics.defectDensity}%</div>
-                            <div style="font-size: 0.6rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700;">Defect Density</div>
+                        <div style="text-align: center; padding: 16px; background: var(--apple-fill-tertiary); border-radius: var(--apple-radius-md);">
+                            <div style="font-size: 1.8rem; font-weight: 900; color: ${qaMetrics.defectDensity > 0.5 ? 'var(--apple-red)' : 'var(--apple-green)'};">${qaMetrics.defectDensity}%</div>
+                            <div style="font-size: 0.6rem; color: var(--apple-label-secondary); text-transform: uppercase; font-weight: 700; margin-top: 4px;">Defect Density</div>
                         </div>
-                        <div style="text-align: center; padding: 12px; background: var(--bg-main); border-radius: 12px;">
-                            <div style="font-size: 1.6rem; font-weight: 900; color: var(--brand);">${qaMetrics.totalExecutions}</div>
-                            <div style="font-size: 0.6rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700;">Ejecuciones</div>
+                        <div style="text-align: center; padding: 16px; background: var(--apple-fill-tertiary); border-radius: var(--apple-radius-md);">
+                            <div style="font-size: 1.8rem; font-weight: 900; color: var(--apple-blue);">${qaMetrics.totalExecutions}</div>
+                            <div style="font-size: 0.6rem; color: var(--apple-label-secondary); text-transform: uppercase; font-weight: 700; margin-top: 4px;">Ejecuciones</div>
                         </div>
-                        <div style="text-align: center; padding: 12px; background: var(--bg-main); border-radius: 12px;">
-                            <div style="font-size: 1.6rem; font-weight: 900; color: var(--apple-orange);">${qaMetrics.executionTime.totalMinutes >= 60 ? Math.floor(qaMetrics.executionTime.totalMinutes / 60) + 'h ' + Math.round(qaMetrics.executionTime.totalMinutes % 60) + 'm' : Math.round(qaMetrics.executionTime.totalMinutes) + 'm'}</div>
-                            <div style="font-size: 0.6rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700;">Tiempo Total</div>
+                        <div style="text-align: center; padding: 16px; background: var(--apple-fill-tertiary); border-radius: var(--apple-radius-md);">
+                            <div style="font-size: 1.8rem; font-weight: 900; color: var(--apple-orange);">${qaMetrics.executionTime.totalMinutes >= 60 ? Math.floor(qaMetrics.executionTime.totalMinutes / 60) + 'h ' + Math.round(qaMetrics.executionTime.totalMinutes % 60) + 'm' : Math.round(qaMetrics.executionTime.totalMinutes) + 'm'}</div>
+                            <div style="font-size: 0.6rem; color: var(--apple-label-secondary); text-transform: uppercase; font-weight: 700; margin-top: 4px;">Tiempo Total</div>
                         </div>
                     </div>
 
-                    <!-- Pass/Fail Bar + Defects by Severity -->
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                    <!-- Pass/Fail Bar + Defects by Severity (macOS Layout) -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
                         <!-- Pass/Fail Distribution -->
-                        <div>
-                            <div style="font-size: 0.7rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 10px;">Distribución de Ejecuciones</div>
+                        <div style="background: var(--apple-fill-tertiary); border-radius: var(--apple-radius-md); padding: 16px;">
+                            <div style="font-size: 0.7rem; font-weight: 700; color: var(--apple-label-secondary); text-transform: uppercase; margin-bottom: 12px;">Distribución de Ejecuciones</div>
                             ${qaMetrics.totalExecutions > 0 ? `
-                            <div style="display: flex; height: 24px; border-radius: 8px; overflow: hidden; margin-bottom: 8px;">
+                            <div style="display: flex; height: 20px; border-radius: var(--apple-radius-full); overflow: hidden; margin-bottom: 12px;">
                                 ${qaMetrics.executionsByStatus.PASS > 0 ? `<div style="width: ${(qaMetrics.executionsByStatus.PASS / qaMetrics.totalExecutions * 100)}%; background: var(--apple-green);" title="PASS: ${qaMetrics.executionsByStatus.PASS}"></div>` : ''}
                                 ${qaMetrics.executionsByStatus.FAIL > 0 ? `<div style="width: ${(qaMetrics.executionsByStatus.FAIL / qaMetrics.totalExecutions * 100)}%; background: var(--apple-red);" title="FAIL: ${qaMetrics.executionsByStatus.FAIL}"></div>` : ''}
                                 ${qaMetrics.executionsByStatus.BLOCK > 0 ? `<div style="width: ${(qaMetrics.executionsByStatus.BLOCK / qaMetrics.totalExecutions * 100)}%; background: var(--apple-red);" title="BLOCK: ${qaMetrics.executionsByStatus.BLOCK}"></div>` : ''}
@@ -214,37 +214,37 @@ export const DashboardEpicReport = {
                                 ${qaMetrics.executionsByStatus.SKIP > 0 ? `<div style="width: ${(qaMetrics.executionsByStatus.SKIP / qaMetrics.totalExecutions * 100)}%; background: var(--apple-label-tertiary);" title="SKIP: ${qaMetrics.executionsByStatus.SKIP}"></div>` : ''}
                             </div>
                             <div style="display: flex; gap: 12px; flex-wrap: wrap;">
-                                <span style="display: flex; align-items: center; gap: 4px; font-size: 0.7rem;"><span style="width: 10px; height: 10px; border-radius: 2px; background: var(--apple-green);"></span> PASS: ${qaMetrics.executionsByStatus.PASS}</span>
-                                <span style="display: flex; align-items: center; gap: 4px; font-size: 0.7rem;"><span style="width: 10px; height: 10px; border-radius: 2px; background: var(--apple-red);"></span> FAIL: ${qaMetrics.executionsByStatus.FAIL}</span>
-                                ${(qaMetrics.executionsByStatus.BLOCK || 0) > 0 ? `<span style="display: flex; align-items: center; gap: 4px; font-size: 0.7rem;"><span style="width: 10px; height: 10px; border-radius: 2px; background: var(--apple-red);"></span> BLOCK: ${qaMetrics.executionsByStatus.BLOCK}</span>` : ''}
-                                ${(qaMetrics.executionsByStatus.BLOCKED || 0) > 0 ? `<span style="display: flex; align-items: center; gap: 4px; font-size: 0.7rem;"><span style="width: 10px; height: 10px; border-radius: 2px; background: var(--apple-orange);"></span> BLOCKED: ${qaMetrics.executionsByStatus.BLOCKED}</span>` : ''}
-                                <span style="display: flex; align-items: center; gap: 4px; font-size: 0.7rem;"><span style="width: 10px; height: 10px; border-radius: 2px; background: var(--apple-label-secondary);"></span> PENDING: ${qaMetrics.executionsByStatus.PENDING}</span>
-                                ${(qaMetrics.executionsByStatus.SKIP || 0) > 0 ? `<span style="display: flex; align-items: center; gap: 4px; font-size: 0.7rem;"><span style="width: 10px; height: 10px; border-radius: 2px; background: var(--apple-label-tertiary);"></span> SKIP: ${qaMetrics.executionsByStatus.SKIP}</span>` : ''}
+                                <span style="display: flex; align-items: center; gap: 4px; font-size: 0.7rem; color: var(--apple-label);"><span style="width: 10px; height: 10px; border-radius: 3px; background: var(--apple-green);"></span> PASS: ${qaMetrics.executionsByStatus.PASS}</span>
+                                <span style="display: flex; align-items: center; gap: 4px; font-size: 0.7rem; color: var(--apple-label);"><span style="width: 10px; height: 10px; border-radius: 3px; background: var(--apple-red);"></span> FAIL: ${qaMetrics.executionsByStatus.FAIL}</span>
+                                ${(qaMetrics.executionsByStatus.BLOCK || 0) > 0 ? `<span style="display: flex; align-items: center; gap: 4px; font-size: 0.7rem; color: var(--apple-label);"><span style="width: 10px; height: 10px; border-radius: 3px; background: var(--apple-red);"></span> BLOCK: ${qaMetrics.executionsByStatus.BLOCK}</span>` : ''}
+                                ${(qaMetrics.executionsByStatus.BLOCKED || 0) > 0 ? `<span style="display: flex; align-items: center; gap: 4px; font-size: 0.7rem; color: var(--apple-label);"><span style="width: 10px; height: 10px; border-radius: 3px; background: var(--apple-orange);"></span> BLOCKED: ${qaMetrics.executionsByStatus.BLOCKED}</span>` : ''}
+                                <span style="display: flex; align-items: center; gap: 4px; font-size: 0.7rem; color: var(--apple-label);"><span style="width: 10px; height: 10px; border-radius: 3px; background: var(--apple-label-secondary);"></span> PENDING: ${qaMetrics.executionsByStatus.PENDING}</span>
+                                ${(qaMetrics.executionsByStatus.SKIP || 0) > 0 ? `<span style="display: flex; align-items: center; gap: 4px; font-size: 0.7rem; color: var(--apple-label);"><span style="width: 10px; height: 10px; border-radius: 3px; background: var(--apple-label-tertiary);"></span> SKIP: ${qaMetrics.executionsByStatus.SKIP}</span>` : ''}
                             </div>
-                            ` : '<div style="color: var(--text-muted); font-size: 0.8rem; text-align: center; padding: 20px;">Sin ejecuciones registradas</div>'}
+                            ` : '<div style="color: var(--apple-label-tertiary); font-size: 0.8rem; text-align: center; padding: 24px;">Sin ejecuciones registradas</div>'}
                         </div>
 
-                        <!-- Defects by Severity -->
-                        <div>
-                            <div style="font-size: 0.7rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 10px;">Defectos por Severidad</div>
+                        <!-- Defects by Severity (macOS List) -->
+                        <div style="background: var(--apple-fill-tertiary); border-radius: var(--apple-radius-md); padding: 16px;">
+                            <div style="font-size: 0.7rem; font-weight: 700; color: var(--apple-label-secondary); text-transform: uppercase; margin-bottom: 12px;">Defectos por Severidad</div>
                             ${qaMetrics.defectsFound > 0 ? `
-                            <div style="display: flex; flex-direction: column; gap: 8px;">
+                            <div style="display: flex; flex-direction: column; gap: 10px;">
                                 ${Object.entries(qaMetrics.defectsBySeverity).map(([severity, count]) => {
                                     const pct = (count / qaMetrics.defectsFound * 100);
                                     const colors = { 'Crítica': 'var(--apple-red)', 'Alta': 'var(--apple-orange)', 'Media': 'var(--apple-blue)', 'Baja': 'var(--apple-green)' };
                                     return `
                                     <div>
-                                        <div style="display: flex; justify-content: space-between; font-size: 0.75rem; margin-bottom: 3px;">
-                                            <span style="color: var(--text-main); font-weight: 600;">${severity}</span>
-                                            <span style="color: var(--text-muted);">${count} (${pct.toFixed(0)}%)</span>
+                                        <div style="display: flex; justify-content: space-between; font-size: 0.75rem; margin-bottom: 4px;">
+                                            <span style="color: var(--apple-label); font-weight: 600;">${severity}</span>
+                                            <span style="color: var(--apple-label-secondary);">${count} (${pct.toFixed(0)}%)</span>
                                         </div>
-                                        <div style="height: 8px; background: var(--bg-main); border-radius: 4px; overflow: hidden;">
-                                            <div style="height: 100%; width: ${pct}%; background: ${colors[severity] || '#6b7280'}; border-radius: 4px;"></div>
+                                        <div style="height: 6px; background: var(--apple-fill); border-radius: var(--apple-radius-full); overflow: hidden;">
+                                            <div style="height: 100%; width: ${pct}%; background: ${colors[severity] || 'var(--apple-label-tertiary)'}; border-radius: var(--apple-radius-full);"></div>
                                         </div>
                                     </div>`;
                                 }).join('')}
                             </div>
-                            ` : `<div style="color: var(--text-muted); font-size: 0.8rem; text-align: center; padding: 20px;">${qaMetrics.totalTestCases > 0 ? 'Sin defectos registrados' : 'Sin datos de testing'}</div>`}
+                            ` : `<div style="color: var(--apple-label-tertiary); font-size: 0.8rem; text-align: center; padding: 24px;">${qaMetrics.totalTestCases > 0 ? 'Sin defectos registrados' : 'Sin datos de testing'}</div>`}
                         </div>
                     </div>
                 </div>

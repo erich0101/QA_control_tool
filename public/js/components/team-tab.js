@@ -91,8 +91,8 @@ export const TeamTab = {
             </div>
             <style>
                 .perm-badge { display: inline-block; width: 20px; height: 20px; line-height: 20px; text-align: center; border-radius: 4px; font-size: 0.7rem; font-weight: 700; }
-                .perm-on { background: rgba(34,197,94,0.15); color: #22c55e; }
-                .perm-off { background: rgba(239,68,68,0.1); color: #ef4444; }
+                .perm-on { background: var(--apple-green-soft); color: var(--apple-green); }
+                .perm-off { background: var(--apple-red-soft); color: var(--apple-red); }
             </style>
         `;
 

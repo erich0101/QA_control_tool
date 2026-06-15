@@ -1,0 +1,477 @@
+/* ══════════════════════════════════════════════════════════════
+   macOS App Style Components
+   Componentes avanzados estilo macOS App
+   ══════════════════════════════════════════════════════════════ */
+
+/* ─── Segment Control (Tabs estilo macOS) ─── */
+.segment-control {
+    display: inline-flex;
+    background: var(--apple-fill);
+    border-radius: var(--apple-radius-sm);
+    padding: 2px;
+    gap: 2px;
+}
+
+.segment-item {
+    padding: 6px 16px;
+    border-radius: 4px;
+    font-size: var(--apple-text-footnote);
+    font-weight: var(--apple-weight-medium);
+    color: var(--apple-label-secondary);
+    cursor: pointer;
+    transition: all var(--apple-transition);
+    border: none;
+    background: transparent;
+    font-family: var(--apple-font-family);
+}
+
+.segment-item:hover {
+    color: var(--apple-label);
+}
+
+.segment-item.active {
+    background: var(--apple-bg-elevated);
+    color: var(--apple-label);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+/* ─── List Grouped (Listas agrupadas macOS) ─── */
+.list-grouped {
+    background: var(--apple-bg-elevated);
+    border-radius: var(--apple-radius-lg);
+    overflow: hidden;
+    border: 1px solid var(--apple-separator);
+}
+
+.list-grouped-header {
+    padding: 8px 16px;
+    font-size: var(--apple-text-caption);
+    font-weight: var(--apple-weight-semibold);
+    color: var(--apple-label-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+
+.list-item {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--apple-separator);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    transition: background var(--apple-transition);
+    cursor: pointer;
+}
+
+.list-item:last-child {
+    border-bottom: none;
+}
+
+.list-item:hover {
+    background: var(--apple-fill-tertiary);
+}
+
+.list-item.active {
+    background: var(--apple-blue-soft);
+}
+
+.list-item-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: var(--apple-radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+}
+
+.list-item-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.list-item-title {
+    font-size: var(--apple-text-body);
+    font-weight: var(--apple-weight-regular);
+    color: var(--apple-label);
+}
+
+.list-item-subtitle {
+    font-size: var(--apple-text-caption);
+    color: var(--apple-label-secondary);
+    margin-top: 2px;
+}
+
+.list-item-accessory {
+    color: var(--apple-label-tertiary);
+    font-size: 12px;
+}
+
+/* ─── Search Spotlight ─── */
+.search-spotlight {
+    position: relative;
+    width: 100%;
+    max-width: 400px;
+}
+
+.search-spotlight input {
+    width: 100%;
+    padding: 8px 12px 8px 32px;
+    background: var(--apple-fill);
+    border: 1px solid var(--apple-separator);
+    border-radius: var(--apple-radius-md);
+    font-size: var(--apple-text-body);
+    color: var(--apple-label);
+    font-family: var(--apple-font-family);
+    transition: all var(--apple-transition);
+}
+
+.search-spotlight input:focus {
+    outline: none;
+    border-color: var(--apple-blue);
+    box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.3);
+    background: var(--apple-bg-elevated);
+}
+
+.search-spotlight input::placeholder {
+    color: var(--apple-label-tertiary);
+}
+
+.search-spotlight-icon {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--apple-label-tertiary);
+    font-size: 14px;
+    pointer-events: none;
+}
+
+/* ─── Window Controls (Traffic Lights) ─── */
+.window-controls {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.window-btn {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: none;
+    cursor: pointer;
+    transition: opacity var(--apple-transition);
+}
+
+.window-btn:hover {
+    opacity: 0.8;
+}
+
+.window-btn.close { background: #ff5f57; }
+.window-btn.minimize { background: #febc2e; }
+.window-btn.maximize { background: #28c840; }
+
+/* ─── Tooltip macOS ─── */
+.tooltip-macos {
+    position: absolute;
+    background: var(--apple-material-thick);
+    backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid var(--apple-separator);
+    border-radius: var(--apple-radius-sm);
+    padding: 6px 10px;
+    font-size: var(--apple-text-caption);
+    color: var(--apple-label);
+    box-shadow: var(--apple-shadow-md);
+    pointer-events: none;
+    z-index: var(--apple-z-dropdown);
+    white-space: nowrap;
+}
+
+/* ─── Context Menu macOS ─── */
+.context-menu {
+    position: fixed;
+    background: var(--apple-material-thick);
+    backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid var(--apple-separator);
+    border-radius: var(--apple-radius-md);
+    padding: 4px;
+    box-shadow: var(--apple-shadow-lg);
+    z-index: var(--apple-z-dropdown);
+    min-width: 200px;
+}
+
+.context-menu-item {
+    padding: 8px 12px;
+    border-radius: var(--apple-radius-sm);
+    font-size: var(--apple-text-footnote);
+    color: var(--apple-label);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: background var(--apple-transition);
+}
+
+.context-menu-item:hover {
+    background: var(--apple-blue);
+    color: white;
+}
+
+.context-menu-separator {
+    height: 1px;
+    background: var(--apple-separator);
+    margin: 4px 0;
+}
+
+.context-menu-item.danger {
+    color: var(--apple-red);
+}
+
+.context-menu-item.danger:hover {
+    background: var(--apple-red);
+    color: white;
+}
+
+/* ─── Toolbar macOS ─── */
+.toolbar-macos {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 16px;
+    background: var(--apple-bg-elevated);
+    border-bottom: 1px solid var(--apple-separator);
+    gap: 12px;
+}
+
+.toolbar-macos-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.toolbar-macos-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* ─── Sidebar macOS ─── */
+.sidebar-macos {
+    width: 220px;
+    background: var(--apple-bg);
+    border-right: 1px solid var(--apple-separator);
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.sidebar-section {
+    background: var(--apple-fill-tertiary);
+    border-radius: var(--apple-radius-md);
+    padding: 4px;
+}
+
+.sidebar-section-title {
+    padding: 8px 12px 4px;
+    font-size: var(--apple-text-caption);
+    font-weight: var(--apple-weight-semibold);
+    color: var(--apple-label-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+
+.sidebar-item {
+    padding: 6px 12px;
+    border-radius: var(--apple-radius-sm);
+    font-size: var(--apple-text-footnote);
+    color: var(--apple-label);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: background var(--apple-transition);
+}
+
+.sidebar-item:hover {
+    background: var(--apple-fill);
+}
+
+.sidebar-item.active {
+    background: var(--apple-blue);
+    color: white;
+}
+
+/* ─── Card macOS ─── */
+.card-macos {
+    background: var(--apple-bg-elevated);
+    border: 1px solid var(--apple-separator);
+    border-radius: var(--apple-radius-lg);
+    overflow: hidden;
+}
+
+.card-macos-header {
+    padding: 16px;
+    border-bottom: 1px solid var(--apple-separator);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.card-macos-title {
+    font-size: var(--apple-text-body);
+    font-weight: var(--apple-weight-semibold);
+    color: var(--apple-label);
+}
+
+.card-macos-body {
+    padding: 16px;
+}
+
+.card-macos-footer {
+    padding: 12px 16px;
+    border-top: 1px solid var(--apple-separator);
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+/* ─── Badge macOS ─── */
+.badge-macos {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: var(--apple-radius-full);
+    font-size: var(--apple-text-caption);
+    font-weight: var(--apple-weight-medium);
+}
+
+.badge-macos.blue {
+    background: var(--apple-blue-soft);
+    color: var(--apple-blue);
+}
+
+.badge-macos.green {
+    background: var(--apple-green-soft);
+    color: var(--apple-green);
+}
+
+.badge-macos.red {
+    background: var(--apple-red-soft);
+    color: var(--apple-red);
+}
+
+.badge-macos.orange {
+    background: var(--apple-orange-soft);
+    color: var(--apple-orange);
+}
+
+.badge-macos.purple {
+    background: var(--apple-purple-soft);
+    color: var(--apple-purple);
+}
+
+.badge-macos.gray {
+    background: var(--apple-fill);
+    color: var(--apple-label-secondary);
+}
+
+/* ─── Progress Bar macOS ─── */
+.progress-macos {
+    height: 4px;
+    background: var(--apple-fill);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.progress-macos-bar {
+    height: 100%;
+    background: var(--apple-blue);
+    border-radius: 2px;
+    transition: width 0.3s ease;
+}
+
+.progress-macos-bar.green {
+    background: var(--apple-green);
+}
+
+.progress-macos-bar.red {
+    background: var(--apple-red);
+}
+
+.progress-macos-bar.orange {
+    background: var(--apple-orange);
+}
+
+/* ─── Toggle macOS ─── */
+.toggle-macos {
+    width: 42px;
+    height: 24px;
+    background: var(--apple-fill);
+    border-radius: 12px;
+    position: relative;
+    cursor: pointer;
+    transition: background var(--apple-transition);
+    border: none;
+    padding: 0;
+}
+
+.toggle-macos.active {
+    background: var(--apple-green);
+}
+
+.toggle-macos::after {
+    content: '';
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    background: white;
+    border-radius: 50%;
+    top: 2px;
+    left: 2px;
+    transition: transform var(--apple-transition);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.toggle-macos.active::after {
+    transform: translateX(18px);
+}
+
+/* ─── Alert macOS ─── */
+.alert-macos {
+    background: var(--apple-bg-elevated);
+    border: 1px solid var(--apple-separator);
+    border-radius: var(--apple-radius-xl);
+    padding: 24px;
+    width: 400px;
+    box-shadow: var(--apple-shadow-xl);
+    backdrop-filter: blur(20px) saturate(180%);
+}
+
+.alert-macos-icon {
+    font-size: 48px;
+    text-align: center;
+    margin-bottom: 16px;
+}
+
+.alert-macos-title {
+    font-size: var(--apple-text-title3);
+    font-weight: var(--apple-weight-semibold);
+    color: var(--apple-label);
+    text-align: center;
+    margin-bottom: 8px;
+}
+
+.alert-macos-message {
+    font-size: var(--apple-text-body);
+    color: var(--apple-label-secondary);
+    text-align: center;
+    margin-bottom: 24px;
+    line-height: 1.5;
+}
+
+.alert-macos-actions {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+}
