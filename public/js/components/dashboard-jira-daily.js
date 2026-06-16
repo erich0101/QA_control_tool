@@ -248,53 +248,51 @@ export const DashboardJiraDaily = {
 
     showTicketsModal(title, issues, subtitle = '') {
         const jiraBaseUrl = this.lastStats.jiraUrl ? this.lastStats.jiraUrl.replace(/\/$/, '') + '/browse/' : '';
+        const epics = [...new Set(issues.map(i => i.epic || 'Sin Épica'))].sort();
+        const self = this;
 
         const modalHtml = `
             <div id="jira-tickets-modal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); backdrop-filter: blur(20px) saturate(180%); z-index: 9999; display: flex; align-items: center; justify-content: center; animation: modalFade 0.3s cubic-bezier(0.16, 1, 0.3, 1);">
-                <div style="background: var(--apple-bg-elevated); width: 1000px; max-height: 85vh; border-radius: var(--apple-radius-xl); border: 1px solid var(--apple-separator); box-shadow: var(--apple-shadow-xl); display: flex; flex-direction: column; overflow: hidden;">
-                    <div style="padding: 24px 32px; border-bottom: 1px solid var(--apple-separator); display: flex; justify-content: space-between; align-items: center; background: var(--apple-fill-tertiary);">
-                        <div style="display: flex; align-items: center; gap: 20px;">
-                            <div style="background: var(--apple-blue-soft); width: 48px; height: 48px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem;">📊</div>
+                <div style="background: var(--apple-bg-elevated); width: 1100px; max-height: 85vh; border-radius: var(--apple-radius-xl); border: 1px solid var(--apple-separator); box-shadow: var(--apple-shadow-xl); display: flex; flex-direction: column; overflow: hidden;">
+                    <div style="padding: 20px 28px; border-bottom: 1px solid var(--apple-separator); display: flex; justify-content: space-between; align-items: center; background: var(--apple-fill-tertiary);">
+                        <div style="display: flex; align-items: center; gap: 16px;">
+                            <div style="background: var(--apple-blue-soft); width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.3rem;">📊</div>
                             <div>
-                                <h3 style="margin: 0; font-size: 1.2rem; font-weight: 900; color: var(--apple-label);">${title}</h3>
-                                <p style="margin: 4px 0 0 0; font-size: 0.8rem; color: var(--apple-label-secondary); font-weight: 600;">${subtitle}</p>
+                                <h3 style="margin: 0; font-size: 1.1rem; font-weight: 700; color: var(--apple-label);">${title}</h3>
+                                <p style="margin: 2px 0 0 0; font-size: 0.75rem; color: var(--apple-label-secondary);">${subtitle}</p>
                             </div>
                         </div>
-                        <button id="close-modal" style="background: var(--apple-fill); border: none; color: var(--apple-label); width: 36px; height: 36px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1.2rem;">&times;</button>
+                        <button id="close-modal" style="background: var(--apple-fill); border: none; color: var(--apple-label); width: 32px; height: 32px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1.1rem;">&times;</button>
                     </div>
-                    <div style="flex: 1; overflow-y: auto; padding: 32px;">
-                        <table style="width: 100%; border-collapse: separate; border-spacing: 0 12px;">
+                    
+                    <div style="padding: 16px 28px; border-bottom: 1px solid var(--apple-separator); display: flex; align-items: center; gap: 12px; background: var(--apple-bg-elevated);">
+                        <label style="font-size: 0.72rem; font-weight: 600; color: var(--apple-label-secondary);">Filtrar por Épica:</label>
+                        <select id="epic-filter" style="padding: 6px 12px; border-radius: var(--apple-radius-md); border: 1px solid var(--apple-separator); background: var(--apple-bg-tertiary); color: var(--apple-label); font-size: 0.78rem; min-width: 200px;">
+                            <option value="">Todas las Épicas (${issues.length})</option>
+                            ${epics.map(epic => {
+                                const count = issues.filter(i => (i.epic || 'Sin Épica') === epic).length;
+                                return `<option value="${UI.escapeHTML(epic)}">${UI.escapeHTML(epic)} (${count})</option>`;
+                            }).join('')}
+                        </select>
+                        <div style="flex: 1;"></div>
+                        <span id="epic-count" style="font-size: 0.72rem; color: var(--apple-label-tertiary);">${issues.length} tickets</span>
+                        <button id="btn-export-epic" style="padding: 6px 14px; border-radius: var(--apple-radius-md); border: 1px solid var(--apple-separator); background: var(--apple-bg-tertiary); color: var(--apple-label); font-size: 0.72rem; font-weight: 600; cursor: pointer; transition: all 0.15s;">📊 Exportar Reporte</button>
+                    </div>
+                    
+                    <div style="flex: 1; overflow-y: auto; padding: 20px 28px;">
+                        <table style="width: 100%; border-collapse: collapse;">
                             <thead>
-                                <tr style="text-align: left; color: var(--apple-label-secondary); font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;">
-                                    <th style="padding: 0 16px;">Ticket</th>
-                                    <th style="padding: 0 16px;">Estado</th>
-                                    <th style="padding: 0 16px;">TÍTULO</th>
-                                    <th style="padding: 0 16px;">Responsable</th>
-                                    <th style="padding: 0 16px;">Aging</th>
+                                <tr style="text-align: left; border-bottom: 1px solid var(--apple-separator);">
+                                    <th style="padding: 10px 12px; font-size: 0.68rem; font-weight: 700; color: var(--apple-label-tertiary); text-transform: uppercase; letter-spacing: 0.04em;">Ticket</th>
+                                    <th style="padding: 10px 12px; font-size: 0.68rem; font-weight: 700; color: var(--apple-label-tertiary); text-transform: uppercase; letter-spacing: 0.04em;">Estado</th>
+                                    <th style="padding: 10px 12px; font-size: 0.68rem; font-weight: 700; color: var(--apple-label-tertiary); text-transform: uppercase; letter-spacing: 0.04em;">Título</th>
+                                    <th style="padding: 10px 12px; font-size: 0.68rem; font-weight: 700; color: var(--apple-label-tertiary); text-transform: uppercase; letter-spacing: 0.04em;">Épica</th>
+                                    <th style="padding: 10px 12px; font-size: 0.68rem; font-weight: 700; color: var(--apple-label-tertiary); text-transform: uppercase; letter-spacing: 0.04em;">Responsable</th>
+                                    <th style="padding: 10px 12px; font-size: 0.68rem; font-weight: 700; color: var(--apple-label-tertiary); text-transform: uppercase; letter-spacing: 0.04em; text-align: right;">Aging</th>
                                 </tr>
                             </thead>
-                            <tbody>
-                                ${issues.map(issue => {
-                                    const ticketUrl = jiraBaseUrl + issue.key;
-                                    return `
-                                        <tr style="background: var(--apple-fill-tertiary); border-radius: 12px; transition: background 0.2s;">
-                                            <td style="padding: 20px 16px; font-weight: 900; color: var(--apple-blue); font-size: 0.85rem; border-radius: 12px 0 0 12px;">
-                                                <a href="${ticketUrl}" target="_blank" style="color: var(--apple-blue); text-decoration: none; border-bottom: 1px solid transparent;" onmouseover="this.style.borderBottom='1px solid var(--apple-blue)'" onmouseout="this.style.borderBottom='1px solid transparent'">${issue.key}</a>
-                                            </td>
-                                            <td style="padding: 20px 16px;">
-                                                <span style="background: ${this.getStatusTag(issue).bg}; color: ${this.getStatusTag(issue).color}; padding: 6px 10px; border-radius: 6px; font-size: 0.65rem; font-weight: 900;">${this.getStatusTag(issue).text}</span>
-                                            </td>
-                                            <td style="padding: 20px 16px; font-size: 0.8rem; font-weight: 600; color: var(--apple-label); max-width: 400px; line-height: 1.4;">${UI.escapeHTML(issue.summary)}</td>
-                                            <td style="padding: 20px 16px;">
-                                                <div style="display: flex; align-items: center; gap: 8px;">
-                                                    ${issue.avatar ? `<img src="${issue.avatar}" style="width: 20px; height: 20px; border-radius: 50%;">` : ''}
-                                                    <span style="font-size: 0.7rem; color: var(--apple-label-secondary);">${issue.assignee}</span>
-                                                </div>
-                                            </td>
-                                            <td style="padding: 20px 16px; font-size: 0.8rem; font-weight: 800; color: ${this.formatAge(issue.created).color}; border-radius: 0 12px 12px 0;">${this.formatAge(issue.created).text}</td>
-                                        </tr>
-                                    `;
-                                }).join('')}
+                            <tbody id="tickets-tbody">
+                                ${this.renderTicketRows(issues, jiraBaseUrl)}
                             </tbody>
                         </table>
                     </div>
@@ -302,15 +300,176 @@ export const DashboardJiraDaily = {
             </div>
             <style>
                 @keyframes modalFade { from { opacity: 0; transform: translateY(20px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
-                #jira-tickets-modal tr:hover { background: var(--apple-fill) !important; }
+                #jira-tickets-modal tr.ticket-row:hover { background: var(--apple-fill) !important; }
             </style>
         `;
 
         document.body.insertAdjacentHTML('beforeend', modalHtml);
+        
         document.getElementById('close-modal').onclick = () => document.getElementById('jira-tickets-modal').remove();
         document.getElementById('jira-tickets-modal').onclick = (e) => {
             if (e.target.id === 'jira-tickets-modal') document.getElementById('jira-tickets-modal').remove();
         };
+        
+        document.getElementById('epic-filter').addEventListener('change', function() {
+            const selectedEpic = this.value;
+            const filtered = selectedEpic 
+                ? issues.filter(i => (i.epic || 'Sin Épica') === selectedEpic)
+                : issues;
+            document.getElementById('tickets-tbody').innerHTML = self.renderTicketRows(filtered, jiraBaseUrl);
+            document.getElementById('epic-count').textContent = filtered.length + ' tickets';
+        });
+        
+        document.getElementById('btn-export-epic').addEventListener('click', function() {
+            const selectedEpic = document.getElementById('epic-filter').value;
+            const filtered = selectedEpic 
+                ? issues.filter(i => (i.epic || 'Sin Épica') === selectedEpic)
+                : issues;
+            self.exportEpicReport(filtered, selectedEpic || 'Todas las Épicas', title);
+        });
+    },
+    
+    renderTicketRows(issues, jiraBaseUrl) {
+        return issues.map(issue => {
+            const ticketUrl = jiraBaseUrl + issue.key;
+            const age = this.formatAge(issue.created);
+            return `
+                <tr class="ticket-row" style="border-bottom: 1px solid var(--apple-separator); transition: background 0.15s;">
+                    <td style="padding: 12px; font-weight: 700; color: var(--apple-blue); font-size: 0.82rem;">
+                        <a href="${ticketUrl}" target="_blank" style="color: var(--apple-blue); text-decoration: none;">${issue.key}</a>
+                    </td>
+                    <td style="padding: 12px;">
+                        <span style="display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 20px; font-size: 0.65rem; font-weight: 600; background: ${this.getStatusTag(issue).bg}; color: ${this.getStatusTag(issue).color};">${this.getStatusTag(issue).text}</span>
+                    </td>
+                    <td style="padding: 12px; font-size: 0.82rem; font-weight: 500; color: var(--apple-label); max-width: 350px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${UI.escapeHTML(issue.summary)}</td>
+                    <td style="padding: 12px;">
+                        <span style="display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 20px; font-size: 0.65rem; font-weight: 600; background: var(--apple-indigo-soft); color: var(--apple-indigo); max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${UI.escapeHTML(issue.epic || 'Sin Épica')}</span>
+                    </td>
+                    <td style="padding: 12px;">
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            ${issue.avatar ? `<img src="${issue.avatar}" style="width: 18px; height: 18px; border-radius: 50%;">` : ''}
+                            <span style="font-size: 0.72rem; color: var(--apple-label-secondary);">${issue.assignee}</span>
+                        </div>
+                    </td>
+                    <td style="padding: 12px; font-size: 0.78rem; font-weight: 700; color: ${age.color}; text-align: right;">${age.text}</td>
+                </tr>
+            `;
+        }).join('');
+    },
+    
+    exportEpicReport(issues, epicName, modalTitle) {
+        const jiraBaseUrl = this.lastStats.jiraUrl ? this.lastStats.jiraUrl.replace(/\/$/, '') + '/browse/' : '';
+        const now = new Date();
+        const reportDate = now.toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' });
+        
+        const statusCounts = {};
+        issues.forEach(i => {
+            const status = i.status || 'Desconocido';
+            statusCounts[status] = (statusCounts[status] || 0) + 1;
+        });
+        
+        const priorityCounts = {};
+        issues.forEach(i => {
+            const priority = i.priority || 'Media';
+            priorityCounts[priority] = (priorityCounts[priority] || 0) + 1;
+        });
+
+        const reportHtml = `
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Reporte ${epicName} - ${reportDate}</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif; background: #f2f2f7; color: #1d1d1f; padding: 40px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .header { background: white; border-radius: 12px; padding: 28px; margin-bottom: 24px; border: 1px solid rgba(0,0,0,0.08); }
+        .header h1 { font-size: 1.4rem; font-weight: 700; margin-bottom: 4px; }
+        .header p { color: #6e6e73; font-size: 0.85rem; }
+        .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 24px; }
+        .stat-card { background: white; border-radius: 12px; padding: 20px; border: 1px solid rgba(0,0,0,0.08); }
+        .stat-label { font-size: 0.68rem; font-weight: 700; color: #6e6e73; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px; }
+        .stat-value { font-size: 1.8rem; font-weight: 700; }
+        .table-container { background: white; border-radius: 12px; border: 1px solid rgba(0,0,0,0.08); overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; }
+        th { background: #f5f5f7; padding: 12px 16px; text-align: left; font-size: 0.68rem; font-weight: 700; color: #6e6e73; text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid rgba(0,0,0,0.08); }
+        td { padding: 14px 16px; border-bottom: 1px solid rgba(0,0,0,0.06); font-size: 0.82rem; }
+        tr:last-child td { border-bottom: none; }
+        .status-badge { display: inline-flex; padding: 3px 10px; border-radius: 20px; font-size: 0.65rem; font-weight: 600; }
+        .footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid rgba(0,0,0,0.08); display: flex; justify-content: space-between; font-size: 0.7rem; color: #6e6e73; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 Reporte de Bugs por Épica</h1>
+            <p>Épica: <strong>${epicName}</strong> | ${reportDate} | ${issues.length} tickets</p>
+        </div>
+        
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-label">Total Bugs</div>
+                <div class="stat-value">${issues.length}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Abiertos</div>
+                <div class="stat-value" style="color: #FF3B30;">${issues.filter(i => i.statusCategory !== 'done').length}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Cerrados</div>
+                <div class="stat-value" style="color: #34C759;">${issues.filter(i => i.statusCategory === 'done').length}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Críticos (>7 días)</div>
+                <div class="stat-value" style="color: #FF9500;">${issues.filter(i => (now - new Date(i.created)) / (1000*60*60*24) > 7 && i.statusCategory !== 'done').length}</div>
+            </div>
+        </div>
+        
+        <div class="table-container">
+            <table style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr>
+                        <th style="width: 100px;">Ticket</th>
+                        <th style="width: 120px;">Estado</th>
+                        <th>Título</th>
+                        <th style="width: 140px;">Responsable</th>
+                        <th style="width: 80px;">Prioridad</th>
+                        <th style="width: 90px;">Creación</th>
+                        <th style="width: 60px; text-align: right;">Aging</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${issues.map(i => {
+                        const age = this.formatAge(i.created);
+                        const ageDays = Math.floor((now - new Date(i.created)) / (1000*60*60*24));
+                        return `
+                        <tr>
+                            <td style="padding: 12px 10px;"><a href="${jiraBaseUrl}${i.key}" target="_blank" style="color: #007AFF; text-decoration: none; font-weight: 600; font-size: 0.82rem;">${i.key}</a></td>
+                            <td style="padding: 12px 10px;"><span class="status-badge" style="background: ${this.getStatusTag(i).bg}; color: ${this.getStatusTag(i).color}; white-space: nowrap;">${this.getStatusTag(i).text}</span></td>
+                            <td style="padding: 12px 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.85rem;" title="${UI.escapeHTML(i.summary)}">${UI.escapeHTML(i.summary)}</td>
+                            <td style="padding: 12px 10px; font-size: 0.82rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${i.assignee}</td>
+                            <td style="padding: 12px 10px;"><span style="font-weight: 600; color: ${i.priority === 'Crítica' || i.priority === 'Highest' ? '#FF3B30' : i.priority === 'Alta' || i.priority === 'High' ? '#FF9500' : '#1d1d1f'}; white-space: nowrap; font-size: 0.82rem;">${i.priority}</span></td>
+                            <td style="padding: 12px 10px; font-size: 0.82rem; white-space: nowrap;">${new Date(i.created).toLocaleDateString('es-AR')}</td>
+                            <td style="padding: 12px 10px; font-weight: 700; color: ${age.color}; text-align: right; white-space: nowrap;">${ageDays}d</td>
+                        </tr>
+                        `;
+                    }).join('')}
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="footer">
+            <span>Generado por Manual QA Tool — JIRA Edition</span>
+            <span>${now.toLocaleString('es-AR')} · Documento Confidencial</span>
+        </div>
+    </div>
+</body>
+</html>`;
+
+        const win = window.open('', '_blank');
+        win.document.write(reportHtml);
+        win.document.close();
     },
 
     renderTopCard(label, value, icon, bgColor, type) {

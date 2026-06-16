@@ -1673,7 +1673,8 @@ app.get('/api/test-suites', requireAuth, async (req, res) => {
                     attachments, defects, key_id: tc.key_id, priority: tc.priority,
                     assumptions: tc.assumptions, test_data: tc.test_data, acceptance_criteria: tc.acceptance_criteria,
                     is_smoke: !!tc.is_smoke, is_regression: !!tc.is_regression, is_integration: !!tc.is_integration,
-                    is_exploratory: !!tc.is_exploratory
+                    is_exploratory: !!tc.is_exploratory,
+                    last_execution_at: exec ? exec.executed_at : null
                 };
             }).filter(tc => tc !== null);
 
@@ -2739,6 +2740,7 @@ app.get('/api/stats/jira-daily', requireAuth, async (req, res) => {
                 created: f.created,
                 updated: f.updated,
                 resolutiondate: f.resolutiondate,
+                epic: f.parent?.fields?.summary || 'Sin Épica',
                 devUser: devUser || (f.status.name.toLowerCase().includes('curso') ? { name: f.assignee?.displayName, avatar: f.assignee?.avatarUrls?.['24x24'] } : null),
                 doneUser: doneUser || (f.status.statusCategory?.key === 'done' ? { name: f.assignee?.displayName, avatar: f.assignee?.avatarUrls?.['24x24'] } : null)
             };

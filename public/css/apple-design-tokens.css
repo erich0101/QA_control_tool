@@ -12,9 +12,9 @@
     --apple-bg-quaternary:     #48484a;
 
     /* ─── Labels (Text) ─── */
-    --apple-label:             #ffffff;
-    --apple-label-secondary:   #98989d;
-    --apple-label-tertiary:    #8E9399;
+    --apple-label:             #f5f5f7;
+    --apple-label-secondary:   #a1a1a6;
+    --apple-label-tertiary:    #86868b;
     --apple-label-quaternary:  #636366;
 
     /* ─── System Colors ─── */
@@ -134,9 +134,9 @@
     --apple-bg-quaternary:     #d1d1d6;
 
     /* Labels */
-    --apple-label:             #000000;
-    --apple-label-secondary:   #3c3c43;
-    --apple-label-tertiary:    #636366;
+    --apple-label:             #1d1d1f;
+    --apple-label-secondary:   #424245;
+    --apple-label-tertiary:    #6e6e73;
     --apple-label-quaternary:  #aeaeb2;
 
     /* System Colors */

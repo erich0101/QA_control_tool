@@ -14,7 +14,6 @@ export const ExecutionTab = {
     projectSuites: [],
     timerInterval: null,
     selectedCUId: localStorage.getItem('execSelectedCU') ? parseInt(localStorage.getItem('execSelectedCU')) : null,
-    searchQuery: '',
     filterStatus: 'all',
     _isListening: false,
     _lastScroll: 0,
@@ -71,31 +70,28 @@ export const ExecutionTab = {
 
     renderToolbar(activeSuites, totalActiveTests) {
         return `
-            <div class="exec-toolbar">
-                <div class="exec-toolbar-left">
-                    <span class="exec-toolbar-title">EJECUCIÓN</span>
-                    <span class="tab-badge" title="Ciclos Activos">${activeSuites.length}</span>
-                    <span class="tab-badge tab-badge-brand" title="Total de Pruebas">${totalActiveTests}</span>
+            <div class="exec-toolbar" style="padding: 12px 24px; background: var(--apple-bg-elevated); border-bottom: 1px solid var(--apple-separator); display: flex; align-items: center; gap: 16px;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 0.68rem; font-weight: 700; color: var(--apple-label-tertiary); letter-spacing: 0.05em; text-transform: uppercase;">EJECUCIÓN</span>
+                    <span style="display: inline-flex; align-items: center; gap: 3px; padding: 3px 8px; border-radius: 20px; background: var(--apple-fill); font-size: 0.62rem; font-weight: 600; color: var(--apple-label-secondary);">${activeSuites.length} <span style="color: var(--apple-label-tertiary);">C</span></span>
+                    <span style="display: inline-flex; align-items: center; gap: 3px; padding: 3px 8px; border-radius: 20px; background: var(--apple-blue); font-size: 0.62rem; font-weight: 600; color: white;">${totalActiveTests} <span style="opacity: 0.8;">T</span></span>
                 </div>
-                <div class="exec-toolbar-center">
-                    <select id="cu-exec-filter" class="exec-filter-select">
-                        <option value="">— Seleccionar Caso de Uso —</option>
-                        ${Store.state.useCases.map(cu => `<option value="${cu.id}" ${cu.id === this.selectedCUId ? 'selected' : ''}>${UI.escapeHTML(cu.title)}</option>`).join('')}
-                    </select>
-                    <button id="btn-exec-cu" class="btn btn-primary btn-sm" title="Ejecutar todas las suites de este Caso de Uso">▶ Ejecutar CU</button>
-                </div>
-                <div class="exec-toolbar-right">
-                    <input type="text" id="exec-search" placeholder="🔍 Buscar..." value="${UI.escapeHTML(this.searchQuery)}" class="exec-search-input" />
-                    <select id="exec-filter-status" class="exec-filter-select">
-                        <option value="all" ${this.filterStatus === 'all' ? 'selected' : ''}>Todos</option>
-                        <option value="PENDING" ${this.filterStatus === 'PENDING' ? 'selected' : ''}>Pendientes</option>
-                        <option value="PASS" ${this.filterStatus === 'PASS' ? 'selected' : ''}>Pasados</option>
-                        <option value="FAIL" ${this.filterStatus === 'FAIL' ? 'selected' : ''}>Fallidos</option>
-                        <option value="BLOCK" ${this.filterStatus === 'BLOCK' ? 'selected' : ''}>Bloqueados</option>
-                        <option value="SKIP" ${this.filterStatus === 'SKIP' ? 'selected' : ''}>Saltados</option>
-                    </select>
-                    <button id="btn-refresh-exec" class="btn btn-ghost btn-sm" title="Sincronizar">Sincronizar</button>
-                </div>
+                <div style="width: 1px; height: 20px; background: var(--apple-separator);"></div>
+                <select id="cu-exec-filter" style="padding: 6px 12px; border-radius: var(--apple-radius-md); border: 1px solid var(--apple-separator); background: var(--apple-bg-tertiary); color: var(--apple-label); font-size: 0.78rem; outline: none; min-width: 180px;">
+                    <option value="">— Seleccionar Caso de Uso —</option>
+                    ${Store.state.useCases.map(cu => `<option value="${cu.id}" ${cu.id === this.selectedCUId ? 'selected' : ''}>${UI.escapeHTML(cu.title)}</option>`).join('')}
+                </select>
+                <button id="btn-exec-cu" class="btn btn-success btn-sm" style="padding: 6px 14px; font-size: 0.72rem; font-weight: 600; border-radius: var(--apple-radius-sm);">▶ Ejecutar CU</button>
+                <div style="flex: 1;"></div>
+                <select id="exec-filter-status" style="padding: 6px 12px; border-radius: var(--apple-radius-md); border: 1px solid var(--apple-separator); background: var(--apple-bg-tertiary); color: var(--apple-label); font-size: 0.78rem; outline: none;">
+                    <option value="all" ${this.filterStatus === 'all' ? 'selected' : ''}>Todos</option>
+                    <option value="PENDING" ${this.filterStatus === 'PENDING' ? 'selected' : ''}>Pendientes</option>
+                    <option value="PASS" ${this.filterStatus === 'PASS' ? 'selected' : ''}>Pasados</option>
+                    <option value="FAIL" ${this.filterStatus === 'FAIL' ? 'selected' : ''}>Fallidos</option>
+                    <option value="BLOCK" ${this.filterStatus === 'BLOCK' ? 'selected' : ''}>Bloqueados</option>
+                    <option value="SKIP" ${this.filterStatus === 'SKIP' ? 'selected' : ''}>Saltados</option>
+                </select>
+                <button id="btn-refresh-exec" style="padding: 6px 12px; border-radius: var(--apple-radius-md); border: 1px solid var(--apple-separator); background: transparent; color: var(--apple-label-secondary); font-size: 0.75rem; font-weight: 500; cursor: pointer;">🔄 Sincronizar</button>
             </div>
         `;
     },
@@ -130,13 +126,6 @@ export const ExecutionTab = {
             if (us) {
                 filteredTcs = filteredTcs.filter(tc => tc.us_id === us.id);
             }
-        }
-        if (this.searchQuery) {
-            const q = this.searchQuery.toLowerCase();
-            filteredTcs = filteredTcs.filter(tc =>
-                (tc.title || '').toLowerCase().includes(q) ||
-                (tc.key_id || '').toLowerCase().includes(q)
-            );
         }
         if (this.filterStatus !== 'all') {
             filteredTcs = filteredTcs.filter(tc => tc.status === this.filterStatus);
@@ -637,11 +626,6 @@ export const ExecutionTab = {
         container.querySelector('#cu-exec-filter')?.addEventListener('change', (e) => {
             this.selectedCUId = parseInt(e.target.value) || null;
             localStorage.setItem('execSelectedCU', this.selectedCUId || '');
-            this.render(container);
-        });
-
-        container.querySelector('#exec-search')?.addEventListener('input', (e) => {
-            this.searchQuery = e.target.value;
             this.render(container);
         });
 

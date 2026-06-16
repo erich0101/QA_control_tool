@@ -79,34 +79,30 @@ export const TestSuitesTab = {
         container.innerHTML = `
             <div class="ts-layout">
                 <div class="ts-sidebar">
-                    <div class="ts-sidebar-header">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                            <span style="font-size: 0.75rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em;">Test Suites</span>
+                    <div class="ts-sidebar-header" style="padding: 16px; background: var(--apple-bg-elevated); border-bottom: 1px solid var(--apple-separator);">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+                            <span style="font-size: 0.68rem; font-weight: 700; color: var(--apple-label-tertiary); text-transform: uppercase; letter-spacing: 0.08em;">Test Suites</span>
                             <div style="display: flex; gap: 6px;">
-                                <span class="tab-badge" title="Total de Suites">${testSuites.length} S</span>
-                                <span class="tab-badge" style="background: var(--brand); color: white;" title="Total de Pruebas">${totalTests} T</span>
+                                <span style="display: inline-flex; align-items: center; gap: 3px; padding: 3px 8px; border-radius: 20px; background: var(--apple-fill); font-size: 0.62rem; font-weight: 600; color: var(--apple-label-secondary);" title="Total de Suites">${testSuites.length} <span style="color: var(--apple-label-tertiary);">S</span></span>
+                                <span style="display: inline-flex; align-items: center; gap: 3px; padding: 3px 8px; border-radius: 20px; background: var(--apple-blue); font-size: 0.62rem; font-weight: 600; color: white;" title="Total de Pruebas">${totalTests} <span style="opacity: 0.8;">T</span></span>
                             </div>
                         </div>
-                        <div style="display: flex; flex-direction: column; gap: 8px;">
-                            <select id="uc-filter" class="w-full">
+                        <div style="display: flex; flex-direction: column; gap: 10px;">
+                            <select id="uc-filter" class="w-full" style="font-size: 0.78rem; padding: 8px 12px; border-radius: var(--apple-radius-md); border: 1px solid var(--apple-separator); background: var(--apple-bg-tertiary); color: var(--apple-label);">
                                 <option value="">Selecciona Caso de Uso</option>
                                 ${Store.state.useCases.map(uc => `
                                     <option value="${uc.id}" ${uc.id === selectedUseCaseId ? 'selected' : ''}>${UI.escapeHTML(uc.key_id || 'CU')} - ${UI.escapeHTML(uc.title)}</option>
                                 `).join('')}
                             </select>
-                            <!-- Search suites + actions row -->
-                            <div style="display: flex; gap: 6px; align-items: center;">
-                                <div style="position: relative; flex: 1;">
-                                    <input type="text" id="suite-search" placeholder="Buscar suite..." value="${UI.escapeHTML(this.suiteSearchQuery)}"
-                                        style="width: 100%; padding: 6px 10px 6px 30px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-surface); color: var(--text-main); font-size: 0.78rem; outline: none; box-sizing: border-box;" />
-                                </div>
+                            <div style="position: relative;">
+                                <input type="text" id="suite-search" placeholder="🔍 Buscar suite..." value="${UI.escapeHTML(this.suiteSearchQuery)}"
+                                    style="width: 100%; padding: 8px 12px; border-radius: var(--apple-radius-md); border: 1px solid var(--apple-separator); background: var(--apple-bg-tertiary); color: var(--apple-label); font-size: 0.78rem; outline: none; box-sizing: border-box; transition: border-color 0.15s;"
+                                    onfocus="this.style.borderColor='var(--apple-blue)'" onblur="this.style.borderColor='var(--apple-separator)'" />
                             </div>
-                            <div style="display: flex; gap: 6px;">
-                                <button class="btn btn-primary btn-sm" id="btn-new-suite" ${!selectedUseCaseId ? 'disabled' : ''} style="flex: 1;">+ Nueva</button>
-                            </div>
-                            <div style="display: flex; gap: 6px;">
-                                <button class="btn btn-ghost btn-sm" id="btn-sidebar-import-xlsx" ${!selectedUseCaseId ? 'disabled' : ''} style="flex: 1; font-size: 0.72rem;">📥 Importar</button>
-                                <button class="btn btn-success btn-sm" id="btn-export-matrix" ${!selectedUseCaseId ? 'disabled' : ''} style="flex: 1; font-size: 0.72rem; background: var(--apple-green); border: none; color: white;">📊 Exportar</button>
+                            <button class="btn btn-primary btn-sm" id="btn-new-suite" ${!selectedUseCaseId ? 'disabled' : ''} style="width: 100%; padding: 8px 12px; font-size: 0.75rem; font-weight: 600; border-radius: var(--apple-radius-md);">+ Nueva Suite</button>
+                            <div style="display: flex; gap: 8px;">
+                                <button class="btn btn-ghost btn-sm" id="btn-sidebar-import-xlsx" ${!selectedUseCaseId ? 'disabled' : ''} style="flex: 1; font-size: 0.72rem; padding: 6px 10px; border-radius: var(--apple-radius-sm);">📥 Importar</button>
+                                <button class="btn btn-sm" id="btn-export-matrix" ${!selectedUseCaseId ? 'disabled' : ''} style="flex: 1; font-size: 0.72rem; padding: 6px 10px; border-radius: var(--apple-radius-sm); background: var(--apple-green); border: none; color: white; font-weight: 600;">📊 Exportar</button>
                             </div>
                         </div>
                     </div>
@@ -150,37 +146,45 @@ export const TestSuitesTab = {
             return `<div style="padding: 20px; text-align: center; opacity: 0.5; font-size: 0.8rem;">Sin suites encontradas</div>`;
         }
         return `
-            <table style="width: 100%; border-collapse: collapse; font-size: 0.82rem;">
-                <tbody>
-                    ${filtered.map((suite, idx) => {
-                        const isActive = this.selectedSuiteId === suite.id;
-                        const isExecuting = !!suite.active_run_id;
-                        const testCount = (suite.test_cases || []).length;
+            <div style="display: flex; flex-direction: column; gap: 4px;">
+                ${filtered.map((suite, idx) => {
+                    const isActive = this.selectedSuiteId === suite.id;
+                    const isExecuting = !!suite.active_run_id;
+                    const testCount = (suite.test_cases || []).length;
 
-                        let incIndicator = '';
-                        const incList = suite.inconsistencies || [];
-                        if (incList.length > 0) {
-                            incIndicator = `<span title="Tiene inconsistencias" style="font-size: 0.65rem; color: var(--apple-orange);">⚠️</span>`;
-                        }
+                    let incIndicator = '';
+                    const incList = suite.inconsistencies || [];
+                    if (incList.length > 0) {
+                        incIndicator = `<span title="Tiene inconsistencias" style="font-size: 0.65rem; color: var(--apple-orange);">⚠️</span>`;
+                    }
 
-                        return `
-                            <tr class="ts-suite-row ${isActive ? 'selected' : ''}" data-id="${suite.id}"
-                                style="border-bottom: 1px solid var(--apple-separator); cursor: pointer;">
-                                <td>
-                                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 2px;">
-                                        <span class="suite-id">SUITE #${suite.id}</span>
-                                        ${isExecuting ? '<span class="status-pill ok" style="font-size: 7px; padding: 1px 4px;">LIVE</span>' : ''}
-                                    </div>
-                                    <div class="suite-title">${UI.escapeHTML(suite.title)} ${incIndicator}</div>
-                                    <div class="suite-meta">
-                                        🧪 ${testCount} tests${suite.assigned_to_name ? ` · 👤 ${UI.escapeHTML(suite.assigned_to_name)}` : ''}
-                                    </div>
-                                </td>
-                            </tr>
-                        `;
-                    }).join('')}
-                </tbody>
-            </table>
+                    const selectedStyle = isActive ? `
+                        background: var(--apple-indigo-soft);
+                        border-left: 3px solid var(--apple-blue);
+                        padding-left: 12px;
+                    ` : `
+                        border-left: 3px solid transparent;
+                        padding-left: 12px;
+                    `;
+
+                    return `
+                        <div class="ts-suite-row ${isActive ? 'selected' : ''}" data-id="${suite.id}"
+                            style="border-radius: var(--apple-radius-md); padding: 10px 12px; cursor: pointer; transition: all 0.15s ease; ${selectedStyle}"
+                            onmouseover="if(!this.classList.contains('selected')) this.style.background='var(--apple-fill)'"
+                            onmouseout="if(!this.classList.contains('selected')) this.style.background='transparent'">
+                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                                <span style="font-size: 0.68rem; font-weight: 700; color: var(--apple-label-tertiary); letter-spacing: 0.03em;">SUITE #${suite.id}</span>
+                                ${isExecuting ? '<span style="font-size: 6px; padding: 2px 5px; border-radius: 10px; background: var(--apple-green); color: white; font-weight: 700;">LIVE</span>' : ''}
+                                ${incIndicator}
+                            </div>
+                            <div style="font-size: 0.82rem; font-weight: 600; color: var(--apple-label); margin-bottom: 4px; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${UI.escapeHTML(suite.title)}</div>
+                            <div style="font-size: 0.7rem; color: var(--apple-label-tertiary); display: flex; align-items: center; gap: 4px;">
+                                <span style="color: var(--apple-blue);">🧪</span> ${testCount} tests${suite.assigned_to_name ? ` <span style="color: var(--apple-label-tertiary);">·</span> <span style="color: var(--apple-purple);">👤</span> ${UI.escapeHTML(suite.assigned_to_name)}` : ''}
+                            </div>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
         `;
     },
 
@@ -195,33 +199,42 @@ export const TestSuitesTab = {
         const bajaCount = incList.filter(i => i.severity === 'Baja').length;
 
         const badges = [];
-        if (altaCount) badges.push(`<span style="background:var(--apple-red-soft);color:var(--apple-red);padding:2px 8px;border-radius:var(--apple-radius-sm);font-size:0.62rem;font-weight:800;">${altaCount} Alta</span>`);
-        if (mediaCount) badges.push(`<span style="background:var(--apple-orange-soft);color:var(--apple-orange);padding:2px 8px;border-radius:var(--apple-radius-sm);font-size:0.62rem;font-weight:800;">${mediaCount} Media</span>`);
-        if (bajaCount) badges.push(`<span style="background:var(--apple-green-soft);color:var(--apple-green);padding:2px 8px;border-radius:var(--apple-radius-sm);font-size:0.62rem;font-weight:800;">${bajaCount} Baja</span>`);
+        if (altaCount) badges.push(`<span style="display:inline-flex;align-items:center;gap:4px;background:var(--apple-red-soft);color:var(--apple-red);padding:3px 10px;border-radius:20px;font-size:0.62rem;font-weight:600;"><span style="width:5px;height:5px;border-radius:50%;background:var(--apple-red);"></span>${altaCount} Alta</span>`);
+        if (mediaCount) badges.push(`<span style="display:inline-flex;align-items:center;gap:4px;background:var(--apple-orange-soft);color:var(--apple-orange);padding:3px 10px;border-radius:20px;font-size:0.62rem;font-weight:600;"><span style="width:5px;height:5px;border-radius:50%;background:var(--apple-orange);"></span>${mediaCount} Media</span>`);
+        if (bajaCount) badges.push(`<span style="display:inline-flex;align-items:center;gap:4px;background:var(--apple-green-soft);color:var(--apple-green);padding:3px 10px;border-radius:20px;font-size:0.62rem;font-weight:600;"><span style="width:5px;height:5px;border-radius:50%;background:var(--apple-green);"></span>${bajaCount} Baja</span>`);
 
         return `
-            <div class="inc-panel" style="border-bottom:1px solid var(--border);">
+            <div class="inc-panel" style="border-bottom:1px solid var(--apple-separator); background: var(--apple-bg-elevated);">
                 <div class="inc-panel-header" onclick="window._toggleIncPanel(this)"
-                    style="padding:8px 20px;background:var(--inc-bg);cursor:pointer;display:flex;align-items:center;gap:10px;user-select:none;">
-                    <span class="inc-chevron" style="font-size:0.7rem;transition:transform 0.2s;">▶</span>
-                    <span style="font-size:0.75rem;">⚠️</span>
-                    <span style="font-size:0.68rem;font-weight:800;color:var(--apple-red);text-transform:uppercase;letter-spacing:0.05em;">Inconsistencias</span>
-                    <span style="font-size:0.65rem;color:var(--inc-text-muted);">${incList.length} total</span>
-                    <div style="display:flex;gap:6px;">${badges.join('')}</div>
+                    style="padding:10px 24px;cursor:pointer;display:flex;align-items:center;gap:10px;user-select:none;transition:background 0.15s;"
+                    onmouseover="this.style.background='var(--apple-fill)'"
+                    onmouseout="this.style.background='transparent'">
+                    <span class="inc-chevron" style="font-size:0.65rem;transition:transform 0.2s ease;color:var(--apple-label-tertiary);">▶</span>
+                    <span style="font-size:0.72rem;">⚠️</span>
+                    <span style="font-size:0.68rem;font-weight:700;color:var(--apple-label);letter-spacing:0.02em;">Inconsistencias</span>
+                    <span style="font-size:0.62rem;color:var(--apple-label-tertiary);font-weight:500;">${incList.length} total</span>
+                    <div style="display:flex;gap:6px;margin-left:8px;">${badges.join('')}</div>
                 </div>
-                <div class="inc-panel-body" style="display:none;padding:12px 20px;background:var(--inc-bg);">
-                    <div style="display:flex;flex-direction:column;gap:6px;">
+                <div class="inc-panel-body" style="display:none;padding:12px 24px;background:var(--apple-bg-elevated); border-top: 1px solid var(--apple-separator);">
+                    <div style="display:flex;flex-direction:column;gap:8px;">
                         ${incList.map(inc => `
-                            <div style="display:flex;align-items:flex-start;gap:10px;padding:8px 10px;border-radius:6px;background:${sevBg(inc.severity)};border-left:3px solid ${sevColor(inc.severity)};">
-                                <span style="font-size:0.65rem;color:${sevColor(inc.severity)};font-weight:800;min-width:40px;">${inc.severity}</span>
+                            <div style="display:flex;align-items:flex-start;gap:12px;padding:10px 12px;border-radius:var(--apple-radius-md);background:${sevBg(inc.severity)};border: 1px solid ${sevColor(inc.severity)}22;">
+                                <span style="display:inline-flex;align-items:center;gap:4px;font-size:0.62rem;color:${sevColor(inc.severity)};font-weight:700;min-width:50px;padding:3px 8px;border-radius:var(--apple-radius-sm);background:${sevColor(inc.severity)}15;">
+                                    <span style="width:5px;height:5px;border-radius:50%;background:${sevColor(inc.severity)};"></span>
+                                    ${inc.severity}
+                                </span>
                                 <div style="flex:1;min-width:0;">
-                                    <div style="font-size:0.78rem;font-weight:700;color:var(--inc-text);">${UI.escapeHTML(inc.title || '')}</div>
-                                    ${inc.description ? `<div style="font-size:0.7rem;color:var(--inc-text-secondary);margin-top:2px;line-height:1.4;">${UI.escapeHTML(inc.description)}</div>` : ''}
+                                    <div style="font-size:0.8rem;font-weight:600;color:var(--apple-label);">${UI.escapeHTML(inc.title || '')}</div>
+                                    ${inc.description ? `<div style="font-size:0.72rem;color:var(--apple-label-tertiary);margin-top:3px;line-height:1.4;">${UI.escapeHTML(inc.description)}</div>` : ''}
                                 </div>
-                                <button class="resolve-inc-btn" data-id="${inc.id}" data-suite-id="${suite.id}" title="Resolver" style="background:none;border:none;color:var(--apple-green);cursor:pointer;font-size:0.75rem;padding:2px 6px;">✅</button>
+                                <button class="resolve-inc-btn" data-id="${inc.id}" data-suite-id="${suite.id}" title="Resolver" style="background:var(--apple-green-soft);border:none;color:var(--apple-green);cursor:pointer;font-size:0.65rem;padding:4px 10px;border-radius:var(--apple-radius-sm);font-weight:600;transition:all 0.15s;"
+                                    onmouseover="this.style.background='var(--apple-green)';this.style.color='white'"
+                                    onmouseout="this.style.background='var(--apple-green-soft)';this.style.color='var(--apple-green)'">✓ Resolver</button>
                             </div>
                         `).join('')}
-                        <button id="btn-add-inc-${suite.id}" data-suite-id="${suite.id}" style="margin-top:6px;padding:6px 10px;border:1px dashed var(--inc-border);border-radius:6px;background:none;color:var(--inc-text-muted);font-size:0.72rem;cursor:pointer;">+ Agregar inconsistencia</button>
+                        <button id="btn-add-inc-${suite.id}" data-suite-id="${suite.id}" style="margin-top:4px;padding:8px 12px;border:1px dashed var(--apple-separator);border-radius:var(--apple-radius-md);background:transparent;color:var(--apple-label-tertiary);font-size:0.72rem;cursor:pointer;transition:all 0.15s;font-weight:500;"
+                            onmouseover="this.style.borderColor='var(--apple-blue)';this.style.color='var(--apple-blue)';this.style.background='var(--apple-blue-soft)'"
+                            onmouseout="this.style.borderColor='var(--apple-separator)';this.style.color='var(--apple-label-tertiary)';this.style.background='transparent'">+ Agregar inconsistencia</button>
                     </div>
                 </div>
             </div>
@@ -247,20 +260,25 @@ export const TestSuitesTab = {
 
         return `
             <!-- Breadcrumb + Suite Header -->
-            <div class="ts-detail-header" style="padding: 10px 20px; border-bottom: 1px solid var(--border); background: var(--bg-surface); flex-shrink: 0; display: flex; align-items: center; gap: 16px;">
-                <div style="flex: 1; min-width: 0;">
-                    <h2 style="margin: 0; font-size: 1rem; font-weight: 800; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${UI.escapeHTML(suite.title)}</h2>
-                    ${suite.jira_epic_key ? `<span class="tab-badge" style="background: var(--apple-blue-soft); color: var(--apple-blue); font-size: 0.65rem; margin-top: 2px; display: inline-block;">Épica: ${UI.escapeHTML(suite.jira_epic_key)}</span>` : ''}
+            <div class="ts-detail-header" style="padding: 12px 24px; border-bottom: 1px solid var(--apple-separator); background: var(--apple-bg-elevated); flex-shrink: 0;">
+                <div style="display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px;">
+                    <span style="font-size: 0.68rem; font-weight: 700; color: var(--apple-label-tertiary); letter-spacing: 0.05em; text-transform: uppercase; white-space: nowrap;">TEST SUITES <span style="color: var(--apple-label-tertiary);">›</span> <span style="color: var(--apple-blue);">#${suite.id}</span></span>
+                    <h2 style="margin: 0; font-size: 1rem; font-weight: 700; color: var(--apple-label); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: -0.01em; flex: 1; min-width: 0;">${UI.escapeHTML(suite.title)}</h2>
                 </div>
-                <div style="display: flex; gap: 6px; align-items: center; flex-shrink: 0;">
-                    <button class="btn btn-ghost btn-sm edit-suite" data-id="${suite.id}" title="Editar Suite" style="padding: 4px 8px;">✏️ Editar</button>
-                    <button class="btn btn-sm delete-suite" data-id="${suite.id}" title="Eliminar Suite" style="padding: 4px 8px; background: var(--apple-red-soft); color: var(--apple-red); border: 1px solid var(--apple-red-soft);">🗑️ Eliminar</button>
-                    <div style="width: 1px; height: 18px; background: var(--border);"></div>
-                    <button class="btn btn-success btn-sm run-suite" data-id="${suite.id}" style="padding: 4px 10px; font-size: 0.72rem;">▶ EJECUTAR</button>
-                    <button class="btn btn-sm" id="btn-ai-gen-tc" data-suite-id="${suite.id}" style="background: linear-gradient(135deg,#2563eb,#3b82f6); color: white; border: none; padding: 4px 10px; font-size: 0.72rem;">✨ AI Tool</button>
-                    <button class="btn btn-primary btn-sm" id="btn-new-tc" data-suite-id="${suite.id}" style="padding: 4px 10px; font-size: 0.72rem;">+ Nuevo TC</button>
-                    <div style="width: 1px; height: 18px; background: var(--border);"></div>
-                    <select class="suite-assign-all-select st-select" data-suite-id="${suite.id}" style="max-width: 170px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    ${suite.jira_epic_key ? `
+                        <span style="display: inline-flex; align-items: center; gap: 4px; background: var(--apple-blue-soft); color: var(--apple-blue); font-size: 0.65rem; font-weight: 600; padding: 4px 10px; border-radius: 20px; border: 1px solid var(--apple-blue-soft);">
+                            <span style="font-size: 0.55rem;">◆</span> ${UI.escapeHTML(suite.jira_epic_key)}
+                        </span>
+                    ` : ''}
+                    <button class="btn btn-ghost btn-sm edit-suite" data-id="${suite.id}" title="Editar Suite" style="padding: 5px 10px; border-radius: var(--apple-radius-sm); font-size: 0.72rem; font-weight: 500;">✏️ Editar</button>
+                    <button class="btn btn-sm delete-suite" data-id="${suite.id}" title="Eliminar Suite" style="padding: 5px 10px; border-radius: var(--apple-radius-sm); background: var(--apple-red-soft); color: var(--apple-red); border: 1px solid transparent; font-size: 0.72rem; font-weight: 500;">🗑️ Eliminar</button>
+                    <div style="width: 1px; height: 18px; background: var(--apple-separator);"></div>
+                    <button class="btn btn-success btn-sm run-suite" data-id="${suite.id}" style="padding: 5px 12px; font-size: 0.7rem; font-weight: 600; border-radius: var(--apple-radius-sm);">▶ Ejecutar</button>
+                    <button class="btn btn-sm" id="btn-ai-gen-tc" data-suite-id="${suite.id}" style="background: linear-gradient(135deg, var(--apple-purple), var(--apple-indigo)); color: white; border: none; padding: 5px 12px; font-size: 0.7rem; font-weight: 600; border-radius: var(--apple-radius-sm);">✨ AI Tool</button>
+                    <button class="btn btn-primary btn-sm" id="btn-new-tc" data-suite-id="${suite.id}" style="padding: 5px 12px; font-size: 0.7rem; font-weight: 600; border-radius: var(--apple-radius-sm);">+ Nuevo TC</button>
+                    <div style="width: 1px; height: 18px; background: var(--apple-separator);"></div>
+                    <select class="suite-assign-all-select st-select" data-suite-id="${suite.id}" style="max-width: 150px; font-size: 0.72rem; padding: 5px 8px;">
                         <option value="">👤 Asignar todos...</option>
                         <option value="0">— Sin asignar —</option>
                         ${(Store.state.team || []).map(u => `<option value="${u.id}">${UI.escapeHTML(u.name)}</option>`).join('')}
@@ -271,7 +289,7 @@ export const TestSuitesTab = {
             ${this.renderInconsistenciesPanel(suite)}
 
             <!-- Grid Panel -->
-            <div class="ts-grid-panel" style="flex: 1; overflow-y: auto; padding: 16px 20px;">
+            <div class="ts-grid-panel" style="flex: 1; overflow-y: auto; padding: 20px 24px;">
                 ${tcs.length === 0 ? `
                     <div class="empty-state" style="padding: 60px;">
                         <div class="empty-state-icon">📄</div>
@@ -289,24 +307,26 @@ export const TestSuitesTab = {
         const activeRunId = suite?.active_run_id;
 
         if (tcs.length === 0) {
-            return `<div style="text-align: center; padding: 40px; opacity: 0.5; color: var(--text-muted); font-size: 0.85rem;">No hay tests en esta suite</div>`;
+            return `<div style="text-align: center; padding: 40px; opacity: 0.5; color: var(--apple-label-tertiary); font-size: 0.85rem;">No hay tests en esta suite</div>`;
         }
 
         return `
-            <table class="ts-grid-table" style="width: 100%; border-collapse: collapse; font-size: 0.82rem;">
-                <thead>
-                    <tr style="border-bottom: 1px solid var(--border); color: var(--text-muted);">
-                        <th style="padding: 8px 12px; text-align: left; font-weight: 700; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; width: 90px;">Key</th>
-                        <th style="padding: 8px 12px; text-align: left; font-weight: 700; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; flex: 1;">Título</th>
-                        <th style="padding: 8px 12px; text-align: left; font-weight: 700; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; width: 120px;">Asignado</th>
-                        <th style="padding: 8px 12px; text-align: left; font-weight: 700; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; width: 100px;">Última Ejecución</th>
-                        <th style="padding: 8px 12px; text-align: center; font-weight: 700; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; width: 60px;">Acciones</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${this.renderTCGridWithDetail(tcs, suite, isAdmin, user, activeRunId)}
-                </tbody>
-            </table>
+            <div style="background: var(--apple-bg-elevated); border-radius: var(--apple-radius-lg); border: 1px solid var(--apple-separator); overflow: hidden;">
+                <table class="ts-grid-table" style="width: 100%; border-collapse: collapse; font-size: 0.82rem;">
+                    <thead>
+                        <tr style="background: var(--apple-fill); border-bottom: 1px solid var(--apple-separator);">
+                            <th style="padding: 10px 16px; text-align: left; font-weight: 600; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--apple-label-tertiary); width: 90px;">Key</th>
+                            <th style="padding: 10px 16px; text-align: left; font-weight: 600; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--apple-label-tertiary);">Título</th>
+                            <th style="padding: 10px 16px; text-align: left; font-weight: 600; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--apple-label-tertiary); width: 120px;">Asignado</th>
+                            <th style="padding: 10px 16px; text-align: left; font-weight: 600; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--apple-label-tertiary); width: 100px;">Última Ejecución</th>
+                            <th style="padding: 10px 16px; text-align: center; font-weight: 600; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--apple-label-tertiary); width: 100px;">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${this.renderTCGridWithDetail(tcs, suite, isAdmin, user, activeRunId)}
+                    </tbody>
+                </table>
+            </div>
         `;
     },
 
@@ -330,34 +350,41 @@ export const TestSuitesTab = {
         const typeColors = { Epic: 'var(--apple-purple)', Bug: 'var(--apple-red)', Task: 'var(--apple-blue)', Story: 'var(--apple-green)' };
         const typeColor = typeColors['Task'] || 'var(--apple-blue)';
 
+        const rowStyle = isSelected ? `
+            background: var(--apple-indigo-soft);
+            border-left: 3px solid var(--apple-blue);
+        ` : `
+            border-left: 3px solid transparent;
+        `;
+
         return `
             <tr class="ts-grid-row ${isSelected ? 'selected' : ''}" data-tc-id="${tc.id}"
-                style="border-bottom: 1px solid var(--apple-separator); cursor: pointer; transition: background 0.15s;"
-                onmouseover="this.style.background='var(--apple-indigo-soft)'"
-                onmouseout="this.style.background='${isSelected ? 'var(--apple-indigo-soft)' : 'transparent'}'">
-                <td style="padding: 10px 12px; font-weight: 800; color: var(--brand); font-size: 0.75rem; width: 90px; white-space: nowrap;">${UI.escapeHTML(tc.key_id || 'TC')}</td>
-                <td style="padding: 10px 12px; color: var(--text-main); font-weight: 500; flex: 1;">
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <span style="width: 8px; height: 8px; border-radius: 50%; background: ${typeColor}; flex-shrink: 0;"></span>
-                        <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${UI.escapeHTML(tc.title)}</span>
+                style="border-bottom: 1px solid var(--apple-separator); cursor: pointer; transition: all 0.15s ease; ${rowStyle}"
+                onmouseover="if(!this.classList.contains('selected')) this.style.background='var(--apple-fill)'"
+                onmouseout="if(!this.classList.contains('selected')) this.style.background='transparent'">
+                <td style="padding: 12px 16px; font-weight: 700; color: var(--apple-blue); font-size: 0.75rem; width: 90px; white-space: nowrap; font-family: var(--apple-font-mono);">${UI.escapeHTML(tc.key_id || 'TC')}</td>
+                <td style="padding: 12px 16px; color: var(--apple-label); font-weight: 500;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span style="width: 8px; height: 8px; border-radius: 50%; background: ${typeColor}; flex-shrink: 0; box-shadow: 0 0 0 2px ${typeColor}22;"></span>
+                        <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.85rem;">${UI.escapeHTML(tc.title)}</span>
                     </div>
                 </td>
-                <td style="padding: 10px 12px; width: 120px;">
+                <td style="padding: 12px 16px; width: 120px;">
                     ${assignee ? `
-                        <div style="display: flex; align-items: center; gap: 6px;">
-                            <span style="width: 22px; height: 22px; border-radius: 50%; background: var(--brand); display: inline-flex; align-items: center; justify-content: center; font-size: 0.65rem; font-weight: 800; color: white;">${assignee.name.charAt(0)}</span>
-                            <span style="font-size: 0.78rem; color: var(--text-muted);">${UI.escapeHTML(assignee.name.split(' ')[0])}</span>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="width: 24px; height: 24px; border-radius: 50%; background: linear-gradient(135deg, var(--apple-blue), var(--apple-indigo)); display: inline-flex; align-items: center; justify-content: center; font-size: 0.65rem; font-weight: 700; color: white; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">${assignee.name.charAt(0)}</span>
+                            <span style="font-size: 0.78rem; color: var(--apple-label-secondary); font-weight: 500;">${UI.escapeHTML(assignee.name.split(' ')[0])}</span>
                         </div>
-                    ` : '<span style="color: var(--text-muted); opacity: 0.4;">—</span>'}
+                    ` : '<span style="color: var(--apple-label-tertiary); opacity: 0.5;">—</span>'}
                 </td>
-                <td style="padding: 10px 12px; font-size: 0.75rem; color: var(--text-muted); width: 100px; white-space: nowrap;">${lastExec}</td>
-                <td style="padding: 10px 12px; text-align: center; width: 60px;">
+                <td style="padding: 12px 16px; font-size: 0.75rem; color: var(--apple-label-tertiary); width: 100px; white-space: nowrap;">${lastExec}</td>
+                <td style="padding: 12px 16px; text-align: center; width: 100px;">
                     <div style="display: flex; gap: 6px; justify-content: center;">
                         ${(isAssignedToMe || isAdmin) && !activeRunId ? `
-                            <button class="btn btn-success btn-sm run-tc-grid" data-id="${tc.id}" title="Ejecutar" style="padding: 3px 10px; font-size: 0.65rem; font-weight: 800;">▶ Ejecutar</button>
+                            <button class="btn btn-success btn-sm run-tc-grid" data-id="${tc.id}" title="Ejecutar" style="padding: 5px 12px; font-size: 0.68rem; font-weight: 600; border-radius: var(--apple-radius-sm);">▶ Ejecutar</button>
                         ` : ''}
                         ${isAdmin ? `
-                            <button class="btn btn-sm delete-tc-grid" data-tc-id="${tc.id}" title="Eliminar" style="padding: 3px 10px; font-size: 0.65rem; font-weight: 800; opacity: ${activeRunId ? '0.3' : '1'}; cursor: ${activeRunId ? 'not-allowed' : 'pointer'}; background: var(--apple-red-soft); color: var(--apple-red); border: 1px solid var(--apple-red-soft);">🗑️</button>
+                            <button class="btn btn-sm delete-tc-grid" data-tc-id="${tc.id}" title="Eliminar" style="padding: 5px 10px; font-size: 0.68rem; font-weight: 600; border-radius: var(--apple-radius-sm); opacity: ${activeRunId ? '0.3' : '1'}; cursor: ${activeRunId ? 'not-allowed' : 'pointer'}; background: var(--apple-red-soft); color: var(--apple-red); border: 1px solid transparent;">🗑️</button>
                         ` : ''}
                     </div>
                 </td>
@@ -372,8 +399,8 @@ export const TestSuitesTab = {
         const assignee = (Store.state.team || []).find(u => u.id === tc.assigned_to);
         const linkedUS = (Store.state.userStories || []).find(u => Number(u.id) === Number(tc.us_id));
         const executions = tc.executions || [];
-        const tabs = ['steps', 'expected', 'metadata', 'evidencia'];
-        const tabLabels = { steps: 'Pasos', expected: 'Esperado', metadata: 'Metadata', evidencia: 'Evidencia' };
+        const tabs = ['steps', 'expected', 'metadata'];
+        const tabLabels = { steps: 'Pasos', expected: 'Esperado', metadata: 'Metadata' };
 
         return `
             <tr class="ts-expanded-row" style="border-bottom: 1px solid var(--border); background: var(--bg-surface-elevated);">
@@ -427,8 +454,8 @@ export const TestSuitesTab = {
         const assignee = (Store.state.team || []).find(u => u.id === tc.assigned_to);
         const isAdmin = Store.state.user?.role === 'Admin' || Store.state.user?.role === 'Analista QA';
 
-        const tabs = ['steps', 'expected', 'metadata', 'evidencia'];
-        const tabLabels = { steps: 'Pasos', expected: 'Esperado', metadata: 'Metadata', evidencia: 'Evidencia' };
+        const tabs = ['steps', 'expected', 'metadata'];
+        const tabLabels = { steps: 'Pasos', expected: 'Esperado', metadata: 'Metadata' };
 
         return `
             <div class="ts-detail-panel" style="border-left: 1px solid var(--border); background: var(--bg-surface); display: flex; flex-direction: column; overflow: hidden;">
@@ -473,10 +500,10 @@ export const TestSuitesTab = {
         switch (this.detailTab) {
             case 'steps':
                 return `
-                    <div style="display: flex; flex-direction: column; gap: 16px;">
+                    <div style="display: flex; flex-direction: column; gap: 18px;">
                         <div class="field-group">
                             <label class="field-label">Precondiciones</label>
-                            <textarea class="tc-edit-field ${readOnlyClass}" data-field="preconditions" ${readOnlyAttr}>${UI.escapeHTML(tc.preconditions || '')}</textarea>
+                            <textarea class="tc-edit-field ${readOnlyClass}" data-field="preconditions" ${readOnlyAttr} style="min-height: 70px;">${UI.escapeHTML(tc.preconditions || '')}</textarea>
                         </div>
                         <div class="field-group">
                             <label class="field-label">Pasos del Test</label>
@@ -487,36 +514,38 @@ export const TestSuitesTab = {
                         </div>
                         <div class="field-group">
                             <label class="field-label">Datos de Prueba</label>
-                            <textarea class="tc-edit-field ${readOnlyClass}" data-field="test_data" ${readOnlyAttr}>${UI.escapeHTML(tc.test_data || '')}</textarea>
+                            <textarea class="tc-edit-field ${readOnlyClass}" data-field="test_data" ${readOnlyAttr} style="min-height: 60px;">${UI.escapeHTML(tc.test_data || '')}</textarea>
                         </div>
                     </div>
                 `;
 
             case 'expected':
                 return `
-                    <div style="display: flex; flex-direction: column; gap: 16px;">
+                    <div style="display: flex; flex-direction: column; gap: 18px;">
                         <div class="field-group">
                             <label class="field-label">Resultado Esperado</label>
-                            <textarea class="tc-edit-field ${readOnlyClass}" data-field="expected_result" ${readOnlyAttr}>${UI.escapeHTML(tc.expected_result || '')}</textarea>
+                            <textarea class="tc-edit-field ${readOnlyClass}" data-field="expected_result" ${readOnlyAttr} style="min-height: 80px;">${UI.escapeHTML(tc.expected_result || '')}</textarea>
                         </div>
                         <div class="field-group">
                             <label class="field-label">Criterios de Aceptación</label>
-                            <textarea class="tc-edit-field ${readOnlyClass}" data-field="acceptance_criteria" ${readOnlyAttr}>${UI.escapeHTML(tc.acceptance_criteria || '')}</textarea>
+                            <textarea class="tc-edit-field ${readOnlyClass}" data-field="acceptance_criteria" ${readOnlyAttr} style="min-height: 80px;">${UI.escapeHTML(tc.acceptance_criteria || '')}</textarea>
                         </div>
                         <div class="field-group">
                             <label class="field-label">Suposiciones</label>
-                            <textarea class="tc-edit-field ${readOnlyClass}" data-field="assumptions" ${readOnlyAttr}>${UI.escapeHTML(tc.assumptions || '')}</textarea>
+                            <textarea class="tc-edit-field ${readOnlyClass}" data-field="assumptions" ${readOnlyAttr} style="min-height: 60px;">${UI.escapeHTML(tc.assumptions || '')}</textarea>
                         </div>
                     </div>
                 `;
 
             case 'metadata':
+                const selectStyle = "width:100%; padding:8px 12px; background:var(--apple-bg-tertiary); border:1px solid var(--apple-separator-opaque); border-radius:var(--apple-radius-md); color:var(--apple-label); font-size:0.85rem; outline:none; transition: border-color 0.15s;";
+                const selectReadonlyStyle = "width:100%; padding:8px 12px; background:var(--apple-fill-tertiary); border:1px solid transparent; border-radius:var(--apple-radius-md); color:var(--apple-label); font-size:0.85rem; cursor:default;";
                 return `
-                    <div style="display: flex; flex-direction: column; gap: 16px;">
-                        <div class="tt-editor-grid" style="grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div style="display: flex; flex-direction: column; gap: 18px;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
                             <div class="field-group">
                                 <label class="field-label">Historia de Usuario</label>
-                                <select class="tc-us-select-detail ${readOnlyClass}" data-tc-id="${tc.id}" ${readOnlyAttr} style="max-width: 180px;">
+                                <select class="tc-us-select-detail ${readOnlyClass}" data-tc-id="${tc.id}" ${readOnlyAttr} style="${readOnlyAttr ? selectReadonlyStyle : selectStyle}">
                                     <option value="">— No vinculada —</option>
                                     ${Store.state.userStories.map(us => {
                                         const fullTitle = `${us.key_id} - ${us.title}`;
@@ -527,7 +556,7 @@ export const TestSuitesTab = {
                             </div>
                             <div class="field-group">
                                 <label class="field-label">Asignado a</label>
-                                <select class="tc-assign-select-detail ${readOnlyClass}" data-tc-id="${tc.id}" ${readOnlyAttr}>
+                                <select class="tc-assign-select-detail ${readOnlyClass}" data-tc-id="${tc.id}" ${readOnlyAttr} style="${readOnlyAttr ? selectReadonlyStyle : selectStyle}">
                                     <option value="">— Sin asignar —</option>
                                     ${(Store.state.team || []).map(u => `
                                         <option value="${u.id}" ${u.id === tc.assigned_to ? 'selected' : ''}>${UI.escapeHTML(u.name)} (${UI.escapeHTML(u.role)})</option>
@@ -535,47 +564,47 @@ export const TestSuitesTab = {
                                 </select>
                             </div>
                         </div>
-                        <div class="tt-editor-grid" style="grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
                             <div class="field-group">
                                 <label class="field-label">Prioridad</label>
-                                <select class="tc-meta-select-detail ${readOnlyClass}" data-tc-id="${tc.id}" data-field="priority" ${readOnlyAttr}>
+                                <select class="tc-meta-select-detail ${readOnlyClass}" data-tc-id="${tc.id}" data-field="priority" ${readOnlyAttr} style="${readOnlyAttr ? selectReadonlyStyle : selectStyle}">
                                     ${['Alta', 'Media', 'Baja'].map(p => `<option value="${p}" ${tc.priority === p ? 'selected' : ''}>${p}</option>`).join('')}
                                 </select>
                             </div>
                             <div class="field-group">
                                 <label class="field-label">Epic Jira</label>
-                                <select class="tc-meta-select-detail ${readOnlyClass}" data-tc-id="${tc.id}" data-field="jira_epic_key" ${readOnlyAttr}>
+                                <select class="tc-meta-select-detail ${readOnlyClass}" data-tc-id="${tc.id}" data-field="jira_epic_key" ${readOnlyAttr} style="${readOnlyAttr ? selectReadonlyStyle : selectStyle}">
                                     <option value="">— Sin Épica —</option>
                                     ${(Store.state.jiraEpics || []).map(e => `<option value="${e.key}" ${tc.jira_epic_key === e.key ? 'selected' : ''}>${e.key} - ${e.name}</option>`).join('')}
                                 </select>
                             </div>
                         </div>
-                        <div class="field-group" style="border-top: 1px solid var(--border); padding-top: 12px;">
+                        <div class="field-group" style="border-top: 1px solid var(--apple-separator); padding-top: 16px; margin-top: 4px;">
                             <label class="field-label">Mover a Suite</label>
-                            <select class="tc-move-select" data-tc-id="${tc.id}" ${tc.us_id ? 'disabled title="TC tiene HU vinculada"' : ''}>
+                            <select class="tc-move-select" data-tc-id="${tc.id}" ${tc.us_id ? 'disabled title="TC tiene HU vinculada"' : ''} style="${selectStyle}">
                                 <option value="">— Suite actual: ${UI.escapeHTML(suite.title)} —</option>
                                 ${(Store.state.testSuites || []).filter(s => s.id !== suite.id).map(s => `
                                     <option value="${s.id}">${UI.escapeHTML(s.title)}</option>
                                 `).join('')}
                             </select>
-                            ${tc.us_id ? `<p style="font-size: 0.65rem; color: var(--apple-orange); margin-top: 4px;">⚠️ Desvinculá la HU antes de mover</p>` : ''}
+                            ${tc.us_id ? `<p style="font-size: 0.68rem; color: var(--apple-orange); margin-top: 6px;">⚠️ Desvinculá la HU antes de mover</p>` : ''}
                         </div>
-                        <div style="padding: 12px; display: flex; flex-direction: column; gap: 10px;">
-                            <label style="display: flex; align-items: center; gap: 10px; font-size: 0.78rem; cursor: pointer;">
+                        <div style="padding: 14px; background: var(--apple-fill-tertiary); border-radius: var(--apple-radius-md); display: flex; flex-direction: column; gap: 12px;">
+                            <label style="display: flex; align-items: center; gap: 10px; font-size: 0.82rem; cursor: pointer; color: var(--apple-label);">
                                 <div class="switch">
                                     <input type="checkbox" class="tc-meta-check-detail" data-tc-id="${tc.id}" data-field="is_smoke" ${tc.is_smoke ? 'checked' : ''} ${readOnlyAttr}>
                                     <span class="slider"></span>
                                 </div>
                                 💨 Smoke
                             </label>
-                            <label style="display: flex; align-items: center; gap: 10px; font-size: 0.78rem; cursor: pointer;">
+                            <label style="display: flex; align-items: center; gap: 10px; font-size: 0.82rem; cursor: pointer; color: var(--apple-label);">
                                 <div class="switch">
                                     <input type="checkbox" class="tc-meta-check-detail" data-tc-id="${tc.id}" data-field="is_regression" ${tc.is_regression ? 'checked' : ''} ${readOnlyAttr}>
                                     <span class="slider"></span>
                                 </div>
                                 🔄 Regresión
                             </label>
-                            <label style="display: flex; align-items: center; gap: 10px; font-size: 0.78rem; cursor: pointer;">
+                            <label style="display: flex; align-items: center; gap: 10px; font-size: 0.82rem; cursor: pointer; color: var(--apple-label);">
                                 <div class="switch">
                                     <input type="checkbox" class="tc-meta-check-detail" data-tc-id="${tc.id}" data-field="is_integration" ${tc.is_integration ? 'checked' : ''} ${readOnlyAttr}>
                                     <span class="slider"></span>
@@ -584,45 +613,10 @@ export const TestSuitesTab = {
                             </label>
                         </div>
                         ${linkedUS ? `
-                            <button class="btn btn-ghost btn-sm view-hu-details" data-us-id="${linkedUS.id}" style="font-size: 0.72rem; font-weight: 800; color: var(--apple-blue); border-color: var(--apple-blue-soft); padding: 5px 12px; align-self: flex-start;">
+                            <button class="btn btn-ghost btn-sm view-hu-details" data-us-id="${linkedUS.id}" style="font-size: 0.72rem; font-weight: 600; color: var(--apple-blue); background: var(--apple-blue-soft); border: 1px solid transparent; padding: 6px 12px; border-radius: var(--apple-radius-sm); align-self: flex-start;">
                                 📖 Ver Detalles de HU
                             </button>
                         ` : ''}
-                    </div>
-                `;
-
-            case 'evidencia':
-                const executions = tc.executions || [];
-                if (executions.length === 0) {
-                    return `<div style="text-align: center; padding: 40px; opacity: 0.4; color: var(--text-muted); font-size: 0.85rem;">Sin ejecuciones aún</div>`;
-                }
-                return `
-                    <div style="display: flex; flex-direction: column; gap: 10px;">
-                        ${executions.map(exec => {
-                            const execDate = exec.executed_at ? this._formatDate(exec.executed_at) : '—';
-                            const execStatus = exec.status === 'OK' ? 'PASS' : UI.escapeHTML(exec.status || 'PENDING');
-                            const statusClass = (exec.status || 'pending').toLowerCase();
-                            const attachments = exec.attachments || [];
-                            return `
-                                <div style="border-bottom: 1px solid var(--apple-separator); padding: 12px 0;">
-                                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
-                                        <span class="status-pill ${statusClass}" style="font-size: 8px; width: 55px; text-align: center; justify-content: center; font-weight: 700; display: inline-flex; padding: 2px 5px;">${execStatus}</span>
-                                        <span style="font-size: 0.75rem; color: var(--text-muted);">${execDate}</span>
-                                        ${exec.executed_by_name ? `<span style="font-size: 0.72rem; color: var(--text-muted);">· ${UI.escapeHTML(exec.executed_by_name)}</span>` : ''}
-                                    </div>
-                                    ${exec.notes ? `<div style="font-size: 0.8rem; color: var(--text-main); margin-bottom: 8px; line-height: 1.5;">${UI.escapeHTML(exec.notes)}</div>` : ''}
-                                    ${attachments.length > 0 ? `
-                                        <div style="display: flex; gap: 6px; flex-wrap: wrap;">
-                                            ${attachments.map(att => `
-                                                <a href="/api/attachments/${att.id}" target="_blank" style="font-size: 0.72rem; background: var(--apple-indigo-soft); color: var(--apple-indigo); padding: 3px 10px; border-radius: var(--apple-radius-sm); text-decoration: none; display: flex; align-items: center; gap: 4px;">
-                                                    📎 ${UI.escapeHTML(att.filename || 'archivo')}
-                                                </a>
-                                            `).join('')}
-                                        </div>
-                                    ` : '<div style="font-size: 0.75rem; opacity: 0.4; color: var(--text-muted);">Sin evidencia</div>'}
-                                </div>
-                            `;
-                        }).join('')}
                     </div>
                 `;
 
@@ -1513,9 +1507,23 @@ window._toggleIncPanel = function(headerEl) {
     const chevron = headerEl.querySelector('.inc-chevron');
     if (body.style.display === 'none') {
         body.style.display = 'block';
-        chevron.textContent = '▼';
+        body.style.opacity = '0';
+        body.style.transform = 'translateY(-5px)';
+        requestAnimationFrame(() => {
+            body.style.transition = 'opacity 0.2s ease, transform 0.2s ease';
+            body.style.opacity = '1';
+            body.style.transform = 'translateY(0)';
+        });
+        chevron.style.transform = 'rotate(90deg)';
     } else {
-        body.style.display = 'none';
-        chevron.textContent = '▶';
+        body.style.transition = 'opacity 0.15s ease, transform 0.15s ease';
+        body.style.opacity = '0';
+        body.style.transform = 'translateY(-5px)';
+        setTimeout(() => {
+            body.style.display = 'none';
+            body.style.transition = '';
+            body.style.transform = '';
+        }, 150);
+        chevron.style.transform = 'rotate(0deg)';
     }
 };

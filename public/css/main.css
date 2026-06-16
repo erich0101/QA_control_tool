@@ -535,9 +535,9 @@ input::placeholder, textarea::placeholder {
     margin: 0;
     padding: 10px 12px !important;
     border: 1px solid var(--apple-separator-opaque);
-    border-radius: var(--apple-radius-sm);
+    border-radius: var(--apple-radius-md);
     font-family: var(--apple-font-family);
-    font-size: var(--apple-text-footnote) !important;
+    font-size: 0.85rem !important;
     line-height: 1.6;
     width: 100%;
     min-height: 120px;
@@ -552,7 +552,7 @@ input::placeholder, textarea::placeholder {
     left: 0;
     right: 0;
     bottom: 0;
-    background: var(--apple-bg-tertiary);
+    background: var(--apple-fill-tertiary);
     color: var(--apple-label);
     z-index: 1;
     overflow-y: hidden;
@@ -565,17 +565,19 @@ input::placeholder, textarea::placeholder {
     z-index: 2;
     background: transparent !important;
     color: transparent !important;
-    caret-color: var(--text-main);
+    caret-color: var(--apple-label);
 }
 
 .highlighted-textarea:focus {
-    border-color: var(--brand);
+    border-color: var(--apple-blue);
+    box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.15);
 }
 
 .highlighted-textarea.is-readonly {
-    background: transparent !important; /* Permitir ver el backdrop */
+    background: transparent !important;
     color: transparent !important;
     cursor: default;
+    border-color: transparent;
 }
 
 .highlighted-textarea:disabled {
@@ -585,12 +587,12 @@ input::placeholder, textarea::placeholder {
 
 .highlighted-textarea.is-readonly + .highlighter-backdrop {
     display: block;
-    opacity: 1; /* Mantener legibilidad total */
+    opacity: 1;
 }
 
-.field-group { display: flex; flex-direction: column; gap: 5px; min-width: 0; overflow: hidden; }
+.field-group { display: flex; flex-direction: column; gap: 6px; min-width: 0; overflow: hidden; }
 .field-group select, .field-group input { max-width: 100%; min-width: 0; text-overflow: ellipsis; }
-.field-label { font-size: 10px; font-weight: 800; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px; }
+.field-label { font-size: 0.68rem; font-weight: 700; color: var(--apple-label-secondary); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 2px; }
 
 /* ─── Modern Switch (Toggle) ─── */
 .switch {
@@ -1307,7 +1309,7 @@ input:checked + .slider:before {
 .ts-suite-row .suite-id { font-size: 0.6rem; font-weight: 800; color: var(--brand); }
 
 .ts-detail-header { 
-    padding: 16px 32px; border-bottom: 1px solid var(--border); background: var(--bg-surface); display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 10;
+    padding: 12px 24px; border-bottom: 1px solid var(--apple-separator); background: var(--apple-bg-elevated); display: flex; flex-direction: column; justify-content: flex-start; position: sticky; top: 0; z-index: 10;
 }
 .ts-detail-body { padding: 24px; display: flex; flex-direction: column; gap: 16px; max-width: 1200px; margin: 0 auto; width: 100%; }
 
@@ -1915,26 +1917,28 @@ input:checked + .slider:before {
     width: 100%;
     background: var(--apple-bg-tertiary);
     border: 1px solid var(--apple-separator-opaque);
-    border-radius: var(--apple-radius-sm);
+    border-radius: var(--apple-radius-md);
     padding: 10px 12px;
     color: var(--apple-label);
-    font-size: var(--apple-text-body);
+    font-size: 0.85rem;
     font-family: var(--apple-font-family);
-    line-height: 1.5;
+    line-height: 1.6;
     resize: vertical;
     transition: border-color var(--apple-transition), box-shadow var(--apple-transition);
 }
 .tc-edit-field:focus {
     outline: none;
     border-color: var(--apple-blue);
-    box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.3);
+    box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.15);
 }
 .tc-edit-field.is-readonly {
     background: var(--apple-fill-tertiary);
+    border-color: transparent;
     cursor: default;
+    color: var(--apple-label);
 }
 .tc-edit-field:disabled {
-    opacity: 0.5;
+    opacity: 0.6;
     cursor: not-allowed;
 }
 
