@@ -1137,20 +1137,20 @@ export const TestSuitesTab = {
         const existingTitles = (suite?.test_cases || []).map(tc => tc.title);
         const modal = document.createElement('div');
         modal.id = 'modal-gemini-tc';
-        modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(20px) saturate(180%);';
+        modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:var(--apple-z-modal);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(20px) saturate(180%);';
         modal.innerHTML = `
             <div style="max-width:760px;width:95vw;max-height:90vh;display:flex;flex-direction:column;background:var(--apple-bg-elevated);border:1px solid var(--apple-separator);border-radius:var(--apple-radius-xl);box-shadow:var(--apple-shadow-xl);overflow:hidden;">
-                <div style="background:linear-gradient(135deg,#4f46e5,#7c3aed);padding:16px 24px;color:white;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;">
+                <div style="background:linear-gradient(135deg,var(--apple-indigo),var(--apple-purple));padding:16px 24px;color:white;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;">
                     <div>
                         <h2 style="margin:0;font-size:1.1rem;font-weight:800;">✨ Generar Tests con Gemini IA</h2>
-                        <p style="margin:3px 0 0;font-size:0.75rem;opacity:0.75;">Los tests se crean directamente en la suite actual.${existingTitles.length > 0 ? ` <span style="opacity:1;color:#86efac;">(${existingTitles.length} existentes — la IA no los repetirá)</span>` : ''}</p>
+                        <p style="margin:3px 0 0;font-size:0.75rem;opacity:0.75;">Los tests se crean directamente en la suite actual.${existingTitles.length > 0 ? ` <span style="opacity:1;color:var(--apple-green);">(${existingTitles.length} existentes — la IA no los repetirá)</span>` : ''}</p>
                     </div>
                     <button id="gemini-tc-close" style="background:var(--apple-fill);border:none;color:var(--apple-label);width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:1.1rem;">&times;</button>
                 </div>
                 <div style="padding:10px 24px;background:var(--apple-fill);border-bottom:1px solid var(--apple-separator);display:flex;align-items:center;gap:12px;flex-shrink:0;">
                     <label style="font-size:0.68rem;font-weight:800;color:var(--apple-purple);white-space:nowrap;text-transform:uppercase;">🔑 API Key</label>
                     <input id="gemini-tc-key" type="password" placeholder="AIza..." value="${savedKey}"
-                        style="flex:1;padding:6px 10px;border-radius:var(--apple-radius-sm);border:1px solid var(--apple-separator-opaque);background:var(--apple-bg-tertiary);color:var(--apple-label);font-family:monospace;font-size:0.78rem;outline:none;"/>
+                        style="flex:1;padding:6px 10px;border-radius:var(--apple-radius-sm);border:1px solid var(--apple-separator-opaque);background:var(--apple-bg-tertiary);color:var(--apple-label);font-family:var(--apple-font-mono);font-size:0.78rem;outline:none;"/>
                     <a href="https://aistudio.google.com/app/apikey" target="_blank" style="font-size:0.68rem;color:var(--apple-purple);white-space:nowrap;text-decoration:none;">Obtener →</a>
                 </div>
                 <div style="flex:1;overflow-y:auto;padding:20px 24px;display:flex;flex-direction:column;gap:16px;">
@@ -1170,12 +1170,12 @@ export const TestSuitesTab = {
                         </div>
                         <input type="file" id="gemini-tc-file" accept="image/*" multiple style="display:none;" />
                     </div>
-                    <div id="gemini-tc-status" style="display:none;font-size:0.8rem;padding:10px 14px;border-radius:8px;font-weight:600;"></div>
+                    <div id="gemini-tc-status" style="display:none;font-size:0.8rem;padding:10px 14px;border-radius:var(--apple-radius-md);font-weight:600;"></div>
                     <div id="gemini-tc-analysis" style="display:none;"></div>
                 </div>
                 <div style="padding:14px 24px;background:var(--apple-fill);border-top:1px solid var(--apple-separator);display:flex;justify-content:flex-end;gap:10px;flex-shrink:0;">
-                    <button id="gemini-tc-cancel" style="padding:9px 18px;border-radius:var(--apple-radius-md);border:1px solid var(--apple-separator);background:transparent;color:var(--apple-label-secondary);font-weight:600;cursor:pointer;font-size:0.85rem;">Cancelar</button>
-                    <button id="gemini-tc-submit" style="padding:9px 24px;border-radius:9px;border:none;background:linear-gradient(to right,#2563eb,#3b82f6);color:white;font-weight:800;cursor:pointer;font-size:0.9rem;display:flex;align-items:center;gap:8px;">
+                    <button id="gemini-tc-cancel" style="padding:9px 18px;border-radius:var(--apple-radius-md);border:1px solid var(--apple-separator);background:transparent;color:var(--apple-label-secondary);font-weight:600;cursor:pointer;font-size:var(--apple-text-body);">Cancelar</button>
+                    <button id="gemini-tc-submit" style="padding:9px 24px;border-radius:var(--apple-radius-md);border:none;background:linear-gradient(to right,var(--apple-blue),var(--apple-blue-hover));color:white;font-weight:800;cursor:pointer;font-size:var(--apple-text-body);display:flex;align-items:center;gap:8px;">
                         <span id="gemini-tc-btn-icon">✨</span><span id="gemini-tc-btn-label">Generar Tests</span>
                     </button>
                 </div>
