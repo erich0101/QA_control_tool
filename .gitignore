@@ -63,6 +63,7 @@ casos/active_caso.json
 *.csv
 sheets_info.json
 qa_prompt_*
+.playwright-cli/
 
 # ============================================================
 # ARCHIVOS FUENTE DE DATOS (XLSX - datos sensibles/propietarios)

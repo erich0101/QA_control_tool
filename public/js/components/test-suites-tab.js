@@ -438,7 +438,13 @@ export const TestSuitesTab = {
 
                         <!-- Tab Content -->
                         <div class="ts-expanded-body" style="display: flex; flex-direction: column; gap: 14px;">
-                            ${this.renderDetailTabContent(tc, suite, isEditing, readOnlyAttr, readOnlyClass, linkedUS, assignee, isAdmin)}
+                            ${['steps', 'expected', 'metadata'].map(tabName => {
+                                const savedTab = this.detailTab;
+                                this.detailTab = tabName;
+                                const content = this.renderDetailTabContent(tc, suite, isEditing, readOnlyAttr, readOnlyClass, linkedUS, assignee, isAdmin);
+                                this.detailTab = savedTab;
+                                return `<div data-tab-content="${tabName}" style="display: ${tabName === savedTab ? 'block' : 'none'};">${content}</div>`;
+                            }).join('')}
                         </div>
                     </div>
                 </td>
@@ -480,7 +486,13 @@ export const TestSuitesTab = {
 
                 <!-- Tab Content -->
                 <div class="ts-detail-body" style="flex: 1; overflow-y: auto; padding: 16px;">
-                    ${this.renderDetailTabContent(tc, suite, isEditing, readOnlyAttr, readOnlyClass, linkedUS, assignee, isAdmin)}
+                    ${['steps', 'expected', 'metadata'].map(tabName => {
+                        const savedTab = this.detailTab;
+                        this.detailTab = tabName;
+                        const content = this.renderDetailTabContent(tc, suite, isEditing, readOnlyAttr, readOnlyClass, linkedUS, assignee, isAdmin);
+                        this.detailTab = savedTab;
+                        return `<div data-tab-content="${tabName}" style="display: ${tabName === savedTab ? 'block' : 'none'};">${content}</div>`;
+                    }).join('')}
                 </div>
 
                 <!-- Actions Footer -->
@@ -743,8 +755,18 @@ export const TestSuitesTab = {
         // Detail tab switching (expanded row tabs + old panel tabs)
         container.querySelectorAll('.ts-expanded-tab, .ts-detail-tab').forEach(tab => {
             tab.addEventListener('click', () => {
-                this.detailTab = tab.dataset.tab;
-                this.render(container);
+                const newTab = tab.dataset.tab;
+                this.detailTab = newTab;
+                container.querySelectorAll('[data-tab-content]').forEach(el => {
+                    el.style.display = el.dataset.tabContent === newTab ? 'block' : 'none';
+                });
+                container.querySelectorAll('.ts-expanded-tab, .ts-detail-tab').forEach(btn => {
+                    const isActive = btn.dataset.tab === newTab;
+                    btn.classList.toggle('active', isActive);
+                    btn.style.color = isActive ? 'var(--brand)' : 'var(--text-muted)';
+                    btn.style.fontWeight = isActive ? '800' : '500';
+                    btn.style.borderBottom = `2px solid ${isActive ? 'var(--brand)' : 'transparent'}`;
+                });
             });
         });
 
