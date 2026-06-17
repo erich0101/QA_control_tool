@@ -1133,6 +1133,8 @@ export const TestSuitesTab = {
         document.getElementById('modal-gemini-tc')?.remove();
 
         const savedKey = localStorage.getItem('gemini_api_key') || '';
+        const suite = Store.state.testSuites.find(s => s.id === suiteId);
+        const existingTitles = (suite?.test_cases || []).map(tc => tc.title);
         const modal = document.createElement('div');
         modal.id = 'modal-gemini-tc';
         modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(20px) saturate(180%);';
@@ -1141,7 +1143,7 @@ export const TestSuitesTab = {
                 <div style="background:linear-gradient(135deg,#4f46e5,#7c3aed);padding:16px 24px;color:white;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;">
                     <div>
                         <h2 style="margin:0;font-size:1.1rem;font-weight:800;">✨ Generar Tests con Gemini IA</h2>
-                        <p style="margin:3px 0 0;font-size:0.75rem;opacity:0.75;">Los tests se crean directamente en la suite actual.</p>
+                        <p style="margin:3px 0 0;font-size:0.75rem;opacity:0.75;">Los tests se crean directamente en la suite actual.${existingTitles.length > 0 ? ` <span style="opacity:1;color:#86efac;">(${existingTitles.length} existentes — la IA no los repetirá)</span>` : ''}</p>
                     </div>
                     <button id="gemini-tc-close" style="background:var(--apple-fill);border:none;color:var(--apple-label);width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:1.1rem;">&times;</button>
                 </div>
@@ -1332,10 +1334,14 @@ REGLAS:
         throw new Error('Estructura inválida en análisis de HU');
     },
 
-    async _generateTC(apiKey, parts) {
-        const PROMPT_TC = `Eres un Senior QA Analyst. Genera TODOS los test cases para la siguiente HU.
+    async _generateTC(apiKey, parts, existingTitles = []) {
+        let PROMPT_TC = `Eres un Senior QA Analyst. Genera test cases para la siguiente HU.`;
 
-Devuelve ÚNICAMENTE un array JSON válido. Cada elemento:
+        if (existingTitles.length > 0) {
+            PROMPT_TC += `\n\nIMPORTANTE: Ya existen los siguientes tests en la suite. NO los repitas ni generes tests con títulos similares:\n${existingTitles.map((t, i) => `${i + 1}. ${t}`).join('\n')}\n\nGenera ÚNICAMENTE tests NUEVOS que no estén en la lista anterior.`;
+        }
+
+        PROMPT_TC += `\n\nDevuelve ÚNICAMENTE un array JSON válido. Cada elemento:
 {
   "title": "título claro y conciso del test case",
   "gherkin": "escenario en español, CADA paso en línea nueva sin indentación, empezando al inicio. Ejemplo: Dado: el usuario está en la pantalla\\nCuando: ingresa credenciales válidas\\nY: presiona el botón Ingresar\\nEntonces: el sistema muestra el dashboard principal",
@@ -1368,44 +1374,24 @@ REGLAS:
         const btn = document.getElementById('gemini-tc-submit');
         if (btn) { btn.disabled = true; }
         document.getElementById('gemini-tc-btn-icon').textContent = '⏳';
-        document.getElementById('gemini-tc-btn-label').textContent = 'Analizando...';
+        document.getElementById('gemini-tc-btn-label').textContent = 'Generando...';
 
         const parts = [];
         if (hu) parts.push({ text: hu });
         this._geminiImages.forEach(img => parts.push({ inlineData: { mimeType: img.mimeType, data: img.base64 } }));
 
         try {
-            this._setGeminiStatus('🔄 Analizando HU...', 'info');
-            const analysis = await this._analyzeHU(apiKey, parts);
-
-            const inconsistencies = analysis?.inconsistencies || [];
-            const recommendations = analysis?.recommendations || [];
-
-            this._showGeminiAnalysisResults(inconsistencies);
+            const suite = Store.state.testSuites.find(s => s.id === suiteId);
+            const existingTitles = (suite?.test_cases || []).map(tc => tc.title);
 
             this._setGeminiStatus('🔄 Generando casos de prueba...', 'info');
-            document.getElementById('gemini-tc-btn-label').textContent = 'Generando...';
 
-            const tcData = await this._generateTC(apiKey, parts);
+            const tcData = await this._generateTC(apiKey, parts, existingTitles);
             if (!tcData?.length) throw new Error('No se generaron test cases');
 
             this._setGeminiStatus(`✅ Creando ${tcData.length} tests en la suite...`, 'ok');
 
             UI.showLoading();
-
-            if (inconsistencies.length > 0) {
-                const currentSuite = Store.state.testSuites.find(s => s.id === suiteId);
-                const existingInconsistencies = currentSuite?.inconsistencies || [];
-                const newInconsistencies = inconsistencies.filter(inc => !existingInconsistencies.some(e => e.title === inc.title));
-                if (newInconsistencies.length > 0) {
-                    const allInconsistencies = [...existingInconsistencies, ...newInconsistencies].map(inc => ({
-                        title: inc.title,
-                        severity: inc.severity || 'Alta',
-                        description: inc.description || ''
-                    }));
-                    await ApiService.updateSuiteInconsistencies(suiteId, allInconsistencies);
-                }
-            }
 
             for (const item of tcData) {
                 const precStr = Array.isArray(item.preconditions) ? item.preconditions.join('\n') : '';
