@@ -219,7 +219,7 @@ export const UserStories = {
 
             <!-- Metadata: Title, Status, Priority (always visible) -->
             <div style="padding: 16px 20px; border-bottom: 1px solid var(--border); background: var(--bg-surface);">
-                <div style="display: grid; grid-template-columns: 1fr 120px 120px; gap: 12px; align-items: end;">
+                <div style="display: grid; grid-template-columns: 1fr 160px 120px; gap: 16px; align-items: end;">
                     <div class="field-group" style="margin: 0;">
                         <label class="field-label">Título de la HU</label>
                         <input type="text" value="${UI.escapeHTML(us.title)}" class="us-edit-field main-title-input" data-id="${us.id}" data-field="title" placeholder="Título de la historia..." style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-surface); color: var(--text-main); font-size: 0.85rem; outline: none; box-sizing: border-box;">
@@ -250,7 +250,7 @@ export const UserStories = {
             </div>
 
             <!-- Tab Content -->
-            <div class="us-detail-body" style="flex: 1; overflow-y: auto; padding: 16px 20px;">
+            <div class="us-detail-body" style="flex: 1; overflow-y: auto; padding: 20px 24px;">
                 ${this.renderTabContent(us)}
             </div>
         `;

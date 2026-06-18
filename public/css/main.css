@@ -1218,6 +1218,7 @@ input:checked + .slider:before {
 .us-sidebar { width: 320px; min-width: 320px; border-right: 1px solid rgba(255,255,255,0.08); display: flex; flex-direction: column; background: var(--bg-sidebar); }
 .us-sidebar-header { padding: 16px; border-bottom: 1px solid rgba(255,255,255,0.08); background: var(--bg-sidebar); }
 .us-sidebar-list { flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 2px; background: var(--bg-sidebar); }
+.us-main-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
 
 .us-master-card {
     padding: 10px 12px; border-radius: 0; border: none; border-bottom: 1px solid rgba(255,255,255,0.04); background: rgba(255,255,255,0.03); cursor: pointer; transition: all 0.15s;
