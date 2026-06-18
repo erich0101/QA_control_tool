@@ -77,11 +77,11 @@ export const JiraTrackingTab = {
             <table class="tt-table">
                 <thead>
                     <tr>
-                        <th style="min-width: 200px;">ÉPICA / TICKET</th>
-                        <th style="width: 150px; white-space: nowrap;">ASIGNADO</th>
-                        <th style="width: 110px; white-space: nowrap;">FECHA CREACIÓN</th>
-                        <th style="text-align: center; width: 120px; white-space: nowrap;">ESTADO JIRA</th>
-                        <th style="text-align: right; width: 100px; white-space: nowrap;">ACCIONES</th>
+                        <th style="width: 40%;">ÉPICA / TICKET</th>
+                        <th style="width: 20%;">ASIGNADO</th>
+                        <th style="width: 15%;">FECHA CREACIÓN</th>
+                        <th style="width: 15%; text-align: center;">ESTADO JIRA</th>
+                        <th style="width: 10%; text-align: right;">ACCIONES</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -122,7 +122,7 @@ export const JiraTrackingTab = {
                                 </div>
                             </div>
                         </td>
-                        <td style="max-width: 180px;">
+                        <td>
                             <div style="display: flex; align-items: center; gap: 8px;">
                                 ${ticket.jira_avatar ? 
                                     `<img src="${ticket.jira_avatar}" style="width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--border);">` : 

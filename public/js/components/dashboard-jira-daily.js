@@ -382,7 +382,7 @@ export const DashboardJiraDaily = {
     <title>Reporte ${epicName} - ${reportDate}</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif; background: #f2f2f7; color: #1d1d1f; padding: 40px; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif; background: #f2f2f7; color: #1d1d1f; padding: 20px 24px; }
         .container { max-width: 1200px; margin: 0 auto; }
         .header { background: white; border-radius: 12px; padding: 28px; margin-bottom: 24px; border: 1px solid rgba(0,0,0,0.08); }
         .header h1 { font-size: 1.4rem; font-weight: 700; margin-bottom: 4px; }
@@ -393,8 +393,8 @@ export const DashboardJiraDaily = {
         .stat-value { font-size: 1.8rem; font-weight: 700; }
         .table-container { background: white; border-radius: 12px; border: 1px solid rgba(0,0,0,0.08); overflow-x: auto; }
         table { width: 100%; border-collapse: collapse; }
-        th { background: #f5f5f7; padding: 12px 16px; text-align: left; font-size: 0.68rem; font-weight: 700; color: #6e6e73; text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid rgba(0,0,0,0.08); }
-        td { padding: 14px 16px; border-bottom: 1px solid rgba(0,0,0,0.06); font-size: 0.82rem; }
+        th { background: #f5f5f7; padding: 10px 12px; text-align: left; font-size: 0.68rem; font-weight: 700; color: #6e6e73; text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid rgba(0,0,0,0.08); }
+        td { padding: 10px 12px; border-bottom: 1px solid rgba(0,0,0,0.06); font-size: 0.82rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         tr:last-child td { border-bottom: none; }
         .status-badge { display: inline-flex; padding: 3px 10px; border-radius: 20px; font-size: 0.65rem; font-weight: 600; }
         .footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid rgba(0,0,0,0.08); display: flex; justify-content: space-between; font-size: 0.7rem; color: #6e6e73; }
@@ -430,13 +430,13 @@ export const DashboardJiraDaily = {
             <table style="width: 100%; border-collapse: collapse;">
                 <thead>
                     <tr>
-                        <th style="width: 100px;">Ticket</th>
-                        <th style="width: 120px;">Estado</th>
+                        <th>Ticket</th>
+                        <th>Estado</th>
                         <th>Título</th>
-                        <th style="width: 140px;">Responsable</th>
-                        <th style="width: 80px;">Prioridad</th>
-                        <th style="width: 90px;">Creación</th>
-                        <th style="width: 60px; text-align: right;">Aging</th>
+                        <th>Responsable</th>
+                        <th>Prioridad</th>
+                        <th>Creación</th>
+                        <th style="text-align: right;">Aging</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -445,13 +445,13 @@ export const DashboardJiraDaily = {
                         const ageDays = Math.floor((now - new Date(i.created)) / (1000*60*60*24));
                         return `
                         <tr>
-                            <td style="padding: 12px 10px;"><a href="${jiraBaseUrl}${i.key}" target="_blank" style="color: #007AFF; text-decoration: none; font-weight: 600; font-size: 0.82rem;">${i.key}</a></td>
-                            <td style="padding: 12px 10px;"><span class="status-badge" style="background: ${this.getStatusTag(i).bg}; color: ${this.getStatusTag(i).color}; white-space: nowrap;">${this.getStatusTag(i).text}</span></td>
-                            <td style="padding: 12px 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.85rem;" title="${UI.escapeHTML(i.summary)}">${UI.escapeHTML(i.summary)}</td>
-                            <td style="padding: 12px 10px; font-size: 0.82rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${i.assignee}</td>
-                            <td style="padding: 12px 10px;"><span style="font-weight: 600; color: ${i.priority === 'Crítica' || i.priority === 'Highest' ? '#FF3B30' : i.priority === 'Alta' || i.priority === 'High' ? '#FF9500' : '#1d1d1f'}; white-space: nowrap; font-size: 0.82rem;">${i.priority}</span></td>
-                            <td style="padding: 12px 10px; font-size: 0.82rem; white-space: nowrap;">${new Date(i.created).toLocaleDateString('es-AR')}</td>
-                            <td style="padding: 12px 10px; font-weight: 700; color: ${age.color}; text-align: right; white-space: nowrap;">${ageDays}d</td>
+                            <td style="padding: 8px 10px;"><a href="${jiraBaseUrl}${i.key}" target="_blank" style="color: #007AFF; text-decoration: none; font-weight: 600; font-size: 0.82rem;">${i.key}</a></td>
+                            <td style="padding: 8px 10px;"><span class="status-badge" style="background: ${this.getStatusTag(i).bg}; color: ${this.getStatusTag(i).color}; white-space: nowrap;">${this.getStatusTag(i).text}</span></td>
+                            <td style="padding: 8px 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.85rem; max-width: 400px;" title="${UI.escapeHTML(i.summary)}">${UI.escapeHTML(i.summary)}</td>
+                            <td style="padding: 8px 10px; font-size: 0.82rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${i.assignee}</td>
+                            <td style="padding: 8px 10px;"><span style="font-weight: 600; color: ${i.priority === 'Crítica' || i.priority === 'Highest' ? '#FF3B30' : i.priority === 'Alta' || i.priority === 'High' ? '#FF9500' : '#1d1d1f'}; white-space: nowrap; font-size: 0.82rem;">${i.priority}</span></td>
+                            <td style="padding: 8px 10px; font-size: 0.82rem; white-space: nowrap;">${new Date(i.created).toLocaleDateString('es-AR')}</td>
+                            <td style="padding: 8px 10px; font-weight: 700; color: ${age.color}; text-align: right; white-space: nowrap;">${ageDays}d</td>
                         </tr>
                         `;
                     }).join('')}

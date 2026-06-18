@@ -920,6 +920,7 @@ input:checked + .slider:before {
 /* Tabla nativa (Gestión de Equipo) */
 .tt-table {
     width: 100%;
+    table-layout: fixed;
     border-collapse: collapse;
     margin-bottom: 24px;
     font-size: 13px;

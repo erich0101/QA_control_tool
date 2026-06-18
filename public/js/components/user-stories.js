@@ -95,6 +95,7 @@ export const UserStories = {
                                 </select>
                                 ${selectedUseCaseId ? `
                                     <button class="btn btn-ghost btn-sm" id="btn-rename-cu" title="Renombrar CU" style="height: 36px; padding: 0 10px;">✏️</button>
+                                    ${isAdmin ? `<button class="btn btn-ghost btn-sm" id="btn-delete-cu" title="Eliminar CU" style="height: 36px; padding: 0 10px; color: var(--apple-red);">🗑️</button>` : ''}
                                 ` : ''}
                             </div>
 
@@ -399,6 +400,46 @@ export const UserStories = {
                     UI.toast(err.message, 'error');
                 }
                 UI.hideLoading();
+            }
+        });
+
+        // Delete CU
+        container.querySelector('#btn-delete-cu')?.addEventListener('click', async () => {
+            const cuId = Store.state.selectedUseCaseId;
+            if (!cuId) return;
+            const cu = Store.state.useCases.find(c => c.id === cuId);
+            if (!cu) return;
+
+            const suiteCount = (Store.state.testSuites || []).length;
+            const usCount = (Store.state.userStories || []).length;
+            const cuTitle = cu.title || cu.key_id;
+
+            const confirmed = await modalManager.confirm(
+                `¿Eliminar el Caso de Uso "${cuTitle}"?\n\n` +
+                `Esta acción eliminará permanentemente:\n` +
+                `• Todas las Suites asociadas (${suiteCount})\n` +
+                `• Todos los Tests de esas Suites\n` +
+                `• Todas las Historias de Usuario vinculadas (${usCount})\n` +
+                `• Todos los escenarios y ejecuciones\n\n` +
+                `Esta acción NO se puede deshacer.`
+            );
+
+            if (!confirmed) return;
+
+            UI.showLoading();
+            try {
+                await ApiService.deleteUseCase(cuId);
+                if (Store.state.selectedUseCaseId === cuId) {
+                    Store.setSelectedUseCase(null);
+                }
+                const { useCases } = await ApiService.getUseCases(Store.state.activeProjectId);
+                Store.setUseCases(useCases || []);
+                UI.hideLoading();
+                UI.toast(`Caso de Uso "${cuTitle}" eliminado`, 'ok');
+                this.render(container);
+            } catch (err) {
+                UI.hideLoading();
+                UI.toast(`Error al eliminar: ${err.message}`, 'error');
             }
         });
 
