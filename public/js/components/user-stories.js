@@ -37,6 +37,7 @@ export const UserStories = {
     activeTab: 'analisis',
     searchQuery: '',
     _isListening: false,
+    _docMdEditing: null,
 
     render(container) {
         const { useCases, selectedUseCaseId, userStories, activeProjectId, loadedForUC } = Store.state;
@@ -195,12 +196,12 @@ export const UserStories = {
         if (!us) return this.renderPlaceholder();
 
         const tabs = [
+            { key: 'documentacion', label: 'Documentación' },
             { key: 'analisis', label: 'Análisis' },
             { key: 'recomendaciones', label: 'Recomendaciones' },
             { key: 'escenarios', label: 'Escenarios' },
             { key: 'reglas', label: 'Reglas' },
-            { key: 'precondiciones', label: 'Precondiciones' },
-            { key: 'documentacion', label: 'Documentación' }
+            { key: 'precondiciones', label: 'Precondiciones' }
         ];
 
         return `
@@ -269,7 +270,7 @@ export const UserStories = {
             case 'precondiciones':
                 return this.renderFieldTab(us, 'precondiciones', 'Precondiciones');
             case 'documentacion':
-                return this.renderFieldTab(us, 'link_documentacion', 'Link Documentación', 'input');
+                return this.renderDocumentationTab(us);
             default:
                 return '';
         }
@@ -296,6 +297,63 @@ export const UserStories = {
                 </div>
             `;
 }
+    },
+
+    renderDocumentationTab(us) {
+        const raw = us.link_documentacion || '';
+        let url = '', md = '';
+        try {
+            const parsed = JSON.parse(raw);
+            url = parsed.url || '';
+            md = parsed.md || '';
+        } catch {
+            url = raw;
+        }
+
+        const isEditing = this._docMdEditing === us.id;
+        if (typeof marked !== 'undefined' && !marked._docConfigured) {
+            marked.use({ renderer: { link({ href, title, text }) { return `<a href="${href}"${title ? ` title="${title}"` : ''} target="_blank" rel="noopener noreferrer">${text}</a>`; } } });
+            marked._docConfigured = true;
+        }
+        const renderedMd = md ? (typeof marked !== 'undefined' ? marked.parse(md) : UI.escapeHTML(md)) : '';
+
+        return `
+            <div style="display: flex; flex-direction: column; gap: 20px;">
+                <div class="field-group">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                        <label class="field-label" style="margin: 0;">🔗 Link a Documentación</label>
+                        <button class="btn btn-ghost btn-sm doc-md-toggle" data-us-id="${us.id}"
+                            style="font-size: 0.72rem; padding: 4px 10px;">
+                            ${isEditing ? '👁️ Vista' : '✏️ Editar'}
+                        </button>
+                    </div>
+
+                    ${isEditing ? `
+                        <input type="text" class="us-edit-field doc-url-input" data-id="${us.id}" data-field="link_documentacion_url"
+                            value="${UI.escapeHTML(url)}" placeholder="https://..."
+                            style="width: 100%; padding: 10px 12px; border-radius: var(--apple-radius-md); border: 1px solid var(--apple-separator-opaque); background: var(--apple-bg-tertiary); color: var(--apple-label); font-size: 0.85rem; outline: none; box-sizing: border-box;">
+                    ` : `
+                        <div style="padding: 10px 14px; border-radius: var(--apple-radius-md); border: 1px solid var(--apple-separator); background: var(--apple-bg-elevated); min-height: 42px; display: flex; align-items: center;">
+                            ${url ? `<a href="${UI.escapeHTML(url)}" target="_blank" rel="noopener noreferrer" style="color: var(--apple-blue); text-decoration: none; font-size: 0.85rem; word-break: break-all; display: flex; align-items: center; gap: 6px;"><span style="font-size: 0.75rem;">↗️</span> ${UI.escapeHTML(url)}</a>` : '<span style="color: var(--apple-label-tertiary); font-style: italic; font-size: 0.85rem;">Sin enlace. Haz clic en "Editar" para agregar uno.</span>'}
+                        </div>
+                    `}
+                </div>
+
+                <div class="field-group">
+                    <label class="field-label">📝 Documentación (Markdown)</label>
+
+                    ${isEditing ? `
+                        <textarea class="us-edit-field doc-md-input" data-id="${us.id}" data-field="link_documentacion_md"
+                            placeholder="# Título&#10;&#10;Escribe la documentación en Markdown..."
+                            style="width: 100%; min-height: 300px; padding: 14px; border-radius: var(--apple-radius-md); border: 1px solid var(--apple-separator-opaque); background: var(--apple-bg-tertiary); color: var(--apple-label); font-family: var(--apple-font-mono); font-size: 0.85rem; line-height: 1.6; resize: vertical; outline: none; box-sizing: border-box; tab-size: 2;">${UI.escapeHTML(md)}</textarea>
+                    ` : `
+                        <div class="doc-md-preview markdown-body" style="min-height: 100px; padding: 16px; border-radius: var(--apple-radius-md); border: 1px solid var(--apple-separator); background: var(--apple-bg-elevated); overflow-y: auto; color: var(--apple-label); line-height: 1.7;">
+                            ${renderedMd || '<p style="color: var(--apple-label-tertiary); font-style: italic;">Sin documentación. Haz clic en "Editar" para agregar contenido.</p>'}
+                        </div>
+                    `}
+                </div>
+            </div>
+        `;
     },
 
     renderInconsistenciesTab(us) {
@@ -453,6 +511,24 @@ export const UserStories = {
             Modals.render('new-us');
         });
 
+        // Markdown preview
+        container.querySelector('.doc-md-input')?.addEventListener('input', (e) => {
+            const preview = container.querySelector('.doc-md-preview');
+            if (preview && typeof marked !== 'undefined') {
+                const html = marked.parse(e.target.value);
+                preview.innerHTML = html || '<p style="color: var(--apple-label-tertiary); font-style: italic;">Vista previa vacía...</p>';
+            }
+        });
+
+        // Doc MD toggle
+        container.querySelectorAll('.doc-md-toggle').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const usId = parseInt(btn.dataset.usId);
+                this._docMdEditing = this._docMdEditing === usId ? null : usId;
+                this.render(container);
+            });
+        });
+
         // Sidebar selection
         container.querySelectorAll('.us-suite-row').forEach(row => {
             row.addEventListener('click', () => {
@@ -485,6 +561,7 @@ export const UserStories = {
         // Cancel Edit
         container.querySelector('.cancel-edit')?.addEventListener('click', () => {
             this.expandedId = null;
+            this._docMdEditing = null;
             this.render(container);
         });
 
@@ -508,6 +585,14 @@ const huData = {};
                 }
             });
 
+            if (huData.link_documentacion_url !== undefined || huData.link_documentacion_md !== undefined) {
+                const urlVal = huData.link_documentacion_url || '';
+                const mdVal = huData.link_documentacion_md || '';
+                delete huData.link_documentacion_url;
+                delete huData.link_documentacion_md;
+                huData.link_documentacion = JSON.stringify({ url: urlVal, md: mdVal });
+            }
+
             UI.showLoading();
             try {
                 await ApiService.updateUserStory(id, huData);
@@ -518,6 +603,7 @@ const huData = {};
                 await Promise.all(promises);
 
                 await this.reloadUS();
+                this._docMdEditing = null;
                 UI.toast('Cambios guardados correctamente', 'success');
                 this.render(container); 
             } catch (err) {
