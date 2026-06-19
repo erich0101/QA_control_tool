@@ -1155,7 +1155,15 @@ export const TestSuitesTab = {
                 </div>
                 <div style="flex:1;overflow-y:auto;padding:20px 24px;display:flex;flex-direction:column;gap:16px;">
                     <div>
-                        <div style="font-size:0.68rem;font-weight:800;color:var(--apple-purple);text-transform:uppercase;margin-bottom:6px;">📋 Historia de Usuario / Contexto</div>
+                        <div style="font-size:0.68rem;font-weight:800;color:var(--apple-purple);text-transform:uppercase;margin-bottom:6px;">📋 Vincular HU (opcional)</div>
+                        <select id="gemini-tc-hu-select"
+                            style="width:100%;padding:8px 12px;border-radius:var(--apple-radius-md);border:1px solid var(--apple-separator-opaque);background:var(--apple-bg-tertiary);color:var(--apple-label);font-size:0.85rem;outline:none;box-sizing:border-box;">
+                            <option value="">— Seleccionar HU existente —</option>
+                            ${Store.state.userStories.map(us => `<option value="${us.id}">${us.key_id} — ${us.title}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div>
+                        <div style="font-size:0.68rem;font-weight:800;color:var(--apple-purple);text-transform:uppercase;margin-bottom:6px;">📝 Historia de Usuario / Contexto</div>
                         <textarea id="gemini-tc-hu" placeholder="Pegá aquí el texto de la HU, criterios de aceptación, reglas de negocio..."
                             style="width:100%;min-height:130px;padding:14px;border-radius:var(--apple-radius-md);border:1px solid var(--apple-separator-opaque);background:var(--apple-bg-tertiary);color:var(--apple-label);font-family:inherit;font-size:0.88rem;line-height:1.6;resize:vertical;outline:none;box-sizing:border-box;"></textarea>
                     </div>
@@ -1218,6 +1226,44 @@ export const TestSuitesTab = {
         document.addEventListener('paste', pasteHandler);
         this._removePasteListener = () => document.removeEventListener('paste', pasteHandler);
 
+        modal.querySelector('#gemini-tc-hu-select')?.addEventListener('change', async (e) => {
+            const usId = parseInt(e.target.value);
+            const textarea = document.getElementById('gemini-tc-hu');
+            if (!usId) {
+                textarea.value = '';
+                textarea.readOnly = false;
+                textarea.style.opacity = '1';
+                textarea.style.cursor = 'text';
+                return;
+            }
+            const us = Store.state.userStories.find(u => u.id === usId);
+            if (!us) return;
+            const docData = this._parseHUDoc(us);
+            if (docData.hasContent) {
+                const useExisting = window.confirm(
+                    `La HU "${us.key_id}" tiene documentación cargada.\n\n¿Usar la documentación actual?\nAceptar = Usar actuales\nCancelar = Ingresar nuevos datos`
+                );
+                if (useExisting) {
+                    textarea.value = docData.textContent;
+                    textarea.readOnly = true;
+                    textarea.style.opacity = '0.7';
+                    textarea.style.cursor = 'default';
+                } else {
+                    textarea.value = '';
+                    textarea.readOnly = false;
+                    textarea.style.opacity = '1';
+                    textarea.style.cursor = 'text';
+                    textarea.focus();
+                }
+            } else {
+                textarea.value = docData.textContent || '';
+                textarea.readOnly = false;
+                textarea.style.opacity = '1';
+                textarea.style.cursor = 'text';
+                textarea.focus();
+            }
+        });
+
         modal.querySelector('#gemini-tc-submit').onclick = () => this._callGemini(suiteId);
     },
 
@@ -1230,6 +1276,20 @@ export const TestSuitesTab = {
             };
             reader.readAsDataURL(file);
         });
+    },
+
+    _parseHUDoc(us) {
+        const raw = us.link_documentacion || '';
+        let url = '', md = '';
+        try {
+            const parsed = JSON.parse(raw);
+            url = parsed.url || '';
+            md = parsed.md || '';
+        } catch {
+            url = raw;
+        }
+        const hasContent = !!(url || md);
+        return { hasContent, textContent: md || '', url, md };
     },
 
     _renderGeminiPreviews() {
@@ -1369,6 +1429,9 @@ REGLAS:
         if (!apiKey) return this._setGeminiStatus('⚠️ Ingresá tu API Key de Gemini.', 'error');
 
         const hu = (document.getElementById('gemini-tc-hu')?.value || '').trim();
+        const huSelect = document.getElementById('gemini-tc-hu-select');
+        const selectedHuId = huSelect ? parseInt(huSelect.value) || null : null;
+        const isHuReadOnly = document.getElementById('gemini-tc-hu')?.readOnly || false;
         if (!hu && this._geminiImages.length === 0) return this._setGeminiStatus('⚠️ Escribí una HU o pegá al menos una imagen.', 'error');
 
         const btn = document.getElementById('gemini-tc-submit');
@@ -1407,6 +1470,16 @@ REGLAS:
                     acceptance_criteria: acStr,
                     assumptions: item.assumption || ''
                 });
+            }
+
+            if (selectedHuId && hu && !isHuReadOnly) {
+                try {
+                    await ApiService.updateUserStory(selectedHuId, {
+                        link_documentacion: JSON.stringify({ url: '', md: hu })
+                    });
+                } catch (err) {
+                    console.warn('No se pudo actualizar la HU:', err);
+                }
             }
 
             UI.hideLoading();
