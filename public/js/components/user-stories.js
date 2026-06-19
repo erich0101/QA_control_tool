@@ -50,7 +50,7 @@ export const UserStories = {
 
         // Si se deseleccionó el CU y había stories cargadas, limpiarlas
         if (!selectedUseCaseId && loadedForUC.userStories) {
-            Store.setUserStories([]);
+            Store.setUserStories([], null);
             return;
         }
 
@@ -699,7 +699,7 @@ const huData = {};
         const cuId = Store.state.selectedUseCaseId;
         if (cuId) {
             const { userStories } = await ApiService.getUserStories(cuId);
-            Store.setUserStories(userStories || []);
+            Store.setUserStories(userStories || [], cuId);
         }
         // Also reload CU counts
         const { useCases } = await ApiService.getUseCases(Store.state.activeProjectId);
@@ -708,13 +708,13 @@ const huData = {};
 
     async loadStoriesForUC(cuId) {
         if (!cuId) {
-            Store.setUserStories([]);
+            Store.setUserStories([], null);
             return;
         }
         UI.showLoading();
         try {
             const { userStories } = await ApiService.getUserStories(cuId);
-            Store.setUserStories(userStories || []);
+            Store.setUserStories(userStories || [], cuId);
         } catch(err) {
             UI.toast(err.message, 'error');
         }

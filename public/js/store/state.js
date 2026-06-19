@@ -31,6 +31,7 @@ export const Store = {
             userStories: null,
             testSuites: null
         },
+        loadedStoryUcIds: new Set(),
 
         // Legacy (compatibilidad guardado/reporte)
         data: { pruebas: [] },
@@ -91,6 +92,7 @@ export const Store = {
         this.state.jiraEpics = [];
         this.state.loadedForUC.userStories = null;
         this.state.loadedForUC.testSuites = null;
+        this.state.loadedStoryUcIds = new Set();
         this.save();
         this.notify();
     },
@@ -108,6 +110,7 @@ export const Store = {
         this.state.testSuites = [];
         this.state.loadedForUC.userStories = null;
         this.state.loadedForUC.testSuites = null;
+        this.state.loadedStoryUcIds = new Set();
         this.save();
         this.notify();
     },
@@ -120,9 +123,10 @@ export const Store = {
     },
 
     // User Stories
-    setUserStories(stories) {
+    setUserStories(stories, ucId) {
         this.state.userStories = stories;
-        this.state.loadedForUC.userStories = this.state.selectedUseCaseId;
+        if (ucId != null) this.state.loadedStoryUcIds.add(Number(ucId));
+        this.state.loadedForUC.userStories = ucId != null ? ucId : this.state.selectedUseCaseId;
         this.notify();
     },
 

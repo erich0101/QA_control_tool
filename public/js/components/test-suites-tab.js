@@ -19,20 +19,13 @@ export const TestSuitesTab = {
     _isListening: false,
     suiteSearchQuery: '',
     _lastJiraProjectId: null,
-    _lastMainScroll: 0,
-    _lastSidebarScroll: 0,
-
     render(container) {
-        const sidebarList = container.querySelector('.ts-sidebar-list');
-        const mainContent = container.querySelector('.ts-main-content');
-        const sidebarScroll = sidebarList ? sidebarList.scrollTop : 0;
-        const mainScroll = mainContent ? mainContent.scrollTop : 0;
-
-        const useMainScroll = this._lastMainScroll > 0 ? this._lastMainScroll : mainScroll;
-        const useSidebarScroll = this._lastSidebarScroll > 0 ? this._lastSidebarScroll : sidebarScroll;
-
         const { testSuites, activeProjectId, selectedUseCaseId, jiraEpics, loadedForUC } = Store.state;
         const totalTests = testSuites.reduce((acc, s) => acc + (s.test_cases || []).length, 0);
+
+        if (selectedUseCaseId && !Store.state.loadedStoryUcIds.has(Number(selectedUseCaseId))) {
+            this.loadStoriesForUC(selectedUseCaseId);
+        }
 
         if (selectedUseCaseId && loadedForUC.testSuites !== selectedUseCaseId) {
             this.loadSuitesForUC(selectedUseCaseId);
@@ -44,11 +37,17 @@ export const TestSuitesTab = {
             return;
         }
 
+        const suiteUcIds = Array.from(new Set(testSuites.map(s => s.use_case_id).filter(Boolean)));
+        for (const ucId of suiteUcIds) {
+            if (Store.state.loadedStoryUcIds.has(Number(ucId))) continue;
+            this.loadStoriesForUC(ucId);
+        }
+
         if (activeProjectId && this._lastJiraProjectId !== activeProjectId) {
             this._lastJiraProjectId = activeProjectId;
             ApiService.getJiraContext(activeProjectId).then(ctx => {
                 if (ctx?.error) {
-                    if (ctx.error.includes('token')) {
+                    if (ctx?.error.includes('token')) {
                         UI.toast('🔑 Configura tu token de Jira para ver las épicas', 'warn');
                     }
                     return;
@@ -120,17 +119,6 @@ export const TestSuitesTab = {
         `;
 
         this.bindEvents(container);
-
-        const newSidebarList = container.querySelector('.ts-sidebar-list');
-        const newMainContent = container.querySelector('.ts-main-content');
-        if (newSidebarList && useSidebarScroll > 0) {
-            newSidebarList.scrollTop = useSidebarScroll;
-            this._lastSidebarScroll = useSidebarScroll;
-        }
-        if (newMainContent && useMainScroll > 0) {
-            newMainContent.scrollTop = useMainScroll;
-            this._lastMainScroll = useMainScroll;
-        }
     },
 
     renderSidebarList(suites) {
@@ -559,11 +547,13 @@ export const TestSuitesTab = {
                                 <label class="field-label">Historia de Usuario</label>
                                 <select class="tc-us-select-detail ${readOnlyClass}" data-tc-id="${tc.id}" ${readOnlyAttr} style="${readOnlyAttr ? selectReadonlyStyle : selectStyle}">
                                     <option value="">— No vinculada —</option>
-                                    ${Store.state.userStories.map(us => {
-                                        const fullTitle = `${us.key_id} - ${us.title}`;
-                                        const displayTitle = fullTitle.length > 80 ? fullTitle.substring(0, 80) + '...' : fullTitle;
-                                        return `<option value="${us.id}" ${us.id === tc.us_id ? 'selected' : ''} title="${UI.escapeHTML(fullTitle)}">${UI.escapeHTML(displayTitle)}</option>`;
-                                    }).join('')}
+                                    ${Store.state.userStories
+                                        .filter(us => !suite?.use_case_id || Number(us.use_case_id) === Number(suite.use_case_id))
+                                        .map(us => {
+                                            const fullTitle = `${us.key_id} - ${us.title}`;
+                                            const displayTitle = fullTitle.length > 80 ? fullTitle.substring(0, 80) + '...' : fullTitle;
+                                            return `<option value="${us.id}" ${us.id === tc.us_id ? 'selected' : ''} title="${UI.escapeHTML(fullTitle)}">${UI.escapeHTML(displayTitle)}</option>`;
+                                        }).join('')}
                                 </select>
                             </div>
                             <div class="field-group">
@@ -711,10 +701,6 @@ export const TestSuitesTab = {
             btn.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                const mainContent = container.querySelector('.ts-main-content');
-                const sidebarList = container.querySelector('.ts-sidebar-list');
-                this._lastMainScroll = mainContent ? mainContent.scrollTop : 0;
-                this._lastSidebarScroll = sidebarList ? sidebarList.scrollTop : 0;
 
                 this.editingTCId = parseInt(btn.dataset.tcId);
                 this.render(container);
@@ -1027,9 +1013,6 @@ export const TestSuitesTab = {
                 e.stopPropagation();
                 if (btn.disabled) return;
 
-                const mainContent = container.querySelector('.ts-main-content');
-                const mainScroll = mainContent ? mainContent.scrollTop : 0;
-
                 const tcId = parseInt(btn.dataset.tcId);
                 const tc = Store.state.testSuites.flatMap(s => s.test_cases || []).find(t => t.id === tcId);
                 if (!tc) return;
@@ -1060,7 +1043,6 @@ export const TestSuitesTab = {
                 UI.showLoading();
                 await ApiService.updateTestCase(tcId, payload);
                 this.editingTCId = null;
-                this._lastMainScroll = mainScroll;
 
                 await this.reloadSuites();
                 UI.hideLoading();
@@ -1128,13 +1110,22 @@ export const TestSuitesTab = {
         });
     },
 
-    openGeminiModal(container, suiteId) {
+    async openGeminiModal(container, suiteId) {
         this._geminiImages = [];
         document.getElementById('modal-gemini-tc')?.remove();
 
         const savedKey = localStorage.getItem('gemini_api_key') || '';
         const suite = Store.state.testSuites.find(s => s.id === suiteId);
         const existingTitles = (suite?.test_cases || []).map(tc => tc.title);
+        const suiteUCId = suite?.use_case_id || Store.state.selectedUseCaseId;
+        if (suiteUCId && Store.state.loadedForUC.userStories !== suiteUCId) {
+            await this.loadStoriesForUC(suiteUCId);
+        }
+        const huOptions = (Store.state.userStories || [])
+            .filter(us => !suiteUCId || Number(us.use_case_id) === Number(suiteUCId))
+            .map(us => `<option value="${us.id}">${us.key_id} — ${us.title}</option>`)
+            .join('');
+
         const modal = document.createElement('div');
         modal.id = 'modal-gemini-tc';
         modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:var(--apple-z-modal);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(20px) saturate(180%);';
@@ -1159,13 +1150,30 @@ export const TestSuitesTab = {
                         <select id="gemini-tc-hu-select"
                             style="width:100%;padding:8px 12px;border-radius:var(--apple-radius-md);border:1px solid var(--apple-separator-opaque);background:var(--apple-bg-tertiary);color:var(--apple-label);font-size:0.85rem;outline:none;box-sizing:border-box;">
                             <option value="">— Seleccionar HU existente —</option>
-                            ${Store.state.userStories.map(us => `<option value="${us.id}">${us.key_id} — ${us.title}</option>`).join('')}
+                            ${huOptions}
                         </select>
+                        <div id="gemini-tc-create-hu" style="display:none;margin-top:8px;padding:10px 12px;background:var(--apple-fill);border:1px solid var(--apple-separator);border-radius:var(--apple-radius-md);flex-direction:column;gap:8px;">
+                            <label style="display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none;">
+                                <span class="switch" style="position:relative;display:inline-block;width:34px;height:20px;flex-shrink:0;">
+                                    <input id="gemini-tc-create-hu-toggle" type="checkbox" style="opacity:0;width:0;height:0;" />
+                                    <span class="slider" style="position:absolute;cursor:pointer;inset:0;background-color:var(--bg-surface-elevated);transition:.3s;border-radius:20px;border:1px solid var(--border);"></span>
+                                </span>
+                                <span style="font-size:0.8rem;font-weight:600;color:var(--apple-label);">Crear HU al generar tests</span>
+                            </label>
+                            <div id="gemini-tc-new-hu-fields" style="display:none;flex-direction:column;gap:4px;">
+                                <label for="gemini-tc-new-hu-title" style="font-size:0.65rem;font-weight:700;color:var(--apple-label-secondary);text-transform:uppercase;letter-spacing:0.04em;">📝 Título de la nueva HU <span style="color:var(--apple-red);">*</span></label>
+                                <input id="gemini-tc-new-hu-title" type="text" placeholder="Título de la nueva HU" required aria-required="true"
+                                    style="width:100%;padding:7px 10px;border-radius:var(--apple-radius-sm);border:1px solid var(--apple-separator-opaque);background:var(--apple-bg-tertiary);color:var(--apple-label);font-family:inherit;font-size:0.82rem;line-height:1.4;outline:none;box-sizing:border-box;transition:border-color 0.15s, box-shadow 0.15s;"
+                                    onfocus="this.style.borderColor='var(--apple-blue)';this.style.boxShadow='0 0 0 3px rgba(0,122,255,0.18)';"
+                                    onblur="this.style.borderColor='var(--apple-separator-opaque)';this.style.boxShadow='none';" />
+                                <span style="font-size:0.66rem;color:var(--apple-label-tertiary);line-height:1.4;">Obligatorio. El detalle se toma del texto de "Historia de Usuario / Contexto".</span>
+                            </div>
+                        </div>
                     </div>
                     <div>
                         <div style="font-size:0.68rem;font-weight:800;color:var(--apple-purple);text-transform:uppercase;margin-bottom:6px;">📝 Historia de Usuario / Contexto</div>
                         <textarea id="gemini-tc-hu" placeholder="Pegá aquí el texto de la HU, criterios de aceptación, reglas de negocio..."
-                            style="width:100%;min-height:130px;padding:14px;border-radius:var(--apple-radius-md);border:1px solid var(--apple-separator-opaque);background:var(--apple-bg-tertiary);color:var(--apple-label);font-family:inherit;font-size:0.88rem;line-height:1.6;resize:vertical;outline:none;box-sizing:border-box;"></textarea>
+                            style="width:100%;min-height:100px;max-height:200px;padding:12px;border-radius:var(--apple-radius-md);border:1px solid var(--apple-separator-opaque);background:var(--apple-bg-tertiary);color:var(--apple-label);font-family:inherit;font-size:0.85rem;line-height:1.55;resize:vertical;outline:none;box-sizing:border-box;"></textarea>
                     </div>
                     <div>
                         <div style="font-size:0.68rem;font-weight:800;color:var(--apple-purple);text-transform:uppercase;margin-bottom:6px;">🖼️ Imágenes <span style="font-weight:400;color:var(--apple-label-tertiary);">(opcional — Ctrl+V, drag & drop o click)</span></div>
@@ -1178,7 +1186,7 @@ export const TestSuitesTab = {
                         </div>
                         <input type="file" id="gemini-tc-file" accept="image/*" multiple style="display:none;" />
                     </div>
-                    <div id="gemini-tc-status" style="display:none;font-size:0.8rem;padding:10px 14px;border-radius:var(--apple-radius-md);font-weight:600;"></div>
+                    <div id="gemini-tc-status" style="display:none;position:sticky;bottom:0;font-size:0.78rem;padding:8px 12px;border-radius:var(--apple-radius-md);font-weight:600;margin:0 -24px -20px;background:var(--apple-bg-elevated);border-top:1px solid var(--apple-separator);box-shadow:0 -2px 8px rgba(0,0,0,0.06);"></div>
                     <div id="gemini-tc-analysis" style="display:none;"></div>
                 </div>
                 <div style="padding:14px 24px;background:var(--apple-fill);border-top:1px solid var(--apple-separator);display:flex;justify-content:flex-end;gap:10px;flex-shrink:0;">
@@ -1264,7 +1272,51 @@ export const TestSuitesTab = {
             }
         });
 
-        modal.querySelector('#gemini-tc-submit').onclick = () => this._callGemini(suiteId);
+        const huSelectEl = modal.querySelector('#gemini-tc-hu-select');
+        const huTextareaEl = modal.querySelector('#gemini-tc-hu');
+        const createHUBlock = modal.querySelector('#gemini-tc-create-hu');
+        const newHUFields = modal.querySelector('#gemini-tc-new-hu-fields');
+        const newHUTitleInput = modal.querySelector('#gemini-tc-new-hu-title');
+        const createHUToggle = modal.querySelector('#gemini-tc-create-hu-toggle');
+        let pendingCreateHU = false;
+
+        const syncCreateHU = () => {
+            if (!createHUBlock) return;
+            const hasText = (huTextareaEl?.value || '').trim().length > 0;
+            const noSel = !huSelectEl?.value;
+            createHUBlock.style.display = (hasText && noSel) ? 'flex' : 'none';
+        };
+        huSelectEl?.addEventListener('change', syncCreateHU);
+        huTextareaEl?.addEventListener('input', syncCreateHU);
+        syncCreateHU();
+
+        const applySwitchVisual = (on) => {
+            const slider = createHUToggle?.parentElement?.querySelector('.slider');
+            if (!slider) return;
+            if (on) {
+                slider.style.backgroundColor = 'var(--apple-blue)';
+                slider.style.borderColor = 'var(--apple-blue)';
+                slider.style.boxShadow = 'inset 0 0 0 1px var(--apple-blue), 0 0 0 3px rgba(0,122,255,0.18)';
+                const thumb = document.createElement('span');
+                thumb.className = 'gemini-switch-thumb';
+                thumb.style.cssText = 'position:absolute;top:2px;left:2px;width:14px;height:14px;background:#fff;border-radius:50%;transition:transform .25s;box-shadow:0 1px 2px rgba(0,0,0,0.2);';
+                if (on) thumb.style.transform = 'translateX(14px)';
+                slider.appendChild(thumb);
+            } else {
+                slider.style.backgroundColor = '';
+                slider.style.borderColor = '';
+                slider.style.boxShadow = '';
+                const t = slider.querySelector('.gemini-switch-thumb');
+                if (t) t.remove();
+            }
+        };
+        createHUToggle?.addEventListener('change', () => {
+            pendingCreateHU = !!createHUToggle.checked;
+            if (newHUFields) newHUFields.style.display = pendingCreateHU ? 'flex' : 'none';
+            applySwitchVisual(pendingCreateHU);
+        });
+
+        modal.querySelector('#gemini-tc-submit').onclick = () => this._callGemini(suiteId, pendingCreateHU);
     },
 
     _addGeminiImages(files) {
@@ -1424,15 +1476,43 @@ REGLAS:
         throw new Error('La respuesta no es un array de test cases');
     },
 
-    async _callGemini(suiteId) {
+    async _callGemini(suiteId, pendingCreateHU = false) {
         const apiKey = (document.getElementById('gemini-tc-key')?.value || '').trim();
         if (!apiKey) return this._setGeminiStatus('⚠️ Ingresá tu API Key de Gemini.', 'error');
 
         const hu = (document.getElementById('gemini-tc-hu')?.value || '').trim();
         const huSelect = document.getElementById('gemini-tc-hu-select');
-        const selectedHuId = huSelect ? parseInt(huSelect.value) || null : null;
+        let selectedHuId = huSelect ? parseInt(huSelect.value) || null : null;
         const isHuReadOnly = document.getElementById('gemini-tc-hu')?.readOnly || false;
         if (!hu && this._geminiImages.length === 0) return this._setGeminiStatus('⚠️ Escribí una HU o pegá al menos una imagen.', 'error');
+
+        const suite = Store.state.testSuites.find(s => s.id === suiteId);
+        const suiteUCId = suite?.use_case_id || Store.state.selectedUseCaseId;
+        if (pendingCreateHU) {
+            const newTitle = (document.getElementById('gemini-tc-new-hu-title')?.value || '').trim();
+            if (!newTitle) return this._setGeminiStatus('⚠️ Ingresá un título para la HU.', 'error');
+            if (!suiteUCId) return this._setGeminiStatus('⚠️ La suite no tiene un Caso de Uso asociado.', 'error');
+            try {
+                this._setGeminiStatus('📝 Creando HU previa…', 'info');
+                const res = await ApiService.createUserStory({
+                    use_case_id: suiteUCId,
+                    title: newTitle,
+                    hu_detallada: hu || '',
+                    priority: 'Media',
+                    status: 'En Análisis'
+                });
+                selectedHuId = res.id;
+                const { userStories } = await ApiService.getUserStories(suiteUCId);
+                Store.setUserStories(userStories || [], suiteUCId);
+                if (huSelect) {
+                    huSelect.innerHTML = '<option value="">— Seleccionar HU existente —</option>'
+                        + (userStories || []).map(us => `<option value="${us.id}">${us.key_id} — ${us.title}</option>`).join('');
+                    huSelect.value = String(res.id);
+                }
+            } catch (err) {
+                return this._setGeminiStatus(`❌ No se pudo crear la HU: ${err.message}`, 'error');
+            }
+        }
 
         const btn = document.getElementById('gemini-tc-submit');
         if (btn) { btn.disabled = true; }
@@ -1444,7 +1524,6 @@ REGLAS:
         this._geminiImages.forEach(img => parts.push({ inlineData: { mimeType: img.mimeType, data: img.base64 } }));
 
         try {
-            const suite = Store.state.testSuites.find(s => s.id === suiteId);
             const existingTitles = (suite?.test_cases || []).map(tc => tc.title);
 
             this._setGeminiStatus('🔄 Generando casos de prueba...', 'info');
@@ -1567,6 +1646,19 @@ const container = document.getElementById('tab-content');
             UI.toast(err.message, 'error');
         }
         UI.hideLoading();
+    },
+
+    async loadStoriesForUC(ucId) {
+        if (!ucId) {
+            Store.setUserStories([], null);
+            return;
+        }
+        try {
+            const { userStories } = await ApiService.getUserStories(ucId);
+            Store.setUserStories(userStories || [], ucId);
+        } catch(err) {
+            UI.toast(err.message, 'error');
+        }
     },
 
     setupRealtimeListener() {

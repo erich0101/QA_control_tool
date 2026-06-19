@@ -64,7 +64,7 @@ export const TopBar = {
                 Store.setSelectedUseCase(useCases[0].id);
                 // Cargar también las historias del primer caso de uso
                 const { stories } = await ApiService.getUserStories(useCases[0].id);
-                Store.setUserStories(stories || []);
+                Store.setUserStories(stories || [], useCases[0].id);
             }
             
             UI.hideLoading();

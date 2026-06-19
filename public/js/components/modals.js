@@ -708,7 +708,7 @@ getStartRunWizardContent({ suite, suites, cuTitle }) {
                     status: overlay.querySelector('#modal-us-status').value
                 });
                 const { userStories } = await ApiService.getUserStories(Store.state.selectedUseCaseId);
-                Store.setUserStories(userStories || []);
+                Store.setUserStories(userStories || [], Store.state.selectedUseCaseId);
                 // Refresh CU counts
                 const { useCases } = await ApiService.getUseCases(Store.state.activeProjectId);
                 Store.state.useCases = useCases || [];
