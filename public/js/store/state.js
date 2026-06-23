@@ -39,7 +39,8 @@ export const Store = {
         sbsPairs: [],
         isLoading: false,
         jiraEpics: [],
-        hallazgos: []
+        hallazgos: [],
+        suggestions: []
     },
     
     listeners: [],
@@ -181,6 +182,10 @@ export const Store = {
     // Hallazgos
     setHallazgos(hallazgos) {
         this.state.hallazgos = hallazgos;
+        this.notify();
+    },
+    setSuggestions(suggestions) {
+        this.state.suggestions = suggestions;
         this.notify();
     }
 };

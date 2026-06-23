@@ -38,6 +38,7 @@ export const Modals = {
             case 'bug-details-pro': content = this.getBugDetailsProContent(options); width = '800px'; break;
             case 'evidence-upload': content = this.getEvidenceUploadContent(options); width = '450px'; break;
             case 'import-dual': content = this.getImportDualContent(options); width = '450px'; break;
+            case 'batch-jira-tickets': content = this.getBatchJiraTicketsContent(options); width = '720px'; break;
             // Hallazgos ahora usan master-detail inline — estos casos se eliminaron
         }
 
@@ -86,6 +87,8 @@ export const Modals = {
             this.bindEvidenceUploadEvents(dialog, options);
         } else if (type === 'import-dual') {
             this.bindImportDualEvents(dialog, options);
+        } else if (type === 'batch-jira-tickets') {
+            this.bindBatchJiraTicketsEvents(dialog, options);
         } else if (false) { // Hallazgos ahora usan master-detail inline
         } else {
             const content = dialog.querySelector('.modal-content');
@@ -1611,6 +1614,301 @@ getStartRunWizardContent({ suite, suites, cuTitle }) {
                 importBtn.disabled = false;
                 UI.toast(err.message, 'error');
             }
+        };
+    },
+
+    // ══════════════════════════════════════════════════════════════
+    // ── BATCH JIRA TICKETS ──
+    // ══════════════════════════════════════════════════════════════
+
+    getBatchJiraTicketsContent(options) {
+        const { bugs = [] } = options;
+        return `
+            <div id="batch-jira-phase-config" style="display: flex; flex-direction: column; gap: 20px;">
+                <div>
+                    <h3 style="margin: 0 0 6px 0; font-size: 1.2rem; font-weight: 800; color: var(--text-main);">🚀 Crear ${bugs.length} ticket${bugs.length === 1 ? '' : 's'} en Jira</h3>
+                    <p style="color: var(--text-muted); font-size: 0.82rem; margin: 0;">Se enviarán en secuencia. Los campos aplicados a continuación se usarán en todos los tickets.</p>
+                </div>
+
+                <div id="batch-jira-context" style="background: var(--apple-fill-tertiary); padding: 16px; border-radius: var(--apple-radius-md); display: flex; flex-direction: column; gap: 14px;">
+                    <div style="display: flex; align-items: center; gap: 8px; color: var(--apple-label-secondary); font-size: 0.78rem;">
+                        <div class="loader-spinner" style="width: 14px; height: 14px; border: 2px solid var(--apple-fill); border-top-color: var(--apple-blue); border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                        Cargando configuración de Jira...
+                    </div>
+                </div>
+
+                <div>
+                    <div style="font-size: 0.7rem; font-weight: 800; color: var(--apple-label-tertiary); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 8px;">Bugs a procesar (${bugs.length})</div>
+                    <div style="background: var(--apple-bg-elevated); border: 1px solid var(--apple-separator); border-radius: var(--apple-radius-md); max-height: 180px; overflow-y: auto;">
+                        ${bugs.map(bug => {
+                            const sevBg = (bug.severity === 'Crítica' || bug.severity === 'Alta') ? 'rgba(255,59,48,0.1)' : 'rgba(255,149,0,0.1)';
+                            const sevColor = (bug.severity === 'Crítica' || bug.severity === 'Alta') ? 'var(--apple-red)' : 'var(--apple-orange)';
+                            return `
+                            <div style="display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-bottom: 1px solid var(--apple-separator); font-size: 0.82rem;">
+                                <span style="font-size: 0.72rem; font-weight: 800; color: var(--apple-label-tertiary); min-width: 50px;">#${bug.id}</span>
+                                <span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--apple-label);">${UI.escapeHTML(bug.title || 'Sin título')}</span>
+                                <span style="display: inline-flex; align-items: center; gap: 3px; padding: 2px 8px; border-radius: 20px; font-size: 0.62rem; font-weight: 700; background: ${sevBg}; color: ${sevColor};">${UI.escapeHTML(bug.severity || 'Media')}</span>
+                            </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 8px;">
+                    <button class="btn btn-ghost btn-sm" id="batch-jira-cancel" style="padding: 8px 18px; border-radius: var(--apple-radius-md); font-size: 0.78rem;">Cancelar</button>
+                    <button class="btn btn-primary btn-sm" id="batch-jira-start" disabled style="padding: 8px 22px; border-radius: var(--apple-radius-md); font-size: 0.78rem; font-weight: 700; opacity: 0.5; cursor: not-allowed;">🚀 Iniciar creación</button>
+                </div>
+            </div>
+
+            <div id="batch-jira-phase-progress" style="display: none; flex-direction: column; gap: 16px;">
+                <div>
+                    <h3 style="margin: 0 0 6px 0; font-size: 1.2rem; font-weight: 800; color: var(--text-main);">Creando tickets en Jira</h3>
+                    <p id="batch-jira-progress-label" style="color: var(--text-muted); font-size: 0.82rem; margin: 0;">0 de ${bugs.length} completados</p>
+                </div>
+
+                <div style="background: var(--apple-fill-tertiary); height: 8px; border-radius: 4px; overflow: hidden;">
+                    <div id="batch-jira-progress-bar" style="height: 100%; width: 0%; background: linear-gradient(90deg, var(--apple-blue), var(--apple-indigo)); border-radius: 4px; transition: width 0.4s cubic-bezier(0.25, 0.1, 0.25, 1);"></div>
+                </div>
+
+                <div id="batch-jira-progress-list" style="background: var(--apple-bg-elevated); border: 1px solid var(--apple-separator); border-radius: var(--apple-radius-md); max-height: 280px; overflow-y: auto;"></div>
+
+                <div id="batch-jira-summary" style="display: none; flex-direction: column; gap: 8px;">
+                    <div id="batch-jira-summary-text" style="font-size: 0.85rem; font-weight: 700; padding: 10px 14px; border-radius: var(--apple-radius-md);"></div>
+                    <details id="batch-jira-errors-details" style="display: none; background: var(--apple-bg-elevated); border: 1px solid rgba(255,59,48,0.2); border-radius: var(--apple-radius-md); padding: 12px 16px;">
+                        <summary style="cursor: pointer; font-size: 0.78rem; font-weight: 700; color: var(--apple-red); user-select: none;">Ver detalles de errores</summary>
+                        <div id="batch-jira-errors-list" style="margin-top: 10px; display: flex; flex-direction: column; gap: 6px; font-size: 0.75rem;"></div>
+                    </details>
+                </div>
+
+                <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 4px;">
+                    <button class="btn btn-ghost btn-sm" id="batch-jira-refresh" style="display: none; padding: 8px 18px; border-radius: var(--apple-radius-md); font-size: 0.78rem;">🔄 Actualizar lista</button>
+                    <button class="btn btn-primary btn-sm" id="batch-jira-close" disabled style="padding: 8px 22px; border-radius: var(--apple-radius-md); font-size: 0.78rem; font-weight: 700; opacity: 0.5; cursor: not-allowed;">Cerrar</button>
+                </div>
+            </div>
+        `;
+    },
+
+    bindBatchJiraTicketsEvents(dialog, options) {
+        const { bugs = [], onComplete } = options;
+        const close = () => { dialog.close(); dialog.remove(); };
+
+        document.getElementById('batch-jira-cancel').onclick = close;
+        document.getElementById('batch-jira-close').onclick = close;
+        document.getElementById('batch-jira-refresh').onclick = async () => {
+            close();
+            if (onComplete) await onComplete();
+        };
+
+        // 1. Cargar contexto Jira y popular selects
+        (async () => {
+            const projectId = Store.state.activeProjectId;
+            if (!projectId) return;
+
+            const contextContainer = document.getElementById('batch-jira-context');
+            const startBtn = document.getElementById('batch-jira-start');
+            let jiraContext = { epics: [], users: [], priorities: [], customFields: [], error: null };
+
+            try {
+                jiraContext = await ApiService.getJiraContext(projectId);
+            } catch (e) {
+                jiraContext = { ...jiraContext, error: e.message };
+            }
+
+            if (jiraContext.error) {
+                contextContainer.innerHTML = `
+                    <div style="color: var(--apple-red); font-size: 0.82rem; padding: 8px 4px;">
+                        ⚠️ ${UI.escapeHTML(jiraContext.error.includes('token') ? 'Configura tu token de Jira antes de crear tickets.' : jiraContext.error)}
+                    </div>
+                `;
+                return;
+            }
+
+            const { epics = [], users = [], priorities = [], customFields = [] } = jiraContext;
+            const inputStyle = "width:100%; padding:8px 12px; background:var(--apple-bg-tertiary); border:1px solid var(--apple-separator); border-radius:var(--apple-radius-md); color:var(--apple-label); font-size:0.85rem; outline:none; box-sizing:border-box; transition: border-color 0.15s;";
+            const focusAttr = `onfocus="this.style.borderColor='var(--apple-blue)'" onblur="this.style.borderColor='var(--apple-separator)'"`;
+
+            contextContainer.innerHTML = `
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div>
+                        <label style="display:block; font-size: 0.7rem; font-weight: 700; color: var(--apple-label-secondary); margin-bottom: 4px;">📌 Épica</label>
+                        <select id="batch-jira-epic" style="${inputStyle}" ${focusAttr}>
+                            <option value="">— Sin Épica —</option>
+                            ${epics.map(e => `<option value="${UI.escapeHTML(e.id)}">${UI.escapeHTML(e.key)} | ${UI.escapeHTML(e.summary)}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div>
+                        <label style="display:block; font-size: 0.7rem; font-weight: 700; color: var(--apple-label-secondary); margin-bottom: 4px;">🎯 Prioridad</label>
+                        <select id="batch-jira-priority" style="${inputStyle}" ${focusAttr}>
+                            ${priorities.map(p => `<option value="${UI.escapeHTML(p.id)}" ${p.name === 'Medium' ? 'selected' : ''}>${UI.escapeHTML(p.name)}</option>`).join('')}
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label style="display:block; font-size: 0.7rem; font-weight: 700; color: var(--apple-label-secondary); margin-bottom: 4px;">👤 Asignado a</label>
+                    <select id="batch-jira-assignee" style="${inputStyle}" ${focusAttr}>
+                        <option value="">— Sin asignar —</option>
+                        ${users.map(u => `<option value="${UI.escapeHTML(u.accountId)}">${UI.escapeHTML(u.displayName)}</option>`).join('')}
+                    </select>
+                </div>
+                ${customFields.length > 0 ? `
+                    <div>
+                        <div style="font-size: 0.7rem; font-weight: 700; color: var(--apple-label-secondary); margin-bottom: 6px;">⚙️ Campos personalizados</div>
+                        <div id="batch-jira-custom-fields" style="display: flex; flex-direction: column; gap: 10px;"></div>
+                    </div>
+                ` : ''}
+            `;
+
+            // Renderizar custom fields
+            if (customFields.length > 0) {
+                const cfContainer = document.getElementById('batch-jira-custom-fields');
+                let cfHtml = '';
+                for (const field of customFields) {
+                    cfHtml += `<div>
+                        <label style="display:block; font-size: 0.66rem; color: var(--apple-label-secondary); margin-bottom: 3px;">${UI.escapeHTML(field.name)}${field.required ? ' *' : ''}</label>`;
+                    if (field.options && field.options.length > 0) {
+                        cfHtml += `<select id="batch-cf-${UI.escapeHTML(field.fieldId)}" style="${inputStyle}" ${focusAttr}>
+                            <option value="">— Seleccionar —</option>
+                            ${field.options.map(o => `<option value="${UI.escapeHTML(o.id)}">${UI.escapeHTML(o.name)}</option>`).join('')}
+                        </select>`;
+                    } else {
+                        cfHtml += `<input type="text" id="batch-cf-${UI.escapeHTML(field.fieldId)}" style="${inputStyle}" ${focusAttr} placeholder="Ingresar valor...">`;
+                    }
+                    cfHtml += `</div>`;
+                }
+                cfContainer.innerHTML = cfHtml;
+            }
+
+            // Habilitar botón
+            startBtn.disabled = false;
+            startBtn.style.opacity = '1';
+            startBtn.style.cursor = 'pointer';
+        })();
+
+        // 2. Iniciar la creación
+        document.getElementById('batch-jira-start').onclick = async () => {
+            const startBtn = document.getElementById('batch-jira-start');
+            const cancelBtn = document.getElementById('batch-jira-cancel');
+            const phaseConfig = document.getElementById('batch-jira-phase-config');
+            const phaseProgress = document.getElementById('batch-jira-phase-progress');
+            const progressLabel = document.getElementById('batch-jira-progress-label');
+            const progressBar = document.getElementById('batch-jira-progress-bar');
+            const progressList = document.getElementById('batch-jira-progress-list');
+            const summary = document.getElementById('batch-jira-summary');
+            const summaryText = document.getElementById('batch-jira-summary-text');
+            const errorsDetails = document.getElementById('batch-jira-errors-details');
+            const errorsList = document.getElementById('batch-jira-errors-list');
+            const refreshBtn = document.getElementById('batch-jira-refresh');
+            const closeBtn = document.getElementById('batch-jira-close');
+
+            const epicId = document.getElementById('batch-jira-epic')?.value || '';
+            const assigneeId = document.getElementById('batch-jira-assignee')?.value || '';
+            const priorityId = document.getElementById('batch-jira-priority')?.value || '';
+
+            const customFieldValues = {};
+            document.querySelectorAll('[id^="batch-cf-"]').forEach(el => {
+                const fieldId = el.id.replace('batch-cf-', '');
+                if (el.value) {
+                    if (el.tagName === 'SELECT') {
+                        customFieldValues[fieldId] = { id: el.value };
+                    } else {
+                        customFieldValues[fieldId] = el.value;
+                    }
+                }
+            });
+
+            // Inicializar lista visual
+            progressList.innerHTML = bugs.map(bug => `
+                <div id="batch-row-${bug.id}" data-status="pending" style="display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-bottom: 1px solid var(--apple-separator); font-size: 0.82rem;">
+                    <span style="font-size: 0.85rem; min-width: 22px; text-align: center;" data-icon>⏳</span>
+                    <span style="font-size: 0.72rem; font-weight: 800; color: var(--apple-label-tertiary); min-width: 50px;">#${bug.id}</span>
+                    <span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--apple-label);">${UI.escapeHTML(bug.title || 'Sin título')}</span>
+                    <span data-result style="font-size: 0.7rem; color: var(--apple-label-tertiary); font-weight: 600;">Pendiente</span>
+                </div>
+            `).join('');
+
+            // Cambiar fase
+            phaseConfig.style.display = 'none';
+            phaseProgress.style.display = 'flex';
+            cancelBtn.disabled = true;
+
+            // Ejecutar creación en secuencia
+            let okCount = 0;
+            let errCount = 0;
+            const errors = [];
+
+            for (let i = 0; i < bugs.length; i++) {
+                const bug = bugs[i];
+                const row = document.getElementById(`batch-row-${bug.id}`);
+                const iconEl = row?.querySelector('[data-icon]');
+                const resultEl = row?.querySelector('[data-result]');
+
+                // Marcar como "enviando"
+                if (row) row.dataset.status = 'sending';
+                if (iconEl) iconEl.textContent = '⌛';
+                if (resultEl) { resultEl.textContent = 'Enviando...'; resultEl.style.color = 'var(--apple-blue)'; }
+                if (row) row.style.background = 'rgba(0,122,255,0.04)';
+
+                try {
+                    const result = await ApiService.createJiraBug(bug.id, epicId, assigneeId, priorityId, customFieldValues);
+                    if (row) row.dataset.status = 'ok';
+                    if (iconEl) iconEl.textContent = '✅';
+                    if (resultEl) {
+                        resultEl.innerHTML = `<a href="${UI.escapeHTML(result.jira.browser_url)}" target="_blank" rel="noopener" style="color: var(--apple-green); font-weight: 700; text-decoration: none;">${UI.escapeHTML(result.jira.key)} ↗</a>`;
+                    }
+                    if (row) row.style.background = 'rgba(52,199,89,0.06)';
+                    okCount++;
+                } catch (err) {
+                    if (row) row.dataset.status = 'error';
+                    if (iconEl) iconEl.textContent = '❌';
+                    if (resultEl) {
+                        resultEl.textContent = 'Error';
+                        resultEl.style.color = 'var(--apple-red)';
+                    }
+                    if (row) row.style.background = 'rgba(255,59,48,0.06)';
+                    errors.push({ bug, error: err.message });
+                    errCount++;
+                }
+
+                // Actualizar barra y label
+                const done = i + 1;
+                const pct = (done / bugs.length) * 100;
+                progressLabel.textContent = `${done} de ${bugs.length} completados`;
+                progressBar.style.width = `${pct}%`;
+
+                // Auto-scroll al item actual
+                if (row) row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            }
+
+            // Resumen final
+            summary.style.display = 'flex';
+            if (errCount === 0) {
+                summaryText.style.background = 'rgba(52,199,89,0.10)';
+                summaryText.style.color = 'var(--apple-green)';
+                summaryText.textContent = `✅ ${okCount} ticket${okCount === 1 ? '' : 's'} creado${okCount === 1 ? '' : 's'} correctamente`;
+            } else if (okCount === 0) {
+                summaryText.style.background = 'rgba(255,59,48,0.10)';
+                summaryText.style.color = 'var(--apple-red)';
+                summaryText.textContent = `❌ No se pudo crear ninguno de los ${bugs.length} tickets`;
+            } else {
+                summaryText.style.background = 'rgba(255,149,0,0.10)';
+                summaryText.style.color = 'var(--apple-orange)';
+                summaryText.textContent = `⚠️ ${okCount} creado${okCount === 1 ? '' : 's'}, ${errCount} con error`;
+            }
+
+            if (errors.length > 0) {
+                errorsDetails.style.display = 'block';
+                errorsList.innerHTML = errors.map(e => `
+                    <div style="padding: 8px 10px; background: rgba(255,59,48,0.04); border-radius: var(--apple-radius-sm);">
+                        <div style="font-weight: 700; color: var(--apple-label); margin-bottom: 2px;">#${e.bug.id} — ${UI.escapeHTML(e.bug.title || 'Sin título')}</div>
+                        <div style="color: var(--apple-red);">${UI.escapeHTML(e.error)}</div>
+                    </div>
+                `).join('');
+            }
+
+            refreshBtn.style.display = (okCount > 0) ? 'inline-flex' : 'none';
+            closeBtn.disabled = false;
+            closeBtn.style.opacity = '1';
+            closeBtn.style.cursor = 'pointer';
         };
     },
 

@@ -124,6 +124,9 @@ export const ApiService = {
     async updateTestSuite(id, data) {
         return fetch(`/api/test-suites/${id}`, { method: 'PUT', body: JSON.stringify(data), headers }).then(json);
     },
+    async setTestSuiteActive(id, isActive) {
+        return fetch(`/api/test-suites/${id}/active`, { method: 'PUT', body: JSON.stringify({ is_active: isActive }), headers }).then(json);
+    },
     async updateSuiteInconsistencies(suiteId, inconsistencies) {
         return fetch(`/api/test-suites/${suiteId}/inconsistencies`, { method: 'PUT', body: JSON.stringify({ inconsistencies }), headers }).then(json);
     },
@@ -263,6 +266,26 @@ export const ApiService = {
             body: JSON.stringify({ epicId, assigneeId, priorityId, customFields }),
             headers
         }).then(json);
+    },
+
+    // ── Sugerencias (subsección dentro de Hallazgos) ──
+    async getSuggestions(projectId) {
+        return fetch(`/api/suggestions?project_id=${projectId}`).then(json);
+    },
+    async createSuggestion(data) {
+        return fetch('/api/suggestions', { method: 'POST', body: JSON.stringify(data), headers }).then(json);
+    },
+    async updateSuggestion(id, data) {
+        return fetch(`/api/suggestions/${id}`, { method: 'PUT', body: JSON.stringify(data), headers }).then(json);
+    },
+    async deleteSuggestion(id) {
+        return fetch(`/api/suggestions/${id}`, { method: 'DELETE' }).then(json);
+    },
+    async updateSuggestionStatus(id, status) {
+        return fetch(`/api/suggestions/${id}/status`, { method: 'PUT', body: JSON.stringify({ status }), headers }).then(json);
+    },
+    async assignSuggestion(id, userId) {
+        return fetch(`/api/suggestions/${id}/assign`, { method: 'PUT', body: JSON.stringify({ assigned_to: userId }), headers }).then(json);
     },
 
     // ── Test Cases ──

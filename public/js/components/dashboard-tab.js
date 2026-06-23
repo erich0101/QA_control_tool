@@ -8,6 +8,7 @@ import { DashboardEpicReport } from './dashboard-epic-report.js';
 export const DashboardTab = {
     stats: [],
     overview: null,
+    expandedPerfGroups: new Set(),
     activeSubTab: 'overview', // 'overview', 'performance', 'daily', 'team', 'epic-report'
     dateFrom: null,
     dateTo: null,
@@ -207,9 +208,9 @@ export const DashboardTab = {
 
         return `
             <div class="dashboard-grid" style="display: grid; grid-template-columns: 1fr; gap: 24px; padding: 24px;">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
                     <h2 style="font-size: 0.85rem; font-weight: 800; color: var(--text-main); text-transform: uppercase; letter-spacing: 0.1em; margin: 0;">Métricas de Rendimiento y Ciclo de Vida</h2>
-                    <div style="display: flex; align-items: center; gap: 12px;">
+                    <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
                         <label style="font-size: 0.7rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Desde</label>
                         <input type="date" id="perf-date-from" value="${this.dateFrom}" style="padding: 8px 12px; border-radius: 10px; background: var(--bg-input); border: 1px solid var(--border); color: var(--text-main); font-size: 0.85rem;">
                         <label style="font-size: 0.7rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Hasta</label>
@@ -237,24 +238,14 @@ export const DashboardTab = {
                     <table class="stats-table" style="width: 100%; border-collapse: collapse;">
                         <thead>
                             <tr style="background: var(--bg-main); text-align: left;">
-                                <th style="padding: 12px 24px; font-size: 0.7rem; color: var(--text-muted);">SUITE</th>
+                                <th style="padding: 12px 24px; font-size: 0.7rem; color: var(--text-muted);">PERIODO / SUITE</th>
                                 <th style="padding: 12px 24px; font-size: 0.7rem; color: var(--text-muted); text-align: center;">EJECUCIONES</th>
                                 <th style="padding: 12px 24px; font-size: 0.7rem; color: var(--text-muted); text-align: center;">PROMEDIO</th>
                                 <th style="padding: 12px 24px; font-size: 0.7rem; color: var(--text-muted); text-align: center;">TOTAL ACUMULADO</th>
                             </tr>
                         </thead>
                         <tbody>
-                            ${this.stats.map(s => `
-                                <tr style="border-bottom: 1px solid var(--border);">
-                                    <td style="padding: 16px 24px;">
-                                        <div style="font-weight: 700; color: var(--text-main);">${UI.escapeHTML(s.title)}</div>
-                                        <div style="font-size: 0.65rem; color: var(--text-muted);">ID: ${s.id}</div>
-                                    </td>
-                                    <td style="padding: 16px 24px; text-align: center; font-weight: 800; color: var(--brand);">${s.total_runs}</td>
-                                    <td style="padding: 16px 24px; text-align: center; color: var(--warning); font-family: monospace;">${this.formatTime(s.avg_minutes)}</td>
-                                    <td style="padding: 16px 24px; text-align: center; color: var(--ok); font-family: monospace; font-weight: 700;">${this.formatTime(s.total_minutes)}</td>
-                                </tr>
-                            `).join('')}
+                            ${this.buildPerfTree()}
                         </tbody>
                     </table>
                 </div>
@@ -267,6 +258,114 @@ export const DashboardTab = {
                 </div>
             </div>
         `;
+    },
+
+    buildPerfTree() {
+        const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+        // Construye árbol Año > Mes > Día agrupando TODOS los runs de todas las suites
+        const byYear = {};
+        this.stats.forEach(s => {
+            const runs = Array.isArray(s.runs) ? s.runs : [];
+            runs.forEach(r => {
+                if (!r.finished_at) return;
+                const d = new Date(r.finished_at);
+                const y = d.getFullYear();
+                const m = d.getMonth();
+                const day = d.getDate();
+                if (!byYear[y]) byYear[y] = {};
+                if (!byYear[y][m]) byYear[y][m] = {};
+                if (!byYear[y][m][day]) byYear[y][m][day] = { runs: [], minutes: 0 };
+                byYear[y][m][day].runs.push({ ...r, suite_id: s.id, suite_title: s.title });
+                byYear[y][m][day].minutes += Number(r.minutes || 0);
+            });
+        });
+
+        const years = Object.keys(byYear).sort((a, b) => b - a);
+        if (years.length === 0) {
+            return `<tr><td colspan="4" style="padding: 24px; text-align: center; color: var(--text-muted);">Sin ejecuciones en el periodo.</td></tr>`;
+        }
+
+        return years.map(y => {
+            const yKey = `py-${y}`;
+            const yExpanded = this.expandedPerfGroups.has(yKey) || this.expandedPerfGroups.size === 0;
+            const yRunsCount = years.reduce((acc, _y) => acc + Object.values(byYear[_y] || {}).reduce((a, m) => a + Object.values(m).reduce((s, d) => s + d.runs.length, 0), 0), 0);
+            const yMinutes = years.reduce((acc, _y) => acc + Object.values(byYear[_y] || {}).reduce((a, m) => a + Object.values(m).reduce((s, d) => s + d.minutes, 0), 0), 0);
+
+            return `
+                <tr class="perf-group-row" data-group-key="${yKey}" style="background: var(--bg-main); cursor: pointer;">
+                    <td colspan="4" style="padding: 12px 24px;">
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <span style="font-size: 0.78rem; color: var(--text-muted); transition: transform 0.15s; transform: ${yExpanded ? 'rotate(90deg)' : 'rotate(0)'};">▶</span>
+                            <span style="font-weight: 800; color: var(--text-main); font-size: 0.85rem;">📅 ${y}</span>
+                            <span style="font-size: 0.7rem; color: var(--text-muted);">${yRunsCount} ejecuciones</span>
+                            <span style="font-size: 0.7rem; color: var(--ok); font-weight: 600; margin-left: auto;">${this.formatTime(yMinutes)} total</span>
+                        </div>
+                    </td>
+                </tr>
+                ${yExpanded ? Object.keys(byYear[y]).sort((a, b) => b - a).map(m => {
+                    const mKey = `pm-${y}-${m}`;
+                    const mExpanded = this.expandedPerfGroups.has(mKey) || this.expandedPerfGroups.size === 0;
+                    const mRunsCount = Object.values(byYear[y][m]).reduce((a, d) => a + d.runs.length, 0);
+                    const mMinutes = Object.values(byYear[y][m]).reduce((a, d) => a + d.minutes, 0);
+                    return `
+                        <tr class="perf-group-row" data-group-key="${mKey}" style="background: var(--bg-surface); cursor: pointer;">
+                            <td colspan="4" style="padding: 10px 24px 10px 44px;">
+                                <div style="display: flex; align-items: center; gap: 12px;">
+                                    <span style="font-size: 0.72rem; color: var(--text-muted); transition: transform 0.15s; transform: ${mExpanded ? 'rotate(90deg)' : 'rotate(0)'};">▶</span>
+                                    <span style="font-weight: 700; color: var(--text-main); font-size: 0.8rem;">${MONTHS[Number(m)]}</span>
+                                    <span style="font-size: 0.68rem; color: var(--text-muted);">${mRunsCount} ejecuciones</span>
+                                    <span style="font-size: 0.68rem; color: var(--warning); font-weight: 600; margin-left: auto;">${this.formatTime(mMinutes)} promedio total</span>
+                                </div>
+                            </td>
+                        </tr>
+                        ${mExpanded ? Object.keys(byYear[y][m]).sort((a, b) => b - a).map(day => {
+                            const dayKey = `pd-${y}-${m}-${day}`;
+                            const dayExpanded = this.expandedPerfGroups.has(dayKey) || this.expandedPerfGroups.size === 0;
+                            const dayData = byYear[y][m][day];
+                            const dayRuns = dayData.runs;
+                            const dayMinutes = dayData.minutes;
+                            const dayDate = new Date(Number(y), Number(m), Number(day));
+                            const dayLabel = dayDate.toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric' });
+                            return `
+                                <tr class="perf-group-row" data-group-key="${dayKey}" style="background: rgba(0,122,255,0.04); cursor: pointer;">
+                                    <td colspan="4" style="padding: 9px 24px 9px 68px;">
+                                        <div style="display: flex; align-items: center; gap: 12px;">
+                                            <span style="font-size: 0.7rem; color: var(--text-muted); transition: transform 0.15s; transform: ${dayExpanded ? 'rotate(90deg)' : 'rotate(0)'};">▶</span>
+                                            <span style="font-weight: 600; color: var(--text-main); font-size: 0.78rem;">${dayLabel}</span>
+                                            <span style="font-size: 0.65rem; color: var(--text-muted);">${dayRuns[0] ? new Date(dayRuns[0].finished_at).toLocaleDateString('es-AR') : ''}</span>
+                                            <span style="font-size: 0.65rem; color: var(--text-muted); margin-left: auto;">${dayRuns.length} ejecuciones · ${this.formatTime(dayMinutes)}</span>
+                                        </div>
+                                    </td>
+                                </tr>
+                                ${dayExpanded ? this.renderPerfDayRuns(dayRuns) : ''}
+                            `;
+                        }).join('') : ''}
+                    `;
+                }).join('') : ''}
+            `;
+        }).join('');
+    },
+
+    renderPerfDayRuns(runs) {
+        // Agrupa runs del día por suite
+        const bySuite = {};
+        runs.forEach(r => {
+            if (!bySuite[r.suite_id]) bySuite[r.suite_id] = { suite_title: r.suite_title, runs: [], minutes: 0, count: 0 };
+            bySuite[r.suite_id].runs.push(r);
+            bySuite[r.suite_id].minutes += Number(r.minutes || 0);
+            bySuite[r.suite_id].count++;
+        });
+        return Object.values(bySuite).map(s => `
+            <tr style="border-bottom: 1px solid var(--border);">
+                <td style="padding: 10px 24px 10px 88px;">
+                    <div style="font-weight: 600; color: var(--text-main); font-size: 0.78rem;">${UI.escapeHTML(s.suite_title)}</div>
+                    <div style="font-size: 0.62rem; color: var(--text-muted);">Suite #${s.runs[0].suite_id} · ${s.count} corrida(s)</div>
+                </td>
+                <td style="padding: 10px 24px; text-align: center; font-weight: 700; color: var(--brand); font-size: 0.85rem;">${s.count}</td>
+                <td style="padding: 10px 24px; text-align: center; color: var(--warning); font-family: monospace; font-size: 0.78rem;">${this.formatTime(s.minutes / s.count)}</td>
+                <td style="padding: 10px 24px; text-align: center; color: var(--ok); font-family: monospace; font-weight: 700; font-size: 0.78rem;">${this.formatTime(s.minutes)}</td>
+            </tr>
+        `).join('');
     },
 
     formatTime(minutes) {
@@ -298,7 +397,22 @@ export const DashboardTab = {
         });
 
         container.querySelector('#perf-apply-dates')?.addEventListener('click', () => {
+            this.expandedPerfGroups.clear();
             this.render(container);
+        });
+
+        // Toggles de grupo del árbol de rendimiento
+        container.querySelectorAll('.perf-group-row').forEach(row => {
+            row.addEventListener('click', (e) => {
+                if (e.target.closest('input,button,select,label,a')) return;
+                const key = row.dataset.groupKey;
+                if (this.expandedPerfGroups.has(key)) {
+                    this.expandedPerfGroups.delete(key);
+                } else {
+                    this.expandedPerfGroups.add(key);
+                }
+                this.render(container);
+            });
         });
     }
 };

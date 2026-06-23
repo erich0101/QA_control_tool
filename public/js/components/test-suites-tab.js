@@ -21,7 +21,7 @@ export const TestSuitesTab = {
     _lastJiraProjectId: null,
     render(container) {
         const { testSuites, activeProjectId, selectedUseCaseId, jiraEpics, loadedForUC } = Store.state;
-        const totalTests = testSuites.reduce((acc, s) => acc + (s.test_cases || []).length, 0);
+        const totalTests = testSuites.reduce((acc, s) => acc + (typeof s.test_cases_count === 'number' ? s.test_cases_count : (s.test_cases || []).length), 0);
 
         if (selectedUseCaseId && !Store.state.loadedStoryUcIds.has(Number(selectedUseCaseId))) {
             this.loadStoriesForUC(selectedUseCaseId);
@@ -75,6 +75,12 @@ export const TestSuitesTab = {
 
         const selectedSuite = testSuites.find(s => s.id === this.selectedSuiteId);
 
+        // Preservar scroll de paneles antes del re-render para evitar saltos visuales
+        const sidebarList = container.querySelector('.ts-sidebar-list');
+        const gridPanel = container.querySelector('.ts-grid-panel');
+        const sidebarScroll = sidebarList ? sidebarList.scrollTop : 0;
+        const gridScroll = gridPanel ? gridPanel.scrollTop : 0;
+
         container.innerHTML = `
             <div class="ts-layout">
                 <div class="ts-sidebar">
@@ -119,6 +125,14 @@ export const TestSuitesTab = {
         `;
 
         this.bindEvents(container);
+
+        // Restaurar scroll después del re-render y reflow
+        requestAnimationFrame(() => {
+            const newSidebar = container.querySelector('.ts-sidebar-list');
+            const newGrid = container.querySelector('.ts-grid-panel');
+            if (newSidebar) newSidebar.scrollTop = sidebarScroll;
+            if (newGrid) newGrid.scrollTop = gridScroll;
+        });
     },
 
     renderSidebarList(suites) {
@@ -138,7 +152,8 @@ export const TestSuitesTab = {
                 ${filtered.map((suite, idx) => {
                     const isActive = this.selectedSuiteId === suite.id;
                     const isExecuting = !!suite.active_run_id;
-                    const testCount = (suite.test_cases || []).length;
+                    const isIncluded = suite.is_active !== false;
+                    const testCount = typeof suite.test_cases_count === 'number' ? suite.test_cases_count : (suite.test_cases || []).length;
 
                     let incIndicator = '';
                     const incList = suite.inconsistencies || [];
@@ -146,6 +161,7 @@ export const TestSuitesTab = {
                         incIndicator = `<span title="Tiene inconsistencias" style="font-size: 0.65rem; color: var(--apple-orange);">⚠️</span>`;
                     }
 
+                    const excludedBg = 'background: linear-gradient(135deg, rgba(255,159,10,0.10), rgba(255,159,10,0.04)); box-shadow: inset 3px 0 0 var(--apple-orange);';
                     const selectedStyle = isActive ? `
                         background: var(--apple-indigo-soft);
                         border-left: 3px solid var(--apple-blue);
@@ -155,17 +171,21 @@ export const TestSuitesTab = {
                         padding-left: 12px;
                     `;
 
+                    const dimmed = isIncluded ? '' : 'opacity: 0.7;';
+                    const excludedStyle = isIncluded ? '' : excludedBg;
+
                     return `
-                        <div class="ts-suite-row ${isActive ? 'selected' : ''}" data-id="${suite.id}"
-                            style="border-radius: var(--apple-radius-md); padding: 10px 12px; cursor: pointer; transition: all 0.15s ease; ${selectedStyle}"
+                        <div class="ts-suite-row ${isActive ? 'selected' : ''} ${isIncluded ? '' : 'ts-suite-row-excluded'}" data-id="${suite.id}"
+                            style="border-radius: var(--apple-radius-md); padding: 10px 12px; cursor: pointer; transition: all 0.15s ease; ${selectedStyle} ${excludedStyle} ${dimmed}"
                             onmouseover="if(!this.classList.contains('selected')) this.style.background='var(--apple-fill)'"
                             onmouseout="if(!this.classList.contains('selected')) this.style.background='transparent'">
-                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
-                                <span style="font-size: 0.68rem; font-weight: 700; color: var(--apple-label-tertiary); letter-spacing: 0.03em;">SUITE #${suite.id}</span>
+                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px; flex-wrap: wrap;">
+                                <span style="font-size: 0.68rem; font-weight: 700; color: ${isIncluded ? 'var(--apple-label-tertiary)' : 'var(--apple-orange)'}; letter-spacing: 0.03em;">SUITE #${suite.id}</span>
                                 ${isExecuting ? '<span style="font-size: 6px; padding: 2px 5px; border-radius: 10px; background: var(--apple-green); color: white; font-weight: 700;">LIVE</span>' : ''}
+                                ${!isIncluded ? '<span title="Esta suite y sus tests están fuera del gap de pruebas: no se contabilizan en las métricas de cobertura" style="font-size: 9px; padding: 2px 7px; border-radius: 10px; background: var(--apple-orange); color: white; font-weight: 800; letter-spacing: 0.04em;">FUERA DEL GAP</span>' : ''}
                                 ${incIndicator}
                             </div>
-                            <div style="font-size: 0.82rem; font-weight: 600; color: var(--apple-label); margin-bottom: 4px; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${UI.escapeHTML(suite.title)}</div>
+                            <div style="font-size: 0.82rem; font-weight: 600; color: ${isIncluded ? 'var(--apple-label)' : 'var(--apple-label-secondary)'}; margin-bottom: 4px; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; ${isIncluded ? '' : 'text-decoration: line-through; text-decoration-color: var(--apple-orange); text-decoration-thickness: 1.5px;'}">${UI.escapeHTML(suite.title)}</div>
                             <div style="font-size: 0.7rem; color: var(--apple-label-tertiary); display: flex; align-items: center; gap: 4px;">
                                 <span style="color: var(--apple-blue);">🧪</span> ${testCount} tests${suite.assigned_to_name ? ` <span style="color: var(--apple-label-tertiary);">·</span> <span style="color: var(--apple-purple);">👤</span> ${UI.escapeHTML(suite.assigned_to_name)}` : ''}
                             </div>
@@ -254,6 +274,30 @@ export const TestSuitesTab = {
                     <h2 style="margin: 0; font-size: 1rem; font-weight: 700; color: var(--apple-label); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: -0.01em; flex: 1; min-width: 0;">${UI.escapeHTML(suite.title)}</h2>
                 </div>
                 <div style="display: flex; align-items: center; gap: 8px;">
+                    ${(() => {
+                        const isIncluded = suite.is_active !== false;
+                        const isAdminUser = Store.state.user?.role === 'Admin' || Store.state.user?.role === 'Analista QA';
+                        const bg = isIncluded ? 'var(--apple-green-soft)' : 'var(--apple-orange-soft)';
+                        const fg = isIncluded ? 'var(--apple-green)' : 'var(--apple-orange)';
+                        const border = isIncluded ? 'transparent' : 'rgba(255,159,10,0.35)';
+                        const label = isIncluded ? 'ACTIVA' : 'INACTIVA';
+                        const sublabel = isIncluded ? 'Cuenta en cobertura' : 'Fuera del gap de pruebas';
+                        const icon = isIncluded ? '✓' : '⏸';
+                        const titleAttr = isIncluded ? 'Esta suite y sus tests se contabilizan en las métricas de cobertura del proyecto' : 'Esta suite y sus tests están fuera del gap de pruebas: NO se contabilizan en las métricas de cobertura';
+                        const cursor = isAdminUser ? 'pointer' : 'not-allowed';
+                        const titleFull = isAdminUser ? titleAttr : titleAttr + ' (solo Admin/Analista QA puede cambiar)';
+                        return `
+                        <label class="suite-active-toggle" data-id="${suite.id}"
+                            style="display: inline-flex; align-items: center; gap: 8px; padding: 5px 12px; border-radius: 10px; background: ${bg}; color: ${fg}; font-size: 0.7rem; font-weight: 700; cursor: ${cursor}; border: 1px solid ${border}; transition: all 0.15s; user-select: none; letter-spacing: 0.03em;"
+                            title="${UI.escapeHTML(titleFull)}">
+                            <span style="font-size: 0.9rem; line-height: 1; font-weight: 800;">${icon}</span>
+                            <span style="display: flex; flex-direction: column; align-items: flex-start; line-height: 1.15;">
+                                <span>${label}</span>
+                                <span style="font-size: 0.58rem; font-weight: 500; opacity: 0.85; letter-spacing: 0.02em;">${sublabel}</span>
+                            </span>
+                            ${isAdminUser ? `<input type="checkbox" class="suite-active-toggle-input" data-id="${suite.id}" ${isIncluded ? 'checked' : ''} style="display:none;">` : ''}
+                        </label>`;
+                    })()}
                     ${suite.jira_epic_key ? `
                         <span style="display: inline-flex; align-items: center; gap: 4px; background: var(--apple-blue-soft); color: var(--apple-blue); font-size: 0.65rem; font-weight: 600; padding: 4px 10px; border-radius: 20px; border: 1px solid var(--apple-blue-soft);">
                             <span style="font-size: 0.55rem;">◆</span> ${UI.escapeHTML(suite.jira_epic_key)}
@@ -892,6 +936,32 @@ export const TestSuitesTab = {
             });
         });
 
+        // Toggle "Incluir en métricas" (excluir/incluir suite del cálculo de cobertura)
+        container.querySelectorAll('.suite-active-toggle-input').forEach(input => {
+            input.addEventListener('change', async (e) => {
+                e.stopPropagation();
+                const id = parseInt(input.dataset.id);
+                const isActive = input.checked;
+                UI.showLoading();
+                try {
+                    await ApiService.setTestSuiteActive(id, isActive);
+                    UI.toast(isActive ? '📊 Suite incluida en métricas' : '⊘ Suite excluida de métricas');
+                    await this.reloadSuites();
+                } catch (err) {
+                    UI.toast(err.message, 'error');
+                    input.checked = !isActive;
+                }
+                UI.hideLoading();
+            });
+            // Prevenir que el click en el label abra/seleccione accidentalmente la fila
+            const parentLabel = input.closest('.suite-active-toggle');
+            if (parentLabel) {
+                parentLabel.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                });
+            }
+        });
+
         // Run Individual TC from grid
         container.querySelectorAll('.run-tc-grid').forEach(btn => {
             btn.addEventListener('click', async (e) => {
@@ -1446,14 +1516,27 @@ REGLAS:
         throw new Error('Estructura inválida en análisis de HU');
     },
 
-    async _generateTC(apiKey, parts, existingTitles = []) {
-        let PROMPT_TC = `Eres un Senior QA Analyst. Genera test cases para la siguiente HU.`;
+    async _generateTC(apiKey, parts, existingTests = []) {
+        let PROMPT_TC = `Eres un Senior QA Analyst. Tu tarea es identificar ÚNICAMENTE los test cases que falten para cubrir la Historia de Usuario proporcionada.`;
 
-        if (existingTitles.length > 0) {
-            PROMPT_TC += `\n\nIMPORTANTE: Ya existen los siguientes tests en la suite. NO los repitas ni generes tests con títulos similares:\n${existingTitles.map((t, i) => `${i + 1}. ${t}`).join('\n')}\n\nGenera ÚNICAMENTE tests NUEVOS que no estén en la lista anterior.`;
+        if (existingTests.length > 0) {
+            PROMPT_TC += `\n\nYa existen los siguientes tests en la suite, con sus PASOS y RESULTADO ESPERADO:\n${existingTests.map((t, i) => `${i + 1}. Título: "${t.title}"\n   Pasos: ${t.gherkin || '(sin pasos)'}\n   Resultado esperado: ${t.expectedResult || '(sin resultado)'}`).join('\n\n')}`;
         }
 
-        PROMPT_TC += `\n\nDevuelve ÚNICAMENTE un array JSON válido. Cada elemento:
+        PROMPT_TC += `\n\n### CRITERIO DE DUPLICADO (CRÍTICO)
+Un test tuyo es DUPLICADO si sus PASOS (gherkin) o su RESULTADO ESPERADO son semánticamente equivalentes a uno existente, AUNQUE el título sea distinto. Sinonimia, paráfrasis, reformulación, cambio de orden de palabras o reemplazo de verbos (ej: "ingresar" vs "introducir", "presionar" vs "clickear", "válido" vs "correcto") NO hacen diferente a un test si los pasos apuntan al mismo flujo verificable. Si dudas, considéralo duplicado.
+
+### PROCESO DE RAZONAMIENTO (obligatorio, no se incluye en la respuesta)
+1. Enumera mentalmente todos los escenarios que la HU implica: flujo feliz, alternativos, validaciones de campos obligatorios/opcionales, formatos, reglas de negocio, manejo de errores, mensajes del sistema.
+2. Para cada escenario, busca si en los tests existentes (incluyendo el contenido completo de gherkin y expectedResult, no solo títulos) ya hay uno que lo cubra.
+3. Devuelve SOLO la diferencia: los escenarios que NO estén ya cubiertos, ni por título ni por pasos.
+4. Si los tests existentes ya cubren todos los escenarios identificables de la HU, devuelve \`[]\`. Tu trabajo es proteger la calidad, no producir volumen.
+
+### AUTORIZACIÓN EXPLÍCITA
+Está permitido y es PREFERIBLE devolver un array vacío \`[]\` cuando los tests existentes ya cubren la HU. NO generes tests artificiales, redundantes, cosméticos o de "seguridad adicional" (salud del sistema, performance, accesibilidad visual) que no estén explícitamente justificados por la HU. Si un escenario es realmente nuevo, mencionalo en el campo "assumption".
+
+### FORMATO DE SALIDA
+Devuelve ÚNICAMENTE un array JSON válido (puede ser \`[]\` si nada aplica). Si hay tests nuevos, cada elemento debe tener esta estructura exacta:
 {
   "title": "título claro y conciso del test case",
   "gherkin": "escenario en español, CADA paso en línea nueva sin indentación, empezando al inicio. Ejemplo: Dado: el usuario está en la pantalla\\nCuando: ingresa credenciales válidas\\nY: presiona el botón Ingresar\\nEntonces: el sistema muestra el dashboard principal",
@@ -1461,19 +1544,181 @@ REGLAS:
   "testData": ["dato de prueba 1", "dato de prueba 2"],
   "acceptanceCriteria": ["criterio de aceptación 1", "criterio 2"],
   "expectedResult": "resultado esperado",
-  "assumption": "supuesto asumido para generar este test; vacío si no aplica"
+  "assumption": "por qué este test no estaba cubierto; vacío si no aplica"
 }
 
 REGLAS:
-- Genera TODOS los escenarios: flujo feliz, alternativos y de error
 - Nunca devuelvas texto fuera del JSON
-- No uses bloques markdown ni backticks`;
+- No uses bloques markdown ni backticks
+- Si dudas entre generar o no generar, NO generes`;
 
         const result = await this._callGeminiEndpoint(apiKey, parts, PROMPT_TC);
         if (Array.isArray(result)) return result;
         if (result && Array.isArray(result.testCases)) return result.testCases;
         if (result && Array.isArray(result.cases)) return result.cases;
         throw new Error('La respuesta no es un array de test cases');
+    },
+
+    _normalizeForSimilarity(text) {
+        if (!text) return '';
+        return text
+            .toLowerCase()
+            .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+            .replace(/[^\w\s]/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+    },
+
+    _shingles(text, n = 3) {
+        const words = this._normalizeForSimilarity(text).split(' ').filter(Boolean);
+        if (words.length < n) return new Set([words.join(' ')]);
+        const set = new Set();
+        for (let i = 0; i <= words.length - n; i++) {
+            set.add(words.slice(i, i + n).join(' '));
+        }
+        return set;
+    },
+
+    _jaccardSimilarity(textA, textB) {
+        const a = this._shingles(textA);
+        const b = this._shingles(textB);
+        if (a.size === 0 || b.size === 0) return 0;
+        let intersect = 0;
+        for (const s of a) if (b.has(s)) intersect++;
+        const union = a.size + b.size - intersect;
+        return union === 0 ? 0 : intersect / union;
+    },
+
+    _wordSetSimilarity(textA, textB) {
+        const a = new Set(this._normalizeForSimilarity(textA).split(' ').filter(Boolean));
+        const b = new Set(this._normalizeForSimilarity(textB).split(' ').filter(Boolean));
+        if (a.size === 0 || b.size === 0) return 0;
+        let intersect = 0;
+        for (const w of a) if (b.has(w)) intersect++;
+        const union = a.size + b.size - intersect;
+        return union === 0 ? 0 : intersect / union;
+    },
+
+    _tokenSortRatio(textA, textB) {
+        const a = this._normalizeForSimilarity(textA).split(' ').filter(Boolean).sort().join(' ');
+        const b = this._normalizeForSimilarity(textB).split(' ').filter(Boolean).sort().join(' ');
+        if (!a || !b) return 0;
+        return this._jaccardSimilarity(a, b);
+    },
+
+    _computeSimilarity(textA, textB) {
+        return Math.max(
+            this._jaccardSimilarity(textA, textB),
+            this._wordSetSimilarity(textA, textB),
+            this._tokenSortRatio(textA, textB)
+        );
+    },
+
+    _dedupeAgainstExisting(newTests, existingTests) {
+        const threshold = 0.60;
+        const kept = [];
+        const duplicates = [];
+        for (const t of newTests) {
+            const candidateText = `${t.gherkin || ''} ${t.expectedResult || ''}`;
+            let bestSim = 0;
+            let bestMatch = null;
+            for (const ex of existingTests) {
+                const refText = `${ex.gherkin || ''} ${ex.expectedResult || ''}`;
+                const sim = this._computeSimilarity(candidateText, refText);
+                if (sim > bestSim) { bestSim = sim; bestMatch = ex; }
+            }
+            if (bestSim >= threshold && bestMatch) {
+                duplicates.push({ ...t, _similarity: Math.round(bestSim * 100), _similarToTitle: bestMatch.title, _similarToId: bestMatch.id });
+            } else {
+                kept.push(t);
+            }
+        }
+        return { new: kept, duplicates };
+    },
+
+    _showReviewModal(newTests, duplicates, onConfirm) {
+        const modal = document.createElement('div');
+        modal.id = 'modal-gemini-review';
+        modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:10001;';
+
+        const escape = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const renderItem = (t, checked, disabled, badge) => `
+            <label style="display:flex;align-items:flex-start;gap:10px;padding:12px;border:1px solid var(--apple-separator);border-radius:8px;background:var(--apple-bg-elevated);margin-bottom:8px;cursor:pointer;">
+                <input type="checkbox" ${checked ? 'checked' : ''} ${disabled ? '' : 'data-review-item'} ${disabled ? 'disabled' : ''} style="margin-top:4px;">
+                <div style="flex:1;min-width:0;">
+                    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                        <strong style="font-size:0.85rem;color:var(--apple-label);">${escape(t.title)}</strong>
+                        ${badge || ''}
+                    </div>
+                    ${t.gherkin ? `<div style="font-size:0.7rem;color:var(--apple-label-secondary);margin-top:4px;line-height:1.4;white-space:pre-wrap;font-family:monospace;">${escape(t.gherkin)}</div>` : ''}
+                </div>
+            </label>
+        `;
+
+        const newSection = newTests.length > 0 ? `
+            <div style="margin-top:16px;">
+                <div style="font-size:0.7rem;font-weight:800;color:var(--apple-green);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;">✅ Tests nuevos (${newTests.length})</div>
+                ${newTests.map(t => renderItem(t, true, false, '')).join('')}
+            </div>
+        ` : '';
+
+        const dupSection = duplicates.length > 0 ? `
+            <div style="margin-top:16px;">
+                <div style="font-size:0.7rem;font-weight:800;color:var(--apple-orange);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;">⚠️ Posibles duplicados (${duplicates.length})</div>
+                <div style="font-size:0.72rem;color:var(--apple-label-secondary);margin-bottom:8px;">La IA generó estos tests, pero sus pasos o resultado esperado son muy similares a los siguientes tests existentes. Desmarcá los que no quieras crear.</div>
+                ${duplicates.map(t => renderItem(t, true, false, `<span style="font-size:0.6rem;font-weight:700;background:var(--apple-orange-soft);color:var(--apple-orange);padding:2px 6px;border-radius:4px;">${t._similarity}% similar a: "${escape(t._similarToTitle)}"</span>`)).join('')}
+            </div>
+        ` : '';
+
+        const totalSelectable = newTests.length + duplicates.length;
+        const empty = totalSelectable === 0;
+
+        modal.innerHTML = `
+            <div style="background:var(--apple-bg);border-radius:var(--apple-radius-lg);width:min(720px,95vw);max-height:90vh;display:flex;flex-direction:column;box-shadow:0 20px 50px rgba(0,0,0,0.3);">
+                <div style="padding:16px 20px;border-bottom:1px solid var(--apple-separator);display:flex;justify-content:space-between;align-items:center;">
+                    <h2 style="margin:0;font-size:1.05rem;font-weight:800;">📋 Revisar tests propuestos</h2>
+                    <button id="review-close" style="background:var(--apple-fill);border:none;color:var(--apple-label);width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:1.1rem;">&times;</button>
+                </div>
+                <div style="padding:16px 20px;overflow-y:auto;flex:1;">
+                    ${empty ? '<div style="text-align:center;padding:40px;color:var(--apple-label-secondary);">✅ Los tests existentes ya cubren la HU. No se generaron tests nuevos.</div>' : ''}
+                    ${newSection}
+                    ${dupSection}
+                </div>
+                <div style="padding:14px 20px;border-top:1px solid var(--apple-separator);display:flex;justify-content:flex-end;gap:10px;">
+                    <button id="review-cancel" style="padding:9px 18px;border-radius:var(--apple-radius-md);border:1px solid var(--apple-separator);background:transparent;color:var(--apple-label-secondary);font-weight:600;cursor:pointer;">Cancelar</button>
+                    <button id="review-confirm" ${empty ? 'disabled' : ''} style="padding:9px 24px;border-radius:var(--apple-radius-md);border:none;background:linear-gradient(to right,var(--apple-blue),var(--apple-blue-hover));color:white;font-weight:800;cursor:${empty ? 'not-allowed' : 'pointer'};opacity:${empty ? '0.5' : '1'};">Crear <span id="review-count">${totalSelectable}</span> tests</button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+
+        const updateCount = () => {
+            const checked = modal.querySelectorAll('input[type=checkbox][data-review-item]:checked').length;
+            const span = modal.querySelector('#review-count');
+            if (span) span.textContent = checked;
+            const btn = modal.querySelector('#review-confirm');
+            if (btn) {
+                btn.disabled = checked === 0;
+                btn.style.cursor = checked === 0 ? 'not-allowed' : 'pointer';
+                btn.style.opacity = checked === 0 ? '0.5' : '1';
+            }
+        };
+
+        modal.querySelectorAll('input[type=checkbox][data-review-item]').forEach(cb => cb.addEventListener('change', updateCount));
+
+        const close = () => modal.remove();
+        modal.querySelector('#review-close').onclick = close;
+        modal.querySelector('#review-cancel').onclick = close;
+        modal.querySelector('#review-confirm').onclick = () => {
+            const selected = [...newTests, ...duplicates].filter(t => {
+                const items = modal.querySelectorAll('input[type=checkbox][data-review-item]');
+                const idx = [...newTests, ...duplicates].indexOf(t);
+                return items[idx] && items[idx].checked;
+            });
+            close();
+            onConfirm(selected);
+        };
     },
 
     async _callGemini(suiteId, pendingCreateHU = false) {
@@ -1524,18 +1769,54 @@ REGLAS:
         this._geminiImages.forEach(img => parts.push({ inlineData: { mimeType: img.mimeType, data: img.base64 } }));
 
         try {
-            const existingTitles = (suite?.test_cases || []).map(tc => tc.title);
+            const existingTests = (suite?.test_cases || []).map(tc => ({
+                id: tc.id,
+                title: tc.title,
+                gherkin: tc.steps || '',
+                expectedResult: tc.expected_result || ''
+            }));
 
             this._setGeminiStatus('🔄 Generando casos de prueba...', 'info');
 
-            const tcData = await this._generateTC(apiKey, parts, existingTitles);
-            if (!tcData?.length) throw new Error('No se generaron test cases');
+            const tcData = await this._generateTC(apiKey, parts, existingTests);
+            if (!tcData?.length) {
+                this._setGeminiStatus('✅ Los tests existentes ya cubren la HU. No se generaron tests nuevos.', 'ok');
+                document.getElementById('gemini-tc-btn-icon').textContent = '✨';
+                document.getElementById('gemini-tc-btn-label').textContent = 'Generar Tests';
+                if (btn) btn.disabled = false;
+                return;
+            }
 
-            this._setGeminiStatus(`✅ Creando ${tcData.length} tests en la suite...`, 'ok');
+            const deduped = this._dedupeAgainstExisting(tcData, existingTests);
+            const totalProposed = deduped.new.length + deduped.duplicates.length;
+
+            if (totalProposed === 0) {
+                this._setGeminiStatus('✅ Los tests existentes ya cubren la HU. No se generaron tests nuevos.', 'ok');
+                document.getElementById('gemini-tc-btn-icon').textContent = '✨';
+                document.getElementById('gemini-tc-btn-label').textContent = 'Generar Tests';
+                if (btn) btn.disabled = false;
+                return;
+            }
+
+            this._setGeminiStatus(`📋 ${totalProposed} tests propuestos — revisá antes de crear`, 'info');
+
+            const confirmedTests = await new Promise((resolve) => {
+                this._showReviewModal(deduped.new, deduped.duplicates, (selected) => resolve(selected));
+            });
+
+            if (!confirmedTests?.length) {
+                this._setGeminiStatus('ℹ️ No se crearon tests.', 'info');
+                document.getElementById('gemini-tc-btn-icon').textContent = '✨';
+                document.getElementById('gemini-tc-btn-label').textContent = 'Generar Tests';
+                if (btn) btn.disabled = false;
+                return;
+            }
+
+            this._setGeminiStatus(`✅ Creando ${confirmedTests.length} tests en la suite...`, 'ok');
 
             UI.showLoading();
 
-            for (const item of tcData) {
+            for (const item of confirmedTests) {
                 const precStr = Array.isArray(item.preconditions) ? item.preconditions.join('\n') : '';
                 const tdStr = Array.isArray(item.testData) ? item.testData.join('\n') : '';
                 const acStr = Array.isArray(item.acceptanceCriteria) ? item.acceptanceCriteria.join('\n') : '';

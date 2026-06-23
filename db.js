@@ -9,7 +9,13 @@ if (!supabaseUrl || !supabaseKey) {
     process.exit(1);
 }
 
-const supabase = createClient(supabaseUrl, supabaseKey);
+const noKeepAliveFetch = (url, options = {}) => {
+    return fetch(url, { ...options, keepalive: false });
+};
+
+const supabase = createClient(supabaseUrl, supabaseKey, {
+    global: { fetch: noKeepAliveFetch }
+});
 
 function escapeLiteral(value) {
     if (value === null || value === undefined) return 'NULL';
@@ -77,23 +83,30 @@ function mapResult(data) {
 
 async function query(sql, params = []) {
     const finalSql = buildSql(sql, params);
+    const MAX_ATTEMPTS = 2;
 
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 30000);
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 30000);
+        try {
+            const { data, error } = await supabase.rpc('exec_query', { query_text: finalSql }, { signal: controller.signal });
 
-    try {
-        const { data, error } = await supabase.rpc('exec_query', { query_text: finalSql }, { signal: controller.signal });
+            if (error) throw new Error(error.message);
+            if (data && data.error) throw new Error(data.error + (data.detail ? ' (' + data.detail + ')' : ''));
 
-        if (error) throw new Error(error.message);
-        if (data && data.error) throw new Error(data.error + (data.detail ? ' (' + data.detail + ')' : ''));
-
-        clearTimeout(timer);
-        return mapResult(data || { rows: [], rowCount: 0 });
-    } catch (err) {
-        clearTimeout(timer);
-        console.error('Error en ejecucion:', err.message);
-        console.error('SQL fallido:', finalSql.substring(0, 500));
-        throw err;
+            clearTimeout(timer);
+            return mapResult(data || { rows: [], rowCount: 0 });
+        } catch (err) {
+            clearTimeout(timer);
+            const isTransientFetch = err && err.name === 'TypeError' && /fetch failed/i.test(err.message);
+            if (isTransientFetch && attempt < MAX_ATTEMPTS) {
+                console.warn(`query: fetch failed, retrying (${attempt}/${MAX_ATTEMPTS})`);
+                continue;
+            }
+            console.error('Error en ejecucion:', err.message);
+            console.error('SQL fallido:', finalSql.substring(0, 500));
+            throw err;
+        }
     }
 }
 

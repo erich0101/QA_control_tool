@@ -283,8 +283,6 @@ export const MiJiraTab = {
                 <button onclick="navigator.clipboard.writeText('${ticket.key}')" style="padding: 6px 12px; border-radius: var(--apple-radius-sm); border: 1px solid var(--apple-separator); background: transparent; color: var(--apple-label-secondary); font-size: 0.75rem; cursor: pointer;">📋 Copiar</button>
             </div>
         `;
-
-        detail.scrollIntoView({ behavior: 'smooth', block: 'start' });
     },
 
     formatDate(dateStr) {

@@ -10,6 +10,13 @@ export const HistoryTab = {
     bugs: [],
     currentTab: 'runs', // 'runs' | 'bugs'
     selectedRunIds: new Set(),
+    selectedBugIds: new Set(),
+    dateFrom: '',
+    dateTo: '',
+    bugsDateFrom: '',
+    bugsDateTo: '',
+    expandedGroups: new Set(), // ids de grupos expandidos (year, month, day) — runs
+    expandedBugGroups: new Set(), // ids de grupos expandidos (year, month, day) — bugs
 
     async render(container) {
         const scrollPos = container.scrollTop;
@@ -55,6 +62,11 @@ export const HistoryTab = {
                                 📊 Reporte Consolidado (${this.selectedRunIds.size})
                             </button>
                         ` : ''}
+                        ${this.currentTab === 'bugs' && this.selectedBugIds.size >= 1 ? `
+                            <button class="btn btn-primary btn-sm" id="btn-batch-jira" style="padding: 6px 14px; border-radius: var(--apple-radius-sm); font-size: 0.72rem; font-weight: 600; background: var(--apple-blue); border: none; color: white;">
+                                🚀 Crear tickets en Jira (${this.selectedBugIds.size})
+                            </button>
+                        ` : ''}
                         <button class="btn btn-ghost btn-sm" id="btn-refresh-history" style="padding: 6px 12px; border-radius: var(--apple-radius-sm); font-size: 0.72rem;">🔄 Recargar</button>
                     </div>
                 </div>
@@ -79,98 +91,322 @@ export const HistoryTab = {
     },
 
     renderRunsView() {
-        const allSelected = this.runs.length > 0 && this.runs.every(r => this.selectedRunIds.has(r.id));
+        const filtered = this.getFilteredRuns();
+        const tree = this.buildRunsTree(filtered);
+
+        if (this.runs.length === 0) {
+            return `<div style="text-align: center; padding: 60px; color: var(--apple-label-tertiary); background: var(--apple-bg-elevated); border-radius: var(--apple-radius-lg); border: 1px solid var(--apple-separator);">No hay ejecuciones finalizadas aún.</div>`;
+        }
+        if (filtered.length === 0) {
+            return `<div style="text-align: center; padding: 40px; color: var(--apple-label-tertiary); background: var(--apple-bg-elevated); border-radius: var(--apple-radius-lg); border: 1px solid var(--apple-separator);">Sin ejecuciones en el rango seleccionado (${this.runs.length} totales).</div>`;
+        }
+
         return `
             <div style="background: var(--apple-bg-elevated); border-radius: var(--apple-radius-lg); border: 1px solid var(--apple-separator); overflow: hidden;">
-                <table class="tt-table" style="width: 100%; border-collapse: collapse;">
-                    <thead>
-                        <tr style="background: var(--apple-fill);">
-                            <th style="width: 40px; padding: 10px 12px; text-align: left; font-size: 0.68rem; font-weight: 700; color: var(--apple-label-tertiary); text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid var(--apple-separator);"><input type="checkbox" id="select-all-runs" ${allSelected ? 'checked' : ''}></th>
-                            <th style="padding: 10px 12px; text-align: left; font-size: 0.68rem; font-weight: 700; color: var(--apple-label-tertiary); text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid var(--apple-separator);">ID</th>
-                            <th style="padding: 10px 12px; text-align: left; font-size: 0.68rem; font-weight: 700; color: var(--apple-label-tertiary); text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid var(--apple-separator);">Test Suite</th>
-                            <th style="padding: 10px 12px; text-align: left; font-size: 0.68rem; font-weight: 700; color: var(--apple-label-tertiary); text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid var(--apple-separator);">Inicio</th>
-                            <th style="padding: 10px 12px; text-align: left; font-size: 0.68rem; font-weight: 700; color: var(--apple-label-tertiary); text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid var(--apple-separator);">Fin</th>
-                            <th style="padding: 10px 12px; text-align: left; font-size: 0.68rem; font-weight: 700; color: var(--apple-label-tertiary); text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid var(--apple-separator);">Duración</th>
-                            <th style="padding: 10px 12px; text-align: left; font-size: 0.68rem; font-weight: 700; color: var(--apple-label-tertiary); text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid var(--apple-separator);">Tester</th>
-                            <th style="padding: 10px 12px; text-align: center; font-size: 0.68rem; font-weight: 700; color: var(--apple-label-tertiary); text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid var(--apple-separator);">Resultado</th>
-                            <th style="padding: 10px 12px; text-align: right; font-size: 0.68rem; font-weight: 700; color: var(--apple-label-tertiary); text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid var(--apple-separator);">Acciones</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${this.runs.length === 0 ? `<tr><td colspan="9" style="text-align: center; padding: 40px; color: var(--apple-label-tertiary);">No hay ejecuciones finalizadas aún.</td></tr>` : ''}
-                        ${this.runs.map(run => this.renderRunRow(run)).join('')}
-                    </tbody>
-                </table>
+                <div style="display: flex; align-items: center; gap: 8px; padding: 12px 16px; background: var(--apple-fill); border-bottom: 1px solid var(--apple-separator); flex-wrap: wrap;">
+                    <span style="font-size: 0.68rem; font-weight: 700; color: var(--apple-label-tertiary); text-transform: uppercase; letter-spacing: 0.04em;">📅 Periodo</span>
+                    <input type="date" id="runs-date-from" value="${UI.escapeHTML(this.dateFrom)}" style="padding: 5px 8px; border-radius: var(--apple-radius-sm); border: 1px solid var(--apple-separator); background: var(--apple-bg-tertiary); color: var(--apple-label); font-size: 0.75rem;" title="Fecha desde">
+                    <span style="color: var(--apple-label-tertiary); font-size: 0.75rem;">→</span>
+                    <input type="date" id="runs-date-to" value="${UI.escapeHTML(this.dateTo)}" style="padding: 5px 8px; border-radius: var(--apple-radius-sm); border: 1px solid var(--apple-separator); background: var(--apple-bg-tertiary); color: var(--apple-label); font-size: 0.75rem;" title="Fecha hasta">
+                    <button class="btn btn-ghost btn-sm" id="runs-clear-dates" style="padding: 4px 10px; border-radius: var(--apple-radius-sm); font-size: 0.72rem;">Limpiar</button>
+                    <span style="margin-left: auto; font-size: 0.72rem; color: var(--apple-label-tertiary);">${filtered.length} de ${this.runs.length} ejecuciones</span>
+                </div>
+                <div style="padding: 8px 0;">
+                    ${tree}
+                </div>
+            </div>
+        `;
+    },
+
+    getFilteredRuns() {
+        return this.runs.filter(run => {
+            if (!this.dateFrom && !this.dateTo) return true;
+            const end = new Date(run.finished_at);
+            if (this.dateFrom) {
+                const from = new Date(this.dateFrom + 'T00:00:00');
+                if (end < from) return false;
+            }
+            if (this.dateTo) {
+                const to = new Date(this.dateTo + 'T23:59:59');
+                if (end > to) return false;
+            }
+            return true;
+        });
+    },
+
+    buildRunsTree(runs) {
+        const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+        // Agrupar por año > mes > día
+        const byYear = {};
+        runs.forEach(run => {
+            const d = new Date(run.finished_at);
+            const y = d.getFullYear();
+            const m = d.getMonth();
+            const day = d.getDate();
+            if (!byYear[y]) byYear[y] = {};
+            if (!byYear[y][m]) byYear[y][m] = {};
+            if (!byYear[y][m][day]) byYear[y][m][day] = [];
+            byYear[y][m][day].push(run);
+        });
+
+        const years = Object.keys(byYear).sort((a, b) => b - a);
+        if (years.length === 0) return '';
+
+        return years.map(y => {
+            const yKey = `y-${y}`;
+            const yExpanded = this.expandedGroups.has(yKey) || this.expandedGroups.size === 0;
+            const yRuns = years.reduce((acc, _y) => acc.concat(...Object.values(byYear[_y] || {}).flatMap(m => Object.values(m).flat()), []), []).filter(r => new Date(r.finished_at).getFullYear() === Number(y));
+            // Más simple: contar runs del año
+            const yCount = Object.values(byYear[y]).reduce((acc, m) => acc + Object.values(m).reduce((a, d) => a + d.length, 0), 0);
+            const yPass = yRuns.reduce((a, r) => a + (r.stats?.pass || 0), 0);
+            const yTotal = yRuns.reduce((a, r) => a + (r.stats?.total || 0), 0);
+
+            return `
+                <div data-group="${yKey}">
+                    <div class="runs-group-row" data-group-key="${yKey}" style="display: flex; align-items: center; gap: 8px; padding: 10px 16px; background: var(--apple-bg-elevated); cursor: pointer; border-bottom: 1px solid var(--apple-separator); user-select: none;">
+                        <span style="font-size: 0.78rem; color: var(--apple-label-tertiary); transition: transform 0.15s; transform: ${yExpanded ? 'rotate(90deg)' : 'rotate(0)'};">▶</span>
+                        <span style="font-size: 0.85rem; font-weight: 800; color: var(--apple-label);">📅 ${y}</span>
+                        <span style="display: inline-flex; align-items: center; gap: 3px; padding: 2px 8px; border-radius: 20px; background: var(--apple-fill); font-size: 0.65rem; font-weight: 600; color: var(--apple-label-secondary);">${yCount} ejecuciones</span>
+                        ${yTotal > 0 ? `<span style="font-size: 0.7rem; color: var(--apple-green); font-weight: 600;">${Math.round((yPass / yTotal) * 100)}% OK</span>` : ''}
+                    </div>
+                    ${yExpanded ? Object.keys(byYear[y]).sort((a, b) => b - a).map(m => {
+                        const mKey = `m-${y}-${m}`;
+                        const mExpanded = this.expandedGroups.has(mKey) || this.expandedGroups.size === 0;
+                        const mRuns = Object.values(byYear[y][m]).flat();
+                        const mCount = mRuns.length;
+                        const mPass = mRuns.reduce((a, r) => a + (r.stats?.pass || 0), 0);
+                        const mTotal = mRuns.reduce((a, r) => a + (r.stats?.total || 0), 0);
+                        return `
+                            <div data-group="${mKey}">
+                                <div class="runs-group-row" data-group-key="${mKey}" style="display: flex; align-items: center; gap: 8px; padding: 8px 16px 8px 36px; background: var(--apple-fill-tertiary); cursor: pointer; border-bottom: 1px solid var(--apple-separator); user-select: none;">
+                                    <span style="font-size: 0.72rem; color: var(--apple-label-tertiary); transition: transform 0.15s; transform: ${mExpanded ? 'rotate(90deg)' : 'rotate(0)'};">▶</span>
+                                    <span style="font-size: 0.8rem; font-weight: 700; color: var(--apple-label);">${MONTHS[Number(m)]}</span>
+                                    <span style="display: inline-flex; align-items: center; gap: 3px; padding: 2px 8px; border-radius: 20px; background: var(--apple-bg-elevated); font-size: 0.65rem; font-weight: 600; color: var(--apple-label-secondary);">${mCount} ejecuciones</span>
+                                    ${mTotal > 0 ? `<span style="font-size: 0.68rem; color: var(--apple-green); font-weight: 600;">${Math.round((mPass / mTotal) * 100)}% OK</span>` : ''}
+                                </div>
+                                ${mExpanded ? Object.keys(byYear[y][m]).sort((a, b) => b - a).map(day => {
+                                    const dayKey = `d-${y}-${m}-${day}`;
+                                    const dayExpanded = this.expandedGroups.has(dayKey) || this.expandedGroups.size === 0;
+                                    const dayRuns = byYear[y][m][day];
+                                    const dayCount = dayRuns.length;
+                                    const dayPass = dayRuns.reduce((a, r) => a + (r.stats?.pass || 0), 0);
+                                    const dayTotal = dayRuns.reduce((a, r) => a + (r.stats?.total || 0), 0);
+                                    const dayDate = new Date(Number(y), Number(m), Number(day));
+                                    const dayLabel = dayDate.toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric' });
+                                    return `
+                                        <div data-group="${dayKey}">
+                                            <div class="runs-group-row" data-group-key="${dayKey}" style="display: flex; align-items: center; gap: 8px; padding: 7px 16px 7px 60px; background: var(--apple-bg-primary); cursor: pointer; border-bottom: 1px solid var(--apple-separator); user-select: none;">
+                                                <span style="font-size: 0.7rem; color: var(--apple-label-tertiary); transition: transform 0.15s; transform: ${dayExpanded ? 'rotate(90deg)' : 'rotate(0)'};">▶</span>
+                                                <span style="font-size: 0.78rem; font-weight: 600; color: var(--apple-label);">${dayLabel}</span>
+                                                <span style="font-size: 0.65rem; color: var(--apple-label-tertiary);">${dayRuns[0] ? new Date(dayRuns[0].finished_at).toLocaleDateString('es-AR') : ''}</span>
+                                                <span style="display: inline-flex; align-items: center; gap: 3px; padding: 2px 8px; border-radius: 20px; background: var(--apple-fill); font-size: 0.62rem; font-weight: 600; color: var(--apple-label-secondary);">${dayCount} ejecuciones</span>
+                                                ${dayTotal > 0 ? `<span style="font-size: 0.65rem; color: var(--apple-green); font-weight: 600;">${Math.round((dayPass / dayTotal) * 100)}% OK</span>` : ''}
+                                            </div>
+                                            ${dayExpanded ? dayRuns.map(run => this.renderRunRowCompact(run)).join('') : ''}
+                                        </div>
+                                    `;
+                                }).join('') : ''}
+                            </div>
+                        `;
+                    }).join('') : ''}
+                </div>
+            `;
+        }).join('');
+    },
+
+    renderRunRowCompact(run) {
+        const start = new Date(run.started_at);
+        const end = new Date(run.finished_at);
+        const duration = this.formatDuration(start, end);
+        const { pass, fail, warn, block, skip, total } = run.stats;
+        const passPct = (pass/total)*100;
+        const failPct = (fail/total)*100;
+        const warnPct = (warn/total)*100;
+        const blockPct = (block/total)*100;
+        const skipPct = (skip/total)*100;
+        const isSelected = this.selectedRunIds.has(run.id);
+
+        return `
+            <div style="display: flex; align-items: center; gap: 12px; padding: 10px 16px 10px 84px; border-bottom: 1px solid var(--apple-separator); background: ${isSelected ? 'var(--apple-blue-soft)' : 'transparent'};">
+                <input type="checkbox" class="run-checkbox" data-id="${run.id}" ${isSelected ? 'checked' : ''} style="flex-shrink: 0;">
+                <span style="font-size: 0.7rem; color: var(--apple-label-tertiary); min-width: 36px;">#${run.id}</span>
+                <div style="flex: 1; min-width: 0;">
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                        <span style="font-size: 0.8rem; font-weight: 600; color: var(--apple-label); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${UI.escapeHTML(run.suite_title)}</span>
+                        <span style="display: inline-flex; align-items: center; gap: 3px; padding: 2px 6px; border-radius: 20px; font-size: 0.58rem; font-weight: 600; background: var(--apple-fill); color: var(--apple-label-secondary);">
+                            ${run.run_type === 'SMOKE' ? '💨' : ''}${run.run_type === 'REGRESSION' ? '🔄' : ''}${run.run_type === 'INTEGRATION' ? '🔗' : ''}${run.run_type === 'EXPLORATORY' ? '🔍' : ''}${run.run_type === 'RETEST' ? '🔁' : ''} ${UI.escapeHTML(run.run_type)}
+                        </span>
+                    </div>
+                    <div style="font-size: 0.65rem; color: var(--apple-label-tertiary); margin-top: 2px;">
+                        🕐 ${start.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })} · ⏱ ${duration} · 👤 ${UI.escapeHTML(run.tester_name || '—')}
+                    </div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 6px; min-width: 120px;">
+                    <div style="width: 80px; height: 4px; border-radius: 2px; overflow: hidden; background: var(--apple-fill); display: flex;">
+                        <div title="PASS: ${pass}" style="width: ${passPct}%; background: var(--apple-green);"></div>
+                        <div title="FAIL: ${fail}" style="width: ${failPct}%; background: var(--apple-red);"></div>
+                        <div title="BLOCK: ${block}" style="width: ${blockPct}%; background: var(--apple-orange);"></div>
+                        <div title="SKIP: ${skip}" style="width: ${skipPct}%; background: var(--apple-label-tertiary);"></div>
+                    </div>
+                    <span style="font-size: 0.65rem; color: var(--apple-green); font-weight: 600; min-width: 32px;">${pass}</span>
+                    <span style="font-size: 0.65rem; color: var(--apple-red); font-weight: 600; min-width: 28px;">${fail}</span>
+                </div>
+                <div style="display: flex; gap: 4px; flex-shrink: 0;">
+                    <button class="btn btn-ghost btn-sm btn-view-report" data-id="${run.id}" title="Ver Reporte" style="padding: 3px 8px; border-radius: var(--apple-radius-sm); font-size: 0.7rem;">📄</button>
+                    <button class="btn btn-ghost btn-sm btn-view-bugs" data-id="${run.id}" title="Ver Defectos" ${fail === 0 ? 'disabled style="opacity:0.4;cursor:not-allowed;"' : ''} style="padding: 3px 8px; border-radius: var(--apple-radius-sm); font-size: 0.7rem;">🐛</button>
+                    <button class="btn btn-sm btn-retest" data-id="${run.id}" title="Retesting" style="padding: 3px 8px; border-radius: var(--apple-radius-sm); font-size: 0.7rem;">🔁</button>
+                </div>
             </div>
         `;
     },
 
     renderBugsView() {
-        const team = Store.state.team || [];
+        const filtered = this.getFilteredBugs();
+        const tree = this.buildBugsTree(filtered);
+
+        if (this.bugs.length === 0) {
+            return `<div style="text-align: center; padding: 60px; color: var(--apple-label-tertiary); background: var(--apple-bg-elevated); border-radius: var(--apple-radius-lg); border: 1px solid var(--apple-separator);">No hay bugs registrados en este proyecto.</div>`;
+        }
+        if (filtered.length === 0) {
+            return `<div style="text-align: center; padding: 40px; color: var(--apple-label-tertiary); background: var(--apple-bg-elevated); border-radius: var(--apple-radius-lg); border: 1px solid var(--apple-separator);">Sin bugs en el rango seleccionado (${this.bugs.length} totales).</div>`;
+        }
+
         return `
             <div style="background: var(--apple-bg-elevated); border-radius: var(--apple-radius-lg); border: 1px solid var(--apple-separator); overflow: hidden;">
-                <table class="tt-table" style="width: 100%; border-collapse: collapse;">
-                    <thead>
-                        <tr style="background: var(--apple-fill);">
-                            <th style="padding: 10px 12px; text-align: left; font-size: 0.68rem; font-weight: 700; color: var(--apple-label-tertiary); text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid var(--apple-separator);">ID</th>
-                            <th style="padding: 10px 12px; text-align: left; font-size: 0.68rem; font-weight: 700; color: var(--apple-label-tertiary); text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid var(--apple-separator);">Defecto / Título</th>
-                            <th style="padding: 10px 12px; text-align: left; font-size: 0.68rem; font-weight: 700; color: var(--apple-label-tertiary); text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid var(--apple-separator);">Contexto</th>
-                            <th style="padding: 10px 12px; text-align: left; font-size: 0.68rem; font-weight: 700; color: var(--apple-label-tertiary); text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid var(--apple-separator);">Severidad</th>
-                            <th style="padding: 10px 12px; text-align: left; font-size: 0.68rem; font-weight: 700; color: var(--apple-label-tertiary); text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid var(--apple-separator);">Estado</th>
-                            <th style="padding: 10px 12px; text-align: left; font-size: 0.68rem; font-weight: 700; color: var(--apple-label-tertiary); text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid var(--apple-separator);">Reportado por</th>
-                            <th style="padding: 10px 12px; text-align: left; font-size: 0.68rem; font-weight: 700; color: var(--apple-label-tertiary); text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid var(--apple-separator);">Fecha</th>
-                            <th style="padding: 10px 12px; text-align: right; font-size: 0.68rem; font-weight: 700; color: var(--apple-label-tertiary); text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid var(--apple-separator);">Detalle</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${this.bugs.length === 0 ? `<tr><td colspan="8" style="text-align: center; padding: 40px; color: var(--apple-label-tertiary);">No hay bugs registrados en este proyecto.</td></tr>` : ''}
-                        ${this.bugs.map(bug => `
-                            <tr style="border-bottom: 1px solid var(--apple-separator);">
-                                <td style="padding: 12px; font-size: 0.75rem; color: var(--apple-label-tertiary);">#${bug.id}</td>
-                                <td style="padding: 12px;">
-                                    <div style="font-weight: 600; color: var(--apple-label); font-size: 0.85rem;">${UI.escapeHTML(bug.title)}</div>
-                                    <div style="font-size: 0.7rem; color: var(--apple-label-tertiary); margin-top: 2px; max-width: 300px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${UI.escapeHTML(bug.description || 'Sin descripción.')}</div>
-                                </td>
-                                <td style="padding: 12px;">
-                                    <div style="font-size: 0.75rem; color: var(--apple-blue); font-weight: 600;">${UI.escapeHTML(bug.tc_key)}</div>
-                                    <div style="font-size: 0.7rem; color: var(--apple-label-secondary);">${UI.escapeHTML(bug.tc_title)}</div>
-                                </td>
-                                <td style="padding: 12px;">
-                                    <span style="display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 20px; font-size: 0.65rem; font-weight: 600; background: ${bug.severity === 'Crítica' || bug.severity === 'Alta' ? 'rgba(255,59,48,0.1)' : 'rgba(255,149,0,0.1)'}; color: ${bug.severity === 'Crítica' || bug.severity === 'Alta' ? 'var(--apple-red)' : 'var(--apple-orange)'};">
-                                        ${UI.escapeHTML(bug.severity)}
-                                    </span>
-                                </td>
-                                <td style="padding: 12px;">
-                                    ${bug.jira_key ? `
-                                        <div style="display: flex; align-items: center; gap: 6px;">
-                                            <a href="${UI.escapeHTML(bug.jira_url)}" target="_blank" rel="noopener" style="font-size: 0.7rem; font-weight: 600; color: var(--apple-blue); text-decoration: none;" title="Abrir en JIRA">
-                                                ${UI.escapeHTML(bug.jira_key)}
-                                            </a>
-                                            ${bug.jira_status ? `
-                                                <span style="display: inline-flex; align-items: center; gap: 3px; padding: 2px 8px; border-radius: 20px; font-size: 0.6rem; font-weight: 600; background: ${bug.jira_statusCategory === 'Done' ? 'rgba(52,199,89,0.1)' : bug.jira_statusCategory === 'In Progress' ? 'rgba(0,122,255,0.1)' : 'rgba(255,149,0,0.1)'}; color: ${bug.jira_statusCategory === 'Done' ? 'var(--apple-green)' : bug.jira_statusCategory === 'In Progress' ? 'var(--apple-blue)' : 'var(--apple-orange)'};">
-                                                    ${UI.escapeHTML(bug.jira_status)}
-                                                </span>
-                                            ` : ''}
+                <div style="display: flex; align-items: center; gap: 8px; padding: 12px 16px; background: var(--apple-fill); border-bottom: 1px solid var(--apple-separator); flex-wrap: wrap;">
+                    <span style="font-size: 0.68rem; font-weight: 700; color: var(--apple-label-tertiary); text-transform: uppercase; letter-spacing: 0.04em;">📅 Periodo</span>
+                    <input type="date" id="bugs-date-from" value="${UI.escapeHTML(this.bugsDateFrom)}" style="padding: 5px 8px; border-radius: var(--apple-radius-sm); border: 1px solid var(--apple-separator); background: var(--apple-bg-tertiary); color: var(--apple-label); font-size: 0.75rem;" title="Fecha desde">
+                    <span style="color: var(--apple-label-tertiary); font-size: 0.75rem;">→</span>
+                    <input type="date" id="bugs-date-to" value="${UI.escapeHTML(this.bugsDateTo)}" style="padding: 5px 8px; border-radius: var(--apple-radius-sm); border: 1px solid var(--apple-separator); background: var(--apple-bg-tertiary); color: var(--apple-label); font-size: 0.75rem;" title="Fecha hasta">
+                    <button class="btn btn-ghost btn-sm" id="bugs-clear-dates" style="padding: 4px 10px; border-radius: var(--apple-radius-sm); font-size: 0.72rem;">Limpiar</button>
+                    <span style="margin-left: auto; font-size: 0.72rem; color: var(--apple-label-tertiary);">${filtered.length} de ${this.bugs.length} bugs</span>
+                </div>
+                <div style="padding: 8px 0;">
+                    ${tree}
+                </div>
+            </div>
+        `;
+    },
+
+    getFilteredBugs() {
+        return this.bugs.filter(bug => {
+            if (!this.bugsDateFrom && !this.bugsDateTo) return true;
+            const created = new Date(bug.created_at);
+            if (this.bugsDateFrom) {
+                const from = new Date(this.bugsDateFrom + 'T00:00:00');
+                if (created < from) return false;
+            }
+            if (this.bugsDateTo) {
+                const to = new Date(this.bugsDateTo + 'T23:59:59');
+                if (created > to) return false;
+            }
+            return true;
+        });
+    },
+
+    buildBugsTree(bugs) {
+        const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+        const byYear = {};
+        bugs.forEach(bug => {
+            const d = new Date(bug.created_at);
+            const y = d.getFullYear();
+            const m = d.getMonth();
+            const day = d.getDate();
+            if (!byYear[y]) byYear[y] = {};
+            if (!byYear[y][m]) byYear[y][m] = {};
+            if (!byYear[y][m][day]) byYear[y][m][day] = [];
+            byYear[y][m][day].push(bug);
+        });
+
+        const years = Object.keys(byYear).sort((a, b) => b - a);
+        if (years.length === 0) return '';
+
+        return years.map(y => {
+            const yKey = `by-${y}`;
+            const yExpanded = this.expandedBugGroups.has(yKey) || this.expandedBugGroups.size === 0;
+            const yBugs = years.reduce((acc, _y) => acc.concat(...Object.values(byYear[_y] || {}).flatMap(m => Object.values(m).flat())), []).filter(b => new Date(b.created_at).getFullYear() === Number(y));
+            const yCount = Object.values(byYear[y]).reduce((acc, m) => acc + Object.values(m).reduce((a, d) => a + d.length, 0), 0);
+            const yCritical = yBugs.filter(b => b.severity === 'Crítica' || b.severity === 'Alta').length;
+
+            return `
+                <div data-group="${yKey}">
+                    <div class="bugs-group-row" data-group-key="${yKey}" style="display: flex; align-items: center; gap: 8px; padding: 10px 16px; background: var(--apple-bg-elevated); cursor: pointer; border-bottom: 1px solid var(--apple-separator); user-select: none;">
+                        <span style="font-size: 0.78rem; color: var(--apple-label-tertiary); transition: transform 0.15s; transform: ${yExpanded ? 'rotate(90deg)' : 'rotate(0)'};">▶</span>
+                        <span style="font-size: 0.85rem; font-weight: 800; color: var(--apple-label);">📅 ${y}</span>
+                        <span style="display: inline-flex; align-items: center; gap: 3px; padding: 2px 8px; border-radius: 20px; background: var(--apple-fill); font-size: 0.65rem; font-weight: 600; color: var(--apple-label-secondary);">${yCount} bugs</span>
+                        ${yCritical > 0 ? `<span style="font-size: 0.68rem; color: var(--apple-red); font-weight: 700;">⚠ ${yCritical} críticos</span>` : ''}
+                    </div>
+                    ${yExpanded ? Object.keys(byYear[y]).sort((a, b) => b - a).map(m => {
+                        const mKey = `bm-${y}-${m}`;
+                        const mExpanded = this.expandedBugGroups.has(mKey) || this.expandedBugGroups.size === 0;
+                        const mBugs = Object.values(byYear[y][m]).flat();
+                        const mCount = mBugs.length;
+                        const mCritical = mBugs.filter(b => b.severity === 'Crítica' || b.severity === 'Alta').length;
+                        return `
+                            <div data-group="${mKey}">
+                                <div class="bugs-group-row" data-group-key="${mKey}" style="display: flex; align-items: center; gap: 8px; padding: 8px 16px 8px 36px; background: var(--apple-fill-tertiary); cursor: pointer; border-bottom: 1px solid var(--apple-separator); user-select: none;">
+                                    <span style="font-size: 0.72rem; color: var(--apple-label-tertiary); transition: transform 0.15s; transform: ${mExpanded ? 'rotate(90deg)' : 'rotate(0)'};">▶</span>
+                                    <span style="font-size: 0.8rem; font-weight: 700; color: var(--apple-label);">${MONTHS[Number(m)]}</span>
+                                    <span style="display: inline-flex; align-items: center; gap: 3px; padding: 2px 8px; border-radius: 20px; background: var(--apple-bg-elevated); font-size: 0.65rem; font-weight: 600; color: var(--apple-label-secondary);">${mCount} bugs</span>
+                                    ${mCritical > 0 ? `<span style="font-size: 0.65rem; color: var(--apple-red); font-weight: 600;">⚠ ${mCritical} críticos</span>` : ''}
+                                </div>
+                                ${mExpanded ? Object.keys(byYear[y][m]).sort((a, b) => b - a).map(day => {
+                                    const dayKey = `bd-${y}-${m}-${day}`;
+                                    const dayExpanded = this.expandedBugGroups.has(dayKey) || this.expandedBugGroups.size === 0;
+                                    const dayBugs = byYear[y][m][day];
+                                    const dayCount = dayBugs.length;
+                                    const dayCritical = dayBugs.filter(b => b.severity === 'Crítica' || b.severity === 'Alta').length;
+                                    const dayDate = new Date(Number(y), Number(m), Number(day));
+                                    const dayLabel = dayDate.toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric' });
+                                    return `
+                                        <div data-group="${dayKey}">
+                                            <div class="bugs-group-row" data-group-key="${dayKey}" style="display: flex; align-items: center; gap: 8px; padding: 7px 16px 7px 60px; background: var(--apple-bg-primary); cursor: pointer; border-bottom: 1px solid var(--apple-separator); user-select: none;">
+                                                <span style="font-size: 0.7rem; color: var(--apple-label-tertiary); transition: transform 0.15s; transform: ${dayExpanded ? 'rotate(90deg)' : 'rotate(0)'};">▶</span>
+                                                <span style="font-size: 0.78rem; font-weight: 600; color: var(--apple-label);">${dayLabel}</span>
+                                                <span style="font-size: 0.65rem; color: var(--apple-label-tertiary);">${dayBugs[0] ? new Date(dayBugs[0].created_at).toLocaleDateString('es-AR') : ''}</span>
+                                                <span style="display: inline-flex; align-items: center; gap: 3px; padding: 2px 8px; border-radius: 20px; background: var(--apple-fill); font-size: 0.62rem; font-weight: 600; color: var(--apple-label-secondary);">${dayCount} bugs</span>
+                                                ${dayCritical > 0 ? `<span style="font-size: 0.65rem; color: var(--apple-red); font-weight: 600;">⚠ ${dayCritical}</span>` : ''}
+                                            </div>
+                                            ${dayExpanded ? dayBugs.map(bug => this.renderBugRowCompact(bug)).join('') : ''}
                                         </div>
-                                    ` : `
-                                        <span style="display: inline-flex; align-items: center; gap: 3px; padding: 2px 8px; border-radius: 20px; font-size: 0.65rem; font-weight: 600; background: ${bug.status === 'FIXED' ? 'rgba(52,199,89,0.1)' : 'rgba(255,149,0,0.1)'}; color: ${bug.status === 'FIXED' ? 'var(--apple-green)' : 'var(--apple-orange)'};">
-                                            ${UI.escapeHTML(bug.status)}
-                                        </span>
-                                    `}
-                            </td>
-                            <td style="padding: 12px;">
-                                <div style="font-size: 0.78rem; color: var(--apple-label);">${UI.escapeHTML(bug.tester_name || '—')}</div>
-                            </td>
-                            <td style="padding: 12px; font-size: 0.72rem; color: var(--apple-label-tertiary);">
-                                ${new Date(bug.created_at).toLocaleDateString()}
-                            </td>
-                            <td style="padding: 12px; text-align: right;">
-                                <button class="btn btn-ghost btn-sm btn-view-bug-details" data-id="${bug.id}" title="Ver Detalle" style="padding: 4px 10px; border-radius: var(--apple-radius-sm); font-size: 0.72rem;">🔍 Ver</button>
-                            </td>
-                        </tr>
-                    `).join('')}
-                </tbody>
-            </table>
+                                    `;
+                                }).join('') : ''}
+                            </div>
+                        `;
+                    }).join('') : ''}
+                </div>
+            `;
+        }).join('');
+    },
+
+    renderBugRowCompact(bug) {
+        const canSelect = !bug.jira_key;
+        const isSelected = this.selectedBugIds.has(bug.id);
+        const sevBg = (bug.severity === 'Crítica' || bug.severity === 'Alta') ? 'rgba(255,59,48,0.1)' : 'rgba(255,149,0,0.1)';
+        const sevColor = (bug.severity === 'Crítica' || bug.severity === 'Alta') ? 'var(--apple-red)' : 'var(--apple-orange)';
+        const dateStr = new Date(bug.created_at).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' });
+
+        return `
+            <div style="display: flex; align-items: center; gap: 12px; padding: 10px 16px 10px 84px; border-bottom: 1px solid var(--apple-separator); background: ${isSelected ? 'var(--apple-blue-soft)' : 'transparent'};">
+                <input type="checkbox" class="bug-checkbox" data-id="${bug.id}" ${isSelected ? 'checked' : ''} ${canSelect ? '' : 'disabled'} style="cursor: ${canSelect ? 'pointer' : 'not-allowed'}; flex-shrink: 0;">
+                <span style="font-size: 0.7rem; color: var(--apple-label-tertiary); min-width: 36px;">#${bug.id}</span>
+                <div style="flex: 1; min-width: 0;">
+                    <div style="font-size: 0.8rem; font-weight: 600; color: var(--apple-label); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${UI.escapeHTML(bug.title || 'Sin título')}</div>
+                    <div style="font-size: 0.65rem; color: var(--apple-label-tertiary); margin-top: 2px;">
+                        🏷 ${UI.escapeHTML(bug.tc_key || '—')} · 👤 ${UI.escapeHTML(bug.tester_name || '—')}
+                    </div>
+                </div>
+                <span style="display: inline-flex; align-items: center; gap: 3px; padding: 2px 8px; border-radius: 20px; font-size: 0.65rem; font-weight: 600; background: ${sevBg}; color: ${sevColor};">
+                    ${UI.escapeHTML(bug.severity || 'Media')}
+                </span>
+                <div style="display: flex; align-items: center; gap: 6px; min-width: 100px;">
+                    ${bug.jira_key
+                        ? `<a href="${UI.escapeHTML(bug.jira_url)}" target="_blank" rel="noopener" style="font-size: 0.7rem; font-weight: 600; color: var(--apple-blue); text-decoration: none;" title="Abrir en JIRA">${UI.escapeHTML(bug.jira_key)} ↗</a>`
+                        : `<span style="display: inline-flex; align-items: center; gap: 3px; padding: 2px 8px; border-radius: 20px; font-size: 0.62rem; font-weight: 600; background: ${bug.status === 'FIXED' ? 'rgba(52,199,89,0.1)' : 'rgba(255,149,0,0.1)'}; color: ${bug.status === 'FIXED' ? 'var(--apple-green)' : 'var(--apple-orange)'};">${UI.escapeHTML(bug.status)}</span>`
+                    }
+                </div>
+                <span style="font-size: 0.65rem; color: var(--apple-label-tertiary); min-width: 50px; text-align: right;">${dateStr}</span>
+                <button class="btn btn-ghost btn-sm btn-view-bug-details" data-id="${bug.id}" title="Ver Detalle" style="padding: 3px 8px; border-radius: var(--apple-radius-sm); font-size: 0.7rem; flex-shrink: 0;">🔍</button>
             </div>
         `;
     },
@@ -225,7 +461,7 @@ export const HistoryTab = {
                     <div style="display: flex; gap: 6px; justify-content: flex-end;">
                         <button class="btn btn-ghost btn-sm btn-view-report" data-id="${run.id}" title="Ver Reporte" style="padding: 4px 10px; border-radius: var(--apple-radius-sm); font-size: 0.72rem;">📄</button>
                         <button class="btn btn-ghost btn-sm btn-view-bugs" data-id="${run.id}" title="Ver Defectos" ${fail === 0 ? 'disabled style="opacity:0.4;cursor:not-allowed;"' : ''} style="padding: 4px 10px; border-radius: var(--apple-radius-sm); font-size: 0.72rem;">🐛</button>
-                        <button class="btn btn-primary btn-sm btn-retest" data-id="${run.id}" title="Retesting" style="padding: 4px 10px; border-radius: var(--apple-radius-sm); font-size: 0.72rem; font-weight: 600;">🔁 Retest</button>
+                        <button class="btn btn-sm btn-retest" data-id="${run.id}" title="Retesting" style="padding: 4px 10px; border-radius: var(--apple-radius-sm); font-size: 0.72rem;">🔁 Retest</button>
                     </div>
                 </td>
             </tr>
@@ -243,7 +479,7 @@ export const HistoryTab = {
     updateConsolidatedButton(container) {
         const toolbarRight = container.querySelector('.tab-toolbar-right');
         if (!toolbarRight) return;
-        
+
         const existingBtn = toolbarRight.querySelector('#btn-consolidated-report');
         if (this.selectedRunIds.size >= 2) {
             if (!existingBtn) {
@@ -261,6 +497,14 @@ export const HistoryTab = {
             }
         } else if (existingBtn) {
             existingBtn.remove();
+        }
+    },
+
+    rerenderRunsView(container) {
+        const tree = container.querySelector('.tt-container');
+        if (tree) {
+            tree.innerHTML = this.currentTab === 'runs' ? this.renderRunsView() : this.renderBugsView();
+            this.bindEvents(container);
         }
     },
 
@@ -331,10 +575,11 @@ export const HistoryTab = {
             const selectAll = container.querySelector('#select-all-runs');
             if (selectAll) {
                 selectAll.addEventListener('change', () => {
+                    const filtered = this.getFilteredRuns();
                     if (selectAll.checked) {
-                        this.runs.forEach(r => this.selectedRunIds.add(r.id));
+                        filtered.forEach(r => this.selectedRunIds.add(r.id));
                     } else {
-                        this.selectedRunIds.clear();
+                        filtered.forEach(r => this.selectedRunIds.delete(r.id));
                     }
                     container.querySelectorAll('.run-checkbox').forEach(cb => {
                         cb.checked = selectAll.checked;
@@ -342,6 +587,45 @@ export const HistoryTab = {
                     this.updateConsolidatedButton(container);
                 });
             }
+
+            // Filtro de fechas
+            const dateFromInput = container.querySelector('#runs-date-from');
+            const dateToInput = container.querySelector('#runs-date-to');
+            if (dateFromInput) {
+                dateFromInput.addEventListener('change', (e) => {
+                    this.dateFrom = e.target.value;
+                    this.rerenderRunsView(container);
+                });
+            }
+            if (dateToInput) {
+                dateToInput.addEventListener('change', (e) => {
+                    this.dateTo = e.target.value;
+                    this.rerenderRunsView(container);
+                });
+            }
+            const clearDatesBtn = container.querySelector('#runs-clear-dates');
+            if (clearDatesBtn) {
+                clearDatesBtn.addEventListener('click', () => {
+                    this.dateFrom = '';
+                    this.dateTo = '';
+                    this.expandedGroups.clear();
+                    this.rerenderRunsView(container);
+                });
+            }
+
+            // Toggles de grupo (colapsar/expandir)
+            container.querySelectorAll('.runs-group-row').forEach(row => {
+                row.addEventListener('click', (e) => {
+                    if (e.target.closest('input,button,select,label')) return;
+                    const key = row.dataset.groupKey;
+                    if (this.expandedGroups.has(key)) {
+                        this.expandedGroups.delete(key);
+                    } else {
+                        this.expandedGroups.add(key);
+                    }
+                    this.rerenderRunsView(container);
+                });
+            });
 
             const consolidatedBtn = container.querySelector('#btn-consolidated-report');
             if (consolidatedBtn) {
@@ -363,6 +647,136 @@ export const HistoryTab = {
                     }
                 });
             });
+
+            // Checkbox individual de bug
+            container.querySelectorAll('.bug-checkbox').forEach(cb => {
+                cb.addEventListener('change', () => {
+                    const id = parseInt(cb.dataset.id);
+                    if (cb.checked) {
+                        this.selectedBugIds.add(id);
+                    } else {
+                        this.selectedBugIds.delete(id);
+                    }
+                    this.updateBatchJiraToolbar(container);
+                    this.updateBugRowHighlight(cb, container);
+                });
+            });
+
+            // Filtro de fechas para bugs
+            const bugsDateFromInput = container.querySelector('#bugs-date-from');
+            const bugsDateToInput = container.querySelector('#bugs-date-to');
+            if (bugsDateFromInput) {
+                bugsDateFromInput.addEventListener('change', (e) => {
+                    this.bugsDateFrom = e.target.value;
+                    this.rerenderBugsView(container);
+                });
+            }
+            if (bugsDateToInput) {
+                bugsDateToInput.addEventListener('change', (e) => {
+                    this.bugsDateTo = e.target.value;
+                    this.rerenderBugsView(container);
+                });
+            }
+            const clearBugsDatesBtn = container.querySelector('#bugs-clear-dates');
+            if (clearBugsDatesBtn) {
+                clearBugsDatesBtn.addEventListener('click', () => {
+                    this.bugsDateFrom = '';
+                    this.bugsDateTo = '';
+                    this.expandedBugGroups.clear();
+                    this.rerenderBugsView(container);
+                });
+            }
+
+            // Toggles de grupo del árbol de bugs
+            container.querySelectorAll('.bugs-group-row').forEach(row => {
+                row.addEventListener('click', (e) => {
+                    if (e.target.closest('input,button,select,label,a')) return;
+                    const key = row.dataset.groupKey;
+                    if (this.expandedBugGroups.has(key)) {
+                        this.expandedBugGroups.delete(key);
+                    } else {
+                        this.expandedBugGroups.add(key);
+                    }
+                    this.rerenderBugsView(container);
+                });
+            });
+
+            // Botón "Crear tickets en Jira (N)"
+            const batchBtn = container.querySelector('#btn-batch-jira');
+            if (batchBtn) {
+                batchBtn.addEventListener('click', () => {
+                    const selectedBugs = this.bugs.filter(b => this.selectedBugIds.has(b.id));
+                    if (selectedBugs.length === 0) return;
+                    Modals.render('batch-jira-tickets', {
+                        bugs: selectedBugs,
+                        onComplete: async () => {
+                            this.selectedBugIds.clear();
+                            await this.render(container);
+                        }
+                    });
+                });
+            }
+        }
+    },
+
+    rerenderBugsView(container) {
+        const tree = container.querySelector('.tt-container');
+        if (tree) {
+            tree.innerHTML = this.currentTab === 'bugs' ? this.renderBugsView() : this.renderRunsView();
+            this.bindEvents(container);
+        }
+    },
+
+    updateBugRowHighlight(checkbox, container) {
+        // Resalta o desresalta la fila del bug sin re-renderizar nada.
+        // Las filas pueden ser <tr> (vista clásica) o <div> (vista compacta de árbol).
+        const row = checkbox.closest('tr') || checkbox.closest('[data-bug-id], div[style*="padding-left: 84px"]') || checkbox.parentElement;
+        if (!row) return;
+        if (checkbox.checked) {
+            row.style.background = 'var(--apple-blue-soft)';
+        } else {
+            row.style.background = '';
+        }
+    },
+
+    updateBatchJiraToolbar(container) {
+        // Actualiza solo el botón "Crear tickets en Jira (N)" del toolbar sin re-renderizar la lista
+        const headerRight = container.querySelector('.tt-container')?.previousElementSibling?.querySelector('div[style*="justify-content: flex-end"]') ||
+                            container.querySelector('div[style*="display: flex; gap: 8px; align-items: center;"]');
+        if (!headerRight) return;
+
+        const count = this.selectedBugIds.size;
+        const existingBtn = headerRight.querySelector('#btn-batch-jira');
+        if (count >= 1) {
+            if (existingBtn) {
+                existingBtn.innerHTML = `🚀 Crear tickets en Jira (${count})`;
+            } else {
+                const btn = document.createElement('button');
+                btn.id = 'btn-batch-jira';
+                btn.className = 'btn btn-primary btn-sm';
+                btn.style.cssText = 'padding: 6px 14px; border-radius: var(--apple-radius-sm); font-size: 0.72rem; font-weight: 600; background: var(--apple-blue); border: none; color: white;';
+                btn.innerHTML = `🚀 Crear tickets en Jira (${count})`;
+                btn.addEventListener('click', () => {
+                    const selectedBugs = this.bugs.filter(b => this.selectedBugIds.has(b.id));
+                    if (selectedBugs.length === 0) return;
+                    Modals.render('batch-jira-tickets', {
+                        bugs: selectedBugs,
+                        onComplete: async () => {
+                            this.selectedBugIds.clear();
+                            await this.render(container);
+                        }
+                    });
+                });
+                // Insertar antes del botón "Recargar"
+                const refreshBtn = headerRight.querySelector('#btn-refresh-history');
+                if (refreshBtn) {
+                    headerRight.insertBefore(btn, refreshBtn);
+                } else {
+                    headerRight.appendChild(btn);
+                }
+            }
+        } else if (existingBtn) {
+            existingBtn.remove();
         }
     },
 

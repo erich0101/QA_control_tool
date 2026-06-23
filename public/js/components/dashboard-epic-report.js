@@ -90,6 +90,9 @@ export const DashboardEpicReport = {
         const riskBgColors = { low: 'var(--apple-green-soft)', moderate: 'var(--apple-orange-soft)', high: 'var(--apple-red-soft)' };
         const insightColors = { success: { bg: 'var(--apple-green-soft)', border: 'var(--apple-green-soft)', text: 'var(--apple-green)' }, warning: { bg: 'var(--apple-orange-soft)', border: 'var(--apple-orange-soft)', text: 'var(--apple-orange)' }, critical: { bg: 'var(--apple-red-soft)', border: 'var(--apple-red-soft)', text: 'var(--apple-red)' } };
 
+        // Helper: etiqueta con tooltip de ayuda. Lenguaje simple orientado a PM/cliente.
+        const helpTip = (txt) => `<span title="${UI.escapeHTML(txt)}" style="display: inline-flex; align-items: center; justify-content: center; width: 12px; height: 12px; border-radius: 50%; background: var(--apple-fill); color: var(--apple-label-secondary); font-size: 0.6rem; font-weight: 800; margin-left: 4px; cursor: help; user-select: none;">?</span>`;
+
         const totalBugs = Object.values(statusBreakdown).reduce((a, b) => a + b, 0);
         const maxTrend = Math.max(...trend.map(w => Math.max(w.created, w.resolved, w.backlogEnd)), 1);
         const chartHeight = 200;
@@ -97,7 +100,7 @@ export const DashboardEpicReport = {
         return `
             <div id="epic-report-exportable">
                 <div style="text-align: center; margin-bottom: 24px;">
-                    <h2 style="font-size: 1.2rem; font-weight: 800; color: var(--text-main); margin: 0;">📋 Reporte de Estado — Épica ${this.selectedEpic}</h2>
+                    <h2 style="font-size: 1.2rem; font-weight: 800; color: var(--text-main); margin: 0;">📋 Resumen de la Épica ${this.selectedEpic}</h2>
                     <p style="color: var(--text-muted); font-size: 0.8rem; margin: 4px 0 0;">Período: ${this.dateFrom} al ${this.dateTo}</p>
                 </div>
 
@@ -129,12 +132,12 @@ export const DashboardEpicReport = {
                                 <span style="font-size: 0.55rem; color: var(--apple-label-tertiary); font-weight: 600;">/ 100</span>
                             </div>
                         </div>
-                        <div style="font-size: 0.65rem; font-weight: 800; color: var(--apple-label-secondary); text-transform: uppercase; letter-spacing: 0.05em;">QA Health</div>
+                        <div style="font-size: 0.65rem; font-weight: 800; color: var(--apple-label-secondary); text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center;">Calidad General${helpTip('Puntaje de 0 a 100 que resume el estado general del testing de la épica. Combina la cantidad de bugs, su gravedad y qué tan rápido se resuelven.')}</div>
                     </div>
 
                     <!-- Release Risk (macOS Status Card) -->
                     <div style="background: ${riskBgColors[riskLabel]}; border: 1px solid ${riskBgColors[riskLabel]}; border-radius: var(--apple-radius-xl); padding: 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: var(--apple-shadow-sm);">
-                        <div style="font-size: 0.6rem; font-weight: 800; color: var(--apple-label-secondary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;">Release Risk</div>
+                        <div style="font-size: 0.6rem; font-weight: 800; color: var(--apple-label-secondary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; display: flex; align-items: center;">Riesgo de Entrega${helpTip('Indica qué tan seguro es liberar esta épica a producción. "Bajo" = listo, "Moderado" = revisar pendientes, "Alto" = no recomendable liberar.')}</div>
                         <div style="font-size: 1.5rem; font-weight: 900; color: ${riskColors[riskLabel]}; text-transform: uppercase;">${riskLabel}</div>
                         <div style="font-size: 0.75rem; color: var(--apple-label-secondary); margin-top: 4px;">Score: ${riskScore}/100</div>
                         <div style="margin-top: 10px; width: 100%; height: 6px; background: var(--apple-fill); border-radius: 3px; overflow: hidden;">
@@ -151,51 +154,51 @@ export const DashboardEpicReport = {
                     <!-- KPI: Resolution Rate (macOS Glass Card) -->
                     <div style="background: var(--apple-bg-elevated); border: 1px solid var(--apple-separator); border-radius: var(--apple-radius-xl); padding: 18px; text-align: center; box-shadow: var(--apple-shadow-sm); transition: transform 0.2s, box-shadow 0.2s;">
                         <div style="font-size: 2rem; font-weight: 900; color: ${summary.bugResolutionRate >= 100 ? 'var(--apple-green)' : summary.bugResolutionRate >= 50 ? 'var(--apple-orange)' : 'var(--apple-red)'};">${summary.bugResolutionRate}%</div>
-                        <div style="font-size: 0.6rem; color: var(--apple-label-secondary); text-transform: uppercase; font-weight: 700; margin-top: 6px;">Resolution Rate</div>
-                        <div style="font-size: 0.65rem; color: var(--apple-label-tertiary); margin-top: 2px;">${summary.resolved}/${summary.total}</div>
+                        <div style="font-size: 0.6rem; color: var(--apple-label-secondary); text-transform: uppercase; font-weight: 700; margin-top: 6px; display: flex; align-items: center; justify-content: center;">% Bugs Resueltos${helpTip('Porcentaje de bugs reportados que ya fueron solucionados. 100% = todos resueltos.')}</div>
+                        <div style="font-size: 0.65rem; color: var(--apple-label-tertiary); margin-top: 2px;">${summary.resolved} de ${summary.total} resueltos</div>
                     </div>
 
                     <!-- KPI: Backlog Trend (macOS Glass Card) -->
                     <div style="background: var(--apple-bg-elevated); border: 1px solid var(--apple-separator); border-radius: var(--apple-radius-xl); padding: 18px; text-align: center; box-shadow: var(--apple-shadow-sm); transition: transform 0.2s, box-shadow 0.2s;">
                         <div style="font-size: 2rem; font-weight: 900; color: ${summary.backlogDelta <= 0 ? 'var(--apple-green)' : 'var(--apple-red)'};">${summary.backlogDelta > 0 ? '+' : ''}${summary.backlogDelta}</div>
-                        <div style="font-size: 0.6rem; color: var(--apple-label-secondary); text-transform: uppercase; font-weight: 700; margin-top: 6px;">Backlog Delta</div>
-                        <div style="font-size: 0.65rem; color: ${summary.backlogDeltaPercent > 0 ? 'var(--apple-red)' : 'var(--apple-green)'}; margin-top: 2px;">${summary.backlogDelta > 0 ? '+' : ''}${summary.backlogDeltaPercent}%</div>
+                        <div style="font-size: 0.6rem; color: var(--apple-label-secondary); text-transform: uppercase; font-weight: 700; margin-top: 6px; display: flex; align-items: center; justify-content: center;">Variación de Pendientes${helpTip('Cuántos bugs sin resolver se sumaron o restaron en el período. Positivo = se acumularon más, Negativo = se resolvieron más de los que entraron.')}</div>
+                        <div style="font-size: 0.65rem; color: ${summary.backlogDeltaPercent > 0 ? 'var(--apple-red)' : 'var(--apple-green)'}; margin-top: 2px;">${summary.backlogDelta > 0 ? '+' : ''}${summary.backlogDeltaPercent}% vs. inicio</div>
                     </div>
 
                     <!-- KPI: Open (macOS Alert Card) -->
                     <div style="background: var(--apple-red-soft); border: 1px solid var(--apple-red-soft); border-radius: var(--apple-radius-xl); padding: 18px; text-align: center; box-shadow: var(--apple-shadow-sm);">
                         <div style="font-size: 2rem; font-weight: 900; color: var(--apple-red);">${summary.open}</div>
-                        <div style="font-size: 0.6rem; color: var(--apple-label-secondary); text-transform: uppercase; font-weight: 700; margin-top: 6px;">Abiertos</div>
-                        <div style="font-size: 0.65rem; color: var(--apple-label-tertiary); margin-top: 2px;">sin resolver</div>
+                        <div style="font-size: 0.6rem; color: var(--apple-label-secondary); text-transform: uppercase; font-weight: 700; margin-top: 6px; display: flex; align-items: center; justify-content: center;">Pendientes${helpTip('Bugs reportados que aún no fueron resueltos por el equipo.')}</div>
+                        <div style="font-size: 0.65rem; color: var(--apple-label-tertiary); margin-top: 2px;">aún sin resolver</div>
                     </div>
                 </div>
 
                 <!-- QA TESTING METRICS (macOS Card) -->
                 ${qaMetrics ? `
                 <div style="background: var(--apple-bg-elevated); border: 1px solid var(--apple-separator); border-radius: var(--apple-radius-xl); padding: 24px; margin-bottom: 24px; box-shadow: var(--apple-shadow-sm);">
-                    <div style="font-size: 0.75rem; font-weight: 800; color: var(--apple-label-secondary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 20px;">🧪 Métricas de Testing</div>
+                    <div style="font-size: 0.75rem; font-weight: 800; color: var(--apple-label-secondary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 20px; display: flex; align-items: center;">🧪 Resultados del Testing${helpTip('Métricas del trabajo de testing ejecutado sobre la épica.')}</div>
                     
                     <!-- QA KPIs (macOS Glass Cards) -->
                     <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin-bottom: 24px;">
                         <div style="text-align: center; padding: 16px; background: var(--apple-fill-tertiary); border-radius: var(--apple-radius-md);">
                             <div style="font-size: 1.8rem; font-weight: 900; color: var(--apple-blue);">${qaMetrics.totalTestCases}</div>
-                            <div style="font-size: 0.6rem; color: var(--apple-label-secondary); text-transform: uppercase; font-weight: 700; margin-top: 4px;">Test Cases</div>
+                            <div style="font-size: 0.6rem; color: var(--apple-label-secondary); text-transform: uppercase; font-weight: 700; margin-top: 4px; display: flex; align-items: center; justify-content: center;">Casos de Prueba${helpTip('Cantidad de pruebas diseñadas y ejecutadas en esta épica.')}</div>
                         </div>
                         <div style="text-align: center; padding: 16px; background: var(--apple-fill-tertiary); border-radius: var(--apple-radius-md);">
                             <div style="font-size: 1.8rem; font-weight: 900; color: ${qaMetrics.passRate >= 80 ? 'var(--apple-green)' : qaMetrics.passRate >= 50 ? 'var(--apple-orange)' : 'var(--apple-red)'};">${qaMetrics.passRate}%</div>
-                            <div style="font-size: 0.6rem; color: var(--apple-label-secondary); text-transform: uppercase; font-weight: 700; margin-top: 4px;">Pass Rate</div>
+                            <div style="font-size: 0.6rem; color: var(--apple-label-secondary); text-transform: uppercase; font-weight: 700; margin-top: 4px; display: flex; align-items: center; justify-content: center;">% Aprobados${helpTip('Porcentaje de pruebas que pasaron sin encontrar errores.')}</div>
                         </div>
                         <div style="text-align: center; padding: 16px; background: var(--apple-fill-tertiary); border-radius: var(--apple-radius-md);">
                             <div style="font-size: 1.8rem; font-weight: 900; color: ${qaMetrics.defectDensity > 0.5 ? 'var(--apple-red)' : 'var(--apple-green)'};">${qaMetrics.defectDensity}%</div>
-                            <div style="font-size: 0.6rem; color: var(--apple-label-secondary); text-transform: uppercase; font-weight: 700; margin-top: 4px;">Defect Density</div>
+                            <div style="font-size: 0.6rem; color: var(--apple-label-secondary); text-transform: uppercase; font-weight: 700; margin-top: 4px; display: flex; align-items: center; justify-content: center;">Tasa de Defectos${helpTip('Porcentaje de pruebas que encontraron defectos. Más bajo = mejor calidad del entregable.')}</div>
                         </div>
                         <div style="text-align: center; padding: 16px; background: var(--apple-fill-tertiary); border-radius: var(--apple-radius-md);">
                             <div style="font-size: 1.8rem; font-weight: 900; color: var(--apple-blue);">${qaMetrics.totalExecutions}</div>
-                            <div style="font-size: 0.6rem; color: var(--apple-label-secondary); text-transform: uppercase; font-weight: 700; margin-top: 4px;">Ejecuciones</div>
+                            <div style="font-size: 0.6rem; color: var(--apple-label-secondary); text-transform: uppercase; font-weight: 700; margin-top: 4px; display: flex; align-items: center; justify-content: center;">Ciclos de Test${helpTip('Cantidad de corridas completas del set de pruebas en el período.')}</div>
                         </div>
                         <div style="text-align: center; padding: 16px; background: var(--apple-fill-tertiary); border-radius: var(--apple-radius-md);">
                             <div style="font-size: 1.8rem; font-weight: 900; color: var(--apple-orange);">${qaMetrics.executionTime.totalMinutes >= 60 ? Math.floor(qaMetrics.executionTime.totalMinutes / 60) + 'h ' + Math.round(qaMetrics.executionTime.totalMinutes % 60) + 'm' : Math.round(qaMetrics.executionTime.totalMinutes) + 'm'}</div>
-                            <div style="font-size: 0.6rem; color: var(--apple-label-secondary); text-transform: uppercase; font-weight: 700; margin-top: 4px;">Tiempo Total</div>
+                            <div style="font-size: 0.6rem; color: var(--apple-label-secondary); text-transform: uppercase; font-weight: 700; margin-top: 4px; display: flex; align-items: center; justify-content: center;">Tiempo Invertido${helpTip('Horas-hombre acumuladas en testing sobre la épica.')}</div>
                         </div>
                     </div>
 
@@ -203,7 +206,7 @@ export const DashboardEpicReport = {
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
                         <!-- Pass/Fail Distribution -->
                         <div style="background: var(--apple-fill-tertiary); border-radius: var(--apple-radius-md); padding: 16px;">
-                            <div style="font-size: 0.7rem; font-weight: 700; color: var(--apple-label-secondary); text-transform: uppercase; margin-bottom: 12px;">Distribución de Ejecuciones</div>
+                            <div style="font-size: 0.7rem; font-weight: 700; color: var(--apple-label-secondary); text-transform: uppercase; margin-bottom: 12px; display: flex; align-items: center; gap: 4px;">Resultados por Estado${helpTip('Cómo se distribuyen las corridas: aprobadas, fallidas, bloqueadas o pendientes.')}</div>
                             ${qaMetrics.totalExecutions > 0 ? `
                             <div style="display: flex; height: 20px; border-radius: var(--apple-radius-full); overflow: hidden; margin-bottom: 12px;">
                                 ${qaMetrics.executionsByStatus.PASS > 0 ? `<div style="width: ${(qaMetrics.executionsByStatus.PASS / qaMetrics.totalExecutions * 100)}%; background: var(--apple-green);" title="PASS: ${qaMetrics.executionsByStatus.PASS}"></div>` : ''}
@@ -226,7 +229,7 @@ export const DashboardEpicReport = {
 
                         <!-- Defects by Severity (macOS List) -->
                         <div style="background: var(--apple-fill-tertiary); border-radius: var(--apple-radius-md); padding: 16px;">
-                            <div style="font-size: 0.7rem; font-weight: 700; color: var(--apple-label-secondary); text-transform: uppercase; margin-bottom: 12px;">Defectos por Severidad</div>
+                            <div style="font-size: 0.7rem; font-weight: 700; color: var(--apple-label-secondary); text-transform: uppercase; margin-bottom: 12px; display: flex; align-items: center; gap: 4px;">Defectos por Gravedad${helpTip('Distribución de bugs según su impacto: Crítica/Alta (bloqueantes), Media, Baja (cosméticos).')}</div>
                             ${qaMetrics.defectsFound > 0 ? `
                             <div style="display: flex; flex-direction: column; gap: 10px;">
                                 ${Object.entries(qaMetrics.defectsBySeverity).map(([severity, count]) => {
@@ -256,7 +259,7 @@ export const DashboardEpicReport = {
                     <!-- SLA Advanced -->
                     ${sla ? `
                     <div style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: 16px; padding: 20px;">
-                        <div style="font-size: 0.75rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 14px;">⌚ SLA — Target: ${sla.target} días</div>
+                        <div style="font-size: 0.75rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 14px; display: flex; align-items: center; gap: 4px;">⏱️ Tiempo Objetivo: ${sla.target} días${helpTip('Plazo objetivo para resolver un bug. Mide qué tan rápido el equipo resuelve los pendientes.')}</div>
                         <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 14px;">
                             <div style="text-align: center;">
                                 <div style="font-size: 1.3rem; font-weight: 900; color: var(--brand);">${sla.median}</div>
@@ -264,24 +267,24 @@ export const DashboardEpicReport = {
                             </div>
                             <div style="text-align: center;">
                                 <div style="font-size: 1.3rem; font-weight: 900; color: var(--apple-orange);">${sla.p90}</div>
-                                <div style="font-size: 0.6rem; color: var(--text-muted);">P90 (días)</div>
+                                <div style="font-size: 0.6rem; color: var(--text-muted);">Peor caso (días)</div>
                             </div>
                             <div style="text-align: center;">
                                 <div style="font-size: 1.3rem; font-weight: 900; color: ${sla.compliance >= 80 ? '#10b981' : sla.compliance >= 50 ? '#f59e0b' : '#ef4444'};">${sla.compliance}%</div>
-                                <div style="font-size: 0.6rem; color: var(--text-muted);">Compliance</div>
+                                <div style="font-size: 0.6rem; color: var(--text-muted);">Cumplimiento</div>
                             </div>
                         </div>
                         <div style="height: 8px; background: var(--bg-main); border-radius: 4px; overflow: hidden; margin-bottom: 6px;">
                             <div style="height: 100%; width: ${sla.compliance}%; background: ${sla.compliance >= 80 ? '#10b981' : sla.compliance >= 50 ? '#f59e0b' : '#ef4444'}; border-radius: 4px;"></div>
                         </div>
-                        <div style="font-size: 0.7rem; color: var(--text-muted); text-align: center;">${sla.withinSLA} de ${sla.total} bugs dentro del SLA</div>
+                        <div style="font-size: 0.7rem; color: var(--text-muted); text-align: center;">${sla.withinSLA} de ${sla.total} bugs resueltos dentro del plazo${helpTip('Cantidad de bugs resueltos antes de vencer el plazo.')}</div>
                     </div>
                     ` : ''}
 
                     <!-- Aging Buckets -->
                     ${agingBuckets ? `
                     <div style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: 16px; padding: 20px;">
-                        <div style="font-size: 0.75rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 14px;">⏳ Aging — Bugs Abiertos</div>
+                        <div style="font-size: 0.75rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 14px; display: flex; align-items: center; gap: 4px;">⏳ Antigüedad de Pendientes${helpTip('Cuánto tiempo llevan abiertos los bugs sin resolver. Rangos: 0-3d (fresco), 4-7d (alerta), 8-15d (riesgo), +15d (crítico).')}</div>
                         <div style="display: flex; flex-direction: column; gap: 8px;">
                             ${Object.entries(agingBuckets).map(([bucket, count]) => {
                                 const pct = summary.open > 0 ? (count / summary.open * 100) : 0;
@@ -303,7 +306,7 @@ export const DashboardEpicReport = {
 
                     <!-- Backlog Evolution Chart -->
                     <div style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: 16px; padding: 20px;">
-                        <div style="font-size: 0.75rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 14px;">📈 Evolución del Backlog</div>
+                        <div style="font-size: 0.75rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 14px; display: flex; align-items: center; gap: 4px;">📈 Evolución de Pendientes${helpTip('Cómo varió la cantidad de bugs pendientes semana a semana. La línea azul muestra el total acumulado.')}</div>
                         <div style="position: relative; height: ${chartHeight}px;">
                             <svg width="100%" height="${chartHeight}" style="overflow: visible;">
                                 ${this.renderTrendSVG(trend, maxTrend, chartHeight)}
@@ -322,7 +325,7 @@ export const DashboardEpicReport = {
 
                     <!-- Status Breakdown -->
                     <div style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: 16px; padding: 20px;">
-                        <div style="font-size: 0.75rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 14px;">📊 Distribución por Estado</div>
+                        <div style="font-size: 0.75rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 14px; display: flex; align-items: center; gap: 4px;">📊 Distribución por Estado${helpTip('En qué estado se encuentra cada bug: To Do (pendiente), In Progress (en curso), In Review (revisión), Done (resuelto).')}</div>
                         ${Object.entries(statusBreakdown).filter(([_, v]) => v > 0).map(([s, count]) => {
                             const pct = totalBugs > 0 ? (count / totalBugs * 100) : 0;
                             const colors = { 'To Do': '#6b7280', 'In Progress': '#f59e0b', 'In Review': '#3b82f6', 'Done': '#10b981', 'Other': '#9ca3af' };
@@ -341,7 +344,7 @@ export const DashboardEpicReport = {
 
                     <!-- Age by Status + Priority -->
                     <div style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: 16px; padding: 20px;">
-                        <div style="font-size: 0.75rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 14px;">⏱️ Edad Promedio por Estado (días)</div>
+                        <div style="font-size: 0.75rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 14px; display: flex; align-items: center; gap: 4px;">⏱️ Días Promedio por Estado${helpTip('Cuántos días en promedio lleva un bug en cada estado antes de avanzar.')}</div>
                         <div style="display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 16px;">
                             ${Object.entries(avgAgeByStatus).filter(([_, v]) => v > 0).map(([k, v]) => `
                                 <div style="text-align: center; min-width: 80px;">
@@ -352,7 +355,7 @@ export const DashboardEpicReport = {
                         </div>
                         ${Object.keys(priorityBreakdown).length > 0 ? `
                         <div style="border-top: 1px solid var(--border); padding-top: 14px;">
-                            <div style="font-size: 0.7rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px;">Por Prioridad</div>
+                            <div style="font-size: 0.7rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px; display: flex; align-items: center; gap: 4px;">Por Prioridad${helpTip('Cantidad de bugs según urgencia: High/Medium.')}</div>
                             <div style="display: flex; flex-wrap: wrap; gap: 6px;">
                                 ${Object.entries(priorityBreakdown).map(([k, v]) => `<span style="background: var(--bg-hover); border: 1px solid var(--border); border-radius: 20px; padding: 3px 10px; font-size: 0.7rem; color: var(--text-main);">${k}: <strong>${v}</strong></span>`).join('')}
                             </div>
@@ -364,15 +367,15 @@ export const DashboardEpicReport = {
                 <!-- Weekly Table -->
                 ${trend.length > 0 ? `
                 <div style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: 16px; padding: 20px; overflow-x: auto;">
-                    <div style="font-size: 0.75rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 16px;">📅 Resumen Semanal</div>
+                    <div style="font-size: 0.75rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 16px; display: flex; align-items: center; gap: 4px;">📅 Resumen Semanal${helpTip('Comparación semana a semana: cuántos bugs se reportaron, cuántos se resolvieron y cuál fue el saldo.')}</div>
                     <table style="width: 100%; border-collapse: collapse; font-size: 0.8rem;">
                         <thead>
                             <tr style="border-bottom: 1px solid var(--border);">
                                 <th style="text-align: left; padding: 8px 12px; color: var(--text-muted); font-weight: 700;">Semana</th>
-                                <th style="text-align: right; padding: 8px 12px; color: var(--apple-red); font-weight: 700;">Creados</th>
+                                <th style="text-align: right; padding: 8px 12px; color: var(--apple-red); font-weight: 700;">Reportados</th>
                                 <th style="text-align: right; padding: 8px 12px; color: var(--apple-green); font-weight: 700;">Resueltos</th>
-                                <th style="text-align: right; padding: 8px 12px; color: var(--brand); font-weight: 700;">Backlog Final</th>
-                                <th style="text-align: right; padding: 8px 12px; font-weight: 700;">Delta</th>
+                                <th style="text-align: right; padding: 8px 12px; color: var(--brand); font-weight: 700;">Pendientes al Cierre</th>
+                                <th style="text-align: right; padding: 8px 12px; font-weight: 700;">Variación</th>
                             </tr>
                         </thead>
                         <tbody>

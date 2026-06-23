@@ -452,9 +452,32 @@ async function fetchSuiteGroupedData(runIds) {
 
     const suites = [];
     for (const [suiteId, group] of Object.entries(suiteMap)) {
+        // Si entre los runs seleccionados hay tanto un FULL como un RETEST, los respetamos como par orig+retest.
+        // Si solo hay un RETEST seleccionado, buscamos su run original (parent_run_id) en TODA la historia de la suite,
+        // para que el reporte muestre los datos del FAIL original y los del nuevo resultado del retest.
         const runsSorted = group.runs.sort((a, b) => new Date(a.finished_at) - new Date(b.finished_at));
-        const origRun = runsSorted.find(r => !r.parent_run_id || r.run_type !== 'RETEST') || runsSorted[0];
-        const retestRun = runsSorted.find(r => r.parent_run_id && r.run_type === 'RETEST');
+        const explicitOrig = runsSorted.find(r => r.run_type !== 'RETEST');
+        const explicitRetest = runsSorted.find(r => r.run_type === 'RETEST');
+
+        let origRun = explicitOrig;
+        let retestRun = explicitRetest;
+
+        if (!origRun && retestRun) {
+            // Solo se seleccionó el retest. Buscar su parent (el run original) en la suite.
+            const parentRes = await query(`SELECT * FROM qa_test_runs WHERE id = ?`, [retestRun.parent_run_id]);
+            if (parentRes.rows.length > 0) origRun = parentRes.rows[0];
+        }
+        if (!retestRun && origRun) {
+            // Solo se seleccionó el run original. Buscar si tiene un retest vinculado.
+            const retestRes = await query(
+                `SELECT * FROM qa_test_runs WHERE parent_run_id = ? AND run_type = 'RETEST' ORDER BY id DESC LIMIT 1`,
+                [origRun.id]
+            );
+            if (retestRes.rows.length > 0) retestRun = retestRes.rows[0];
+        }
+
+        // Fallback final: si no se pudo determinar el par, usar el run más antiguo como orig.
+        if (!origRun) origRun = runsSorted[0];
 
         // Get all test cases for this suite
         const allTCs = await query(`SELECT * FROM qa_test_cases WHERE suite_id = ? ORDER BY id`, [suiteId]);

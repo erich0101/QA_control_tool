@@ -79,6 +79,7 @@ await query(`ALTER TABLE qa_defects ADD COLUMN IF NOT EXISTS observations TEXT`)
         await query(`ALTER TABLE qa_test_suites ADD COLUMN IF NOT EXISTS created_by INTEGER REFERENCES qa_users(id)`);
         await query(`ALTER TABLE qa_test_suites ADD COLUMN IF NOT EXISTS updated_by INTEGER REFERENCES qa_users(id)`);
         await query(`ALTER TABLE qa_test_suites ADD COLUMN IF NOT EXISTS inconsistencies TEXT DEFAULT '[]'`);
+        await query(`ALTER TABLE qa_test_suites ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE`);
         
         // Nueva tabla para Escenarios (Refactorización del modelo de datos)
         await query(`
@@ -145,10 +146,33 @@ await query(`CREATE INDEX IF NOT EXISTS idx_defects_proj_exec ON qa_defects (pro
         await query(`CREATE INDEX IF NOT EXISTS idx_hallazgo_tc_tc       ON qa_hallazgo_tc (tc_id)`);
         await query(`CREATE INDEX IF NOT EXISTS idx_suites_uc_id      ON qa_test_suites (use_case_id)`);
         await query(`CREATE INDEX IF NOT EXISTS idx_suites_active_run ON qa_test_suites (active_run_id) WHERE active_run_id IS NOT NULL`);
+        await query(`CREATE INDEX IF NOT EXISTS idx_suites_is_active  ON qa_test_suites (is_active) WHERE is_active = false`);
         await query(`CREATE INDEX IF NOT EXISTS idx_uc_project_id     ON qa_use_cases (project_id)`);
         await query(`CREATE INDEX IF NOT EXISTS idx_us_uc_id          ON qa_user_stories (use_case_id)`);
         await query(`CREATE INDEX IF NOT EXISTS idx_scenarios_us_id       ON qa_scenarios (us_id)`);
         await query(`CREATE INDEX IF NOT EXISTS idx_inconsistencias_us_id ON qa_inconsistencias (us_id)`);
+
+        // Sugerencias de mejora (tab separada dentro de Hallazgos)
+        await query(`
+            CREATE TABLE IF NOT EXISTS qa_suggestions (
+                id SERIAL PRIMARY KEY,
+                project_id INTEGER NOT NULL REFERENCES qa_projects(id) ON DELETE CASCADE,
+                title VARCHAR(255) NOT NULL,
+                category VARCHAR(50) NOT NULL DEFAULT 'UX',
+                description TEXT DEFAULT '',
+                proposed_solution TEXT DEFAULT '',
+                priority VARCHAR(20) DEFAULT 'Media',
+                status VARCHAR(20) DEFAULT 'OPEN',
+                assigned_to INTEGER REFERENCES qa_users(id) ON DELETE SET NULL,
+                created_by INTEGER REFERENCES qa_users(id),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+        await query(`CREATE INDEX IF NOT EXISTS idx_suggestions_project_id ON qa_suggestions (project_id)`);
+        await query(`CREATE INDEX IF NOT EXISTS idx_suggestions_assigned   ON qa_suggestions (assigned_to)`);
+        await query(`ALTER TABLE qa_attachments ADD COLUMN IF NOT EXISTS suggestion_id INTEGER REFERENCES qa_suggestions(id) ON DELETE CASCADE`);
+        await query(`CREATE INDEX IF NOT EXISTS idx_attachments_suggestion ON qa_attachments (suggestion_id)`);
         await query(`CREATE INDEX IF NOT EXISTS idx_perms_user_id     ON qa_user_permissions (user_id)`);
         await query(`CREATE INDEX IF NOT EXISTS idx_proj_users_uid    ON qa_project_users (user_id)`);
         await query(`CREATE INDEX IF NOT EXISTS idx_proj_users_pid    ON qa_project_users (project_id)`);
@@ -828,7 +852,7 @@ app.get('/api/jira/projects/:id/epic-stats', requireAuth, async (req, res) => {
             SELECT tc.id, tc.title, tc.assigned_to
             FROM qa_test_cases tc
             JOIN qa_test_suites s ON tc.suite_id = s.id
-            WHERE s.jira_epic_key = ?
+            WHERE s.jira_epic_key = ? AND s.is_active = TRUE
         `, [epicKey]);
 
         const qaCaseIds = qaCasesRes.rows.map(c => c.id);
@@ -855,7 +879,7 @@ app.get('/api/jira/projects/:id/epic-stats', requireAuth, async (req, res) => {
                 SELECT r.accumulated_seconds, r.started_at, r.finished_at
                 FROM qa_test_runs r
                 JOIN qa_test_suites s ON r.suite_id = s.id
-                WHERE s.jira_epic_key = ? AND r.status = 'FINISHED'
+                WHERE s.jira_epic_key = ? AND s.is_active = TRUE AND r.status = 'FINISHED'
             `, [epicKey]);
 
             qaRunCount = qaRunsRes.rows.length;
@@ -1634,7 +1658,7 @@ app.get('/api/test-suites', requireAuth, async (req, res) => {
             const activeRun = activeRuns.find(r => r.id === suite.active_run_id) || null;
             const suiteCases = allTestCases.filter(tc => tc.suite_id === suite.id);
             const suiteInconsistencies = allInconsistencies.filter(inc => inc.suite_id === suite.id);
-            
+
             const processedCases = suiteCases.map(tc => {
                 let exec = null;
                 if (activeRun) {
@@ -1678,7 +1702,7 @@ app.get('/api/test-suites', requireAuth, async (req, res) => {
                 };
             }).filter(tc => tc !== null);
 
-            return { ...suite, activeRun, test_cases: processedCases, inconsistencies: suiteInconsistencies };
+            return { ...suite, activeRun, test_cases: processedCases, test_cases_count: suiteCases.length, inconsistencies: suiteInconsistencies };
         });
 
         console.log(`GET /api/test-suites optimized: ${Date.now() - start}ms`);
@@ -2986,11 +3010,20 @@ app.get('/api/stats/suites', requireAuth, async (req, res) => {
                 s.title,
                 COUNT(r.id)::INT as total_runs,
                 COALESCE(SUM(CASE WHEN r.status = 'FINISHED' THEN EXTRACT(EPOCH FROM (r.finished_at - r.started_at)) / 60 ELSE 0 END), 0)::FLOAT as total_minutes,
-                COALESCE(AVG(CASE WHEN r.status = 'FINISHED' THEN EXTRACT(EPOCH FROM (r.finished_at - r.started_at)) / 60 ELSE NULL END), 0)::FLOAT as avg_minutes
+                COALESCE(AVG(CASE WHEN r.status = 'FINISHED' THEN EXTRACT(EPOCH FROM (r.finished_at - r.started_at)) / 60 ELSE NULL END), 0)::FLOAT as avg_minutes,
+                (
+                    SELECT json_agg(json_build_object(
+                        'id', r2.id,
+                        'finished_at', r2.finished_at,
+                        'minutes', CASE WHEN r2.status = 'FINISHED' THEN EXTRACT(EPOCH FROM (r2.finished_at - r2.started_at)) / 60 ELSE 0 END
+                    ) ORDER BY r2.finished_at DESC)
+                    FROM qa_test_runs r2
+                    WHERE r2.suite_id = s.id
+                ) as runs
             FROM qa_test_suites s
             JOIN qa_use_cases uc ON s.use_case_id = uc.id
             LEFT JOIN qa_test_runs r ON s.id = r.suite_id
-            WHERE uc.project_id = ? ${dateFilter}
+            WHERE uc.project_id = ? AND s.is_active = TRUE ${dateFilter}
             GROUP BY s.id, s.title
             ORDER BY total_minutes DESC
         `, params);
@@ -3009,8 +3042,8 @@ app.get('/api/stats/overview', requireAuth, async (req, res) => {
         const summary = await query(`
             SELECT 
                 (SELECT COUNT(*) FROM qa_use_cases WHERE project_id = ?) as total_cu,
-                (SELECT COUNT(*) FROM qa_test_suites s JOIN qa_use_cases cu ON s.use_case_id = cu.id WHERE cu.project_id = ?) as total_suites,
-                (SELECT COUNT(*) FROM qa_test_cases tc JOIN qa_test_suites s ON tc.suite_id = s.id JOIN qa_use_cases cu ON s.use_case_id = cu.id WHERE cu.project_id = ?) as total_tc
+                (SELECT COUNT(*) FROM qa_test_suites s JOIN qa_use_cases cu ON s.use_case_id = cu.id WHERE cu.project_id = ? AND s.is_active = TRUE) as total_suites,
+                (SELECT COUNT(*) FROM qa_test_cases tc JOIN qa_test_suites s ON tc.suite_id = s.id JOIN qa_use_cases cu ON s.use_case_id = cu.id WHERE cu.project_id = ? AND s.is_active = TRUE) as total_tc
         `, [project_id, project_id, project_id]);
 
         const statuses = await query(`
@@ -3024,7 +3057,7 @@ app.get('/api/stats/overview', requireAuth, async (req, res) => {
                 SELECT tc_id, status FROM qa_executions 
                 WHERE id IN (SELECT MAX(id) FROM qa_executions GROUP BY tc_id)
             ) e ON tc.id = e.tc_id
-            WHERE cu.project_id = ?
+            WHERE cu.project_id = ? AND s.is_active = TRUE
             GROUP BY COALESCE(e.status, 'PENDING')
         `, [project_id]);
 
@@ -3040,7 +3073,7 @@ app.get('/api/stats/overview', requireAuth, async (req, res) => {
                 SELECT tc_id, status FROM qa_executions 
                 WHERE id IN (SELECT MAX(id) FROM qa_executions GROUP BY tc_id)
             ) e ON tc.id = e.tc_id
-            WHERE cu.project_id = ?
+            WHERE cu.project_id = ? AND (s.id IS NULL OR s.is_active = TRUE)
             GROUP BY cu.id, cu.title
             ORDER BY cu.id
         `, [project_id]);
@@ -3321,6 +3354,28 @@ app.put('/api/test-suites/:id', requireAuth, async (req, res) => {
     }
 });
 
+app.put('/api/test-suites/:id/active', requireAuth, async (req, res) => {
+    try {
+        if (req.user.role !== 'Admin' && req.user.role !== 'Analista QA') {
+            return res.status(403).json({ error: 'Permisos insuficientes' });
+        }
+        const { is_active } = req.body;
+        if (typeof is_active !== 'boolean') return res.status(400).json({ error: 'is_active (boolean) requerido' });
+
+        const suiteId = req.params.id;
+        const exists = await query(`SELECT id FROM qa_test_suites WHERE id = ?`, [suiteId]);
+        if (exists.rows.length === 0) return res.status(404).json({ error: 'Suite no encontrada' });
+
+        await query(`UPDATE qa_test_suites SET is_active = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+            [is_active, req.user.id, suiteId]);
+
+        const { rows } = await query(`SELECT * FROM qa_test_suites WHERE id = ?`, [suiteId]);
+        res.json({ ok: true, suite: rows[0] });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 app.put('/api/test-suites/:id/assign-all', requireAuth, async (req, res) => {
     try {
         const { assigned_to } = req.body;
@@ -3570,6 +3625,130 @@ app.post('/api/hallazgos/:id/convert-to-tc', requireAuth, async (req, res) => {
     }
 });
 
+// ══════════════════════════════════════════════════════════════
+// ── SUGERENCIAS DE MEJORA (subsección dentro de Hallazgos) ──
+// ══════════════════════════════════════════════════════════════
+
+const SUGGESTION_CATEGORIES = ['UX', 'Performance', 'Seguridad', 'Accesibilidad', 'Otro'];
+const SUGGESTION_STATUSES = ['OPEN', 'IN_REVIEW', 'ACCEPTED', 'REJECTED', 'DONE'];
+const SUGGESTION_PRIORITIES = ['Baja', 'Media', 'Alta'];
+
+app.get('/api/suggestions', requireAuth, async (req, res) => {
+    try {
+        const { project_id } = req.query;
+        if (!project_id) return res.status(400).json({ error: 'project_id requerido' });
+
+        const result = await query(`
+            SELECT s.*,
+                   assignee.name as assignee_name,
+                   creator.name as creator_name,
+                   (SELECT COUNT(*) FROM qa_attachments WHERE suggestion_id = s.id) as evidence_count
+            FROM qa_suggestions s
+            LEFT JOIN qa_users assignee ON s.assigned_to = assignee.id
+            LEFT JOIN qa_users creator  ON s.created_by  = creator.id
+            WHERE s.project_id = ?
+            ORDER BY s.id DESC
+            LIMIT 500
+        `, [project_id]);
+        res.json({ suggestions: result.rows });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/suggestions', requireAuth, async (req, res) => {
+    try {
+        if (!(await checkPermission(req.user.id, 'can_create_cu')) && req.user.role !== 'Admin' && req.user.role !== 'Analista QA') {
+            return res.status(403).json({ error: 'Permisos insuficientes' });
+        }
+        const { project_id, title, category, description, proposed_solution, priority, assigned_to } = req.body;
+        if (!project_id || !title) return res.status(400).json({ error: 'project_id y title son requeridos' });
+
+        const safeCategory = SUGGESTION_CATEGORIES.includes(category) ? category : 'UX';
+        const safePriority = SUGGESTION_PRIORITIES.includes(priority) ? priority : 'Media';
+        const safeAssignedTo = (assigned_to === null || assigned_to === undefined || assigned_to === '')
+            ? null
+            : parseInt(assigned_to, 10);
+
+        const result = await query(
+            `INSERT INTO qa_suggestions (project_id, title, category, description, proposed_solution, priority, assigned_to, status, created_by)
+             VALUES (?, ?, ?, ?, ?, ?, ?, 'OPEN', ?) RETURNING id`,
+            [project_id, title, safeCategory, description || '', proposed_solution || '', safePriority, safeAssignedTo, req.user.id]
+        );
+        res.json({ ok: true, id: result.rows[0].id });
+    } catch (err) {
+        console.error('Error creando sugerencia:', err);
+        console.error('Body era:', JSON.stringify(req.body));
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.put('/api/suggestions/:id', requireAuth, async (req, res) => {
+    try {
+        const { title, category, description, proposed_solution, priority, assigned_to } = req.body;
+        const fields = [];
+        const params = [];
+        const map = { title, category, description, proposed_solution, priority, assigned_to };
+        for (const f of Object.keys(map)) {
+            if (map[f] !== undefined) {
+                if (f === 'category' && !SUGGESTION_CATEGORIES.includes(map[f])) continue;
+                if (f === 'priority' && !SUGGESTION_PRIORITIES.includes(map[f])) continue;
+                fields.push(`${f} = ?`);
+                params.push(map[f] === '' ? null : map[f]);
+            }
+        }
+        if (fields.length === 0) return res.status(400).json({ error: 'Sin campos para actualizar' });
+        fields.push('updated_at = CURRENT_TIMESTAMP');
+        params.push(req.params.id);
+        await query(`UPDATE qa_suggestions SET ${fields.join(', ')} WHERE id = ?`, params);
+        res.json({ ok: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.delete('/api/suggestions/:id', requireAuth, requireAdmin, async (req, res) => {
+    try {
+        await query(`DELETE FROM qa_suggestions WHERE id = ?`, [req.params.id]);
+        res.json({ ok: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.put('/api/suggestions/:id/status', requireAuth, async (req, res) => {
+    try {
+        const { status } = req.body;
+        if (!SUGGESTION_STATUSES.includes(status)) return res.status(400).json({ error: 'status inválido' });
+        await query(`UPDATE qa_suggestions SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [status, req.params.id]);
+        res.json({ ok: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.put('/api/suggestions/:id/assign', requireAuth, async (req, res) => {
+    try {
+        const { assigned_to } = req.body;
+        await query(`UPDATE qa_suggestions SET assigned_to = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [assigned_to || null, req.params.id]);
+        res.json({ ok: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get('/api/suggestions/:id/evidence', requireAuth, async (req, res) => {
+    try {
+        const result = await query(`
+            SELECT id, file_name, mime_type, evidence_category, created_at
+            FROM qa_attachments WHERE suggestion_id = ? ORDER BY id
+        `, [req.params.id]);
+        res.json({ evidence: result.rows });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 app.post('/api/jira/hallazgos/:id/create-ticket', requireAuth, async (req, res) => {
     try {
         const hallazgoId = req.params.id;
@@ -3663,7 +3842,7 @@ app.get('/api/evidence/:id', requireAuth, async (req, res) => {
 
 app.post('/api/evidence', requireAuth, upload.single('evidence'), async (req, res) => {
     try {
-        const { tc_id, defect_id, category } = req.body;
+        const { tc_id, defect_id, suggestion_id, category } = req.body;
         const file = req.file;
         if (!file) return res.status(400).json({ error: 'Archivo no recibido' });
 
@@ -3672,6 +3851,11 @@ app.post('/api/evidence', requireAuth, upload.single('evidence'), async (req, re
                 INSERT INTO qa_attachments (defect_id, file_name, mime_type, file_data, evidence_category)
                 VALUES (?, ?, ?, ?, ?)
             `, [defect_id, file.originalname, file.mimetype, file.buffer, category || 'GENERAL']);
+        } else if (suggestion_id) {
+            await query(`
+                INSERT INTO qa_attachments (suggestion_id, file_name, mime_type, file_data, evidence_category)
+                VALUES (?, ?, ?, ?, ?)
+            `, [suggestion_id, file.originalname, file.mimetype, file.buffer, category || 'GENERAL']);
         } else {
             const execRes = await query(`SELECT id FROM qa_executions WHERE tc_id = ? ORDER BY id DESC LIMIT 1`, [tc_id]);
             if (execRes.rows.length === 0) return res.status(400).json({ error: 'No hay una ejecución reciente para este Test Case' });
