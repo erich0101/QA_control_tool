@@ -17,6 +17,8 @@ export const ExecutionTab = {
     filterStatus: 'all',
     _isListening: false,
     _lastScroll: 0,
+    // Drafts de bugs en memoria por executionId: array de objetos {title, description, steps_to_reproduce, expected_result, actual_result, frequency, severity, business_impact}
+    bugDrafts: new Map(),
 
     async render(container) {
         const scrollPos = container.scrollTop;
@@ -206,7 +208,6 @@ export const ExecutionTab = {
                         ${status === 'PENDING' ? `
                             <button class="btn-text btn-run-tc" data-tc-id="${tc.id}">Ejecutar</button>
                         ` : ''}
-                        <button class="btn-text btn-create-bug" data-tc-id="${tc.id}">Crear Bug</button>
                     </div>
                 </div>
                 <div class="tc-expanded ${isExpanded ? 'visible' : ''}">
@@ -225,8 +226,7 @@ export const ExecutionTab = {
             <div class="tc-detail">
                 ${assignee ? `<div class="tc-detail-assignee">Asignado: ${UI.escapeHTML(assignee.name)}</div>` : ''}
                 <div class="tc-detail-tabs">
-                    <button class="tc-tab ${this.detailTab === 'steps' ? 'active' : ''}" data-tab="steps" data-tc-id="${tc.id}">Pasos</button>
-                    <button class="tc-tab ${this.detailTab === 'expected' ? 'active' : ''}" data-tab="expected" data-tc-id="${tc.id}">Esperado</button>
+                    <button class="tc-tab active" data-tab="steps" data-tc-id="${tc.id}">Pasos &amp; Esperado</button>
                 </div>
 
                 <div class="tc-detail-body">
@@ -236,63 +236,16 @@ export const ExecutionTab = {
                 <div class="bug-report-panel ${status === 'FAIL' ? 'is-open' : ''}" id="bug-panel-${tc.id}">
                     <div class="bug-report-header">
                         <span class="bug-report-title">REPORTE DE DEFECTO (BUG)</span>
-                        <span class="help-text-xs">Se creara un ticket automaticamente al guardar</span>
+                        <span class="help-text-xs">Se creará un nuevo bug por cada tarjeta al guardar</span>
                     </div>
                     <div class="bug-report-body">
-                        <div class="field-group">
-                            <label class="field-label">Título del Bug</label>
-                            <input type="text" class="bug-input" data-field="title" data-tc-id="${tc.id}" placeholder="Resumen conciso del error..." value="Error en: ${UI.escapeHTML(tc.title)}" ${isLocked ? 'disabled' : ''}>
-                        </div>
-                        <div class="field-group">
-                            <label class="field-label">Descripción General</label>
-                            <textarea class="bug-input" data-field="description" data-tc-id="${tc.id}" placeholder="Contexto del error..." ${isLocked ? 'disabled' : ''}></textarea>
-                        </div>
-                        <div class="field-group">
-                            <div class="flex-between">
-                                <label class="field-label">Pasos para reproducir</label>
-                                ${!isLocked ? `<button class="btn btn-ghost btn-sm btn-copy-steps" data-tc-id="${tc.id}" style="font-size: 0.7rem; padding: 2px 8px;">Copiar del TC</button>` : ''}
-                            </div>
-                            <textarea class="bug-input" data-field="steps_to_reproduce" data-tc-id="${tc.id}" placeholder="1. ..." ${isLocked ? 'disabled' : ''}></textarea>
-                        </div>
-                        <div class="bug-result-compare">
-                            <div class="field-group">
-                                <div class="result-box-title expected">Resultado Esperado</div>
-                                <textarea class="bug-input" data-field="expected_result" data-tc-id="${tc.id}" ${isLocked ? 'disabled' : ''}>${UI.escapeHTML(tc.expected_result || '')}</textarea>
-                            </div>
-                            <div class="field-group">
-                                <div class="result-box-title actual">Resultado Actual</div>
-                                <textarea class="bug-input" data-field="actual_result" data-tc-id="${tc.id}" placeholder="¿Qué pasó realmente?" ${isLocked ? 'disabled' : ''}></textarea>
-                            </div>
-                        </div>
-                        <div class="bug-grid-impact">
-                            <div class="field-group">
-                                <label class="field-label">Frecuencia</label>
-                                <select class="bug-input" data-field="frequency" data-tc-id="${tc.id}" ${isLocked ? 'disabled' : ''}>
-                                    <option value="Siempre">Siempre</option>
-                                    <option value="Intermitente">Intermitente</option>
-                                    <option value="Una vez">Una vez</option>
-                                </select>
-                            </div>
-                            <div class="field-group">
-                                <label class="field-label">Severidad</label>
-                                <select class="bug-input" data-field="severity" data-tc-id="${tc.id}" ${isLocked ? 'disabled' : ''}>
-                                    <option value="Crítica">Crítica</option>
-                                    <option value="Alta" selected>Alta</option>
-                                    <option value="Media">Media</option>
-                                    <option value="Baja">Baja</option>
-                                </select>
-                            </div>
-                            <div class="field-group">
-                                <label class="field-label">Impacto en el negocio</label>
-                                <input type="text" class="bug-input" data-field="business_impact" data-tc-id="${tc.id}" placeholder="Ej: Bloquea edición..." ${isLocked ? 'disabled' : ''}>
-                            </div>
-                        </div>
+                        ${this.renderBugList(tc)}
                     </div>
                 </div>
 
-                <div class="block-report-panel ${status === 'BLOCK' ? 'is-open' : ''}" id="block-panel-${tc.id}">
-                    <label class="block-report-title">JUSTIFICACION DEL BLOQUEO</label>
-                    <textarea class="block-input" data-tc-id="${tc.id}" placeholder="Indica por qué no se pudo ejecutar este test..." ${isLocked ? 'disabled' : ''}>${UI.escapeHTML(tc.observations || '')}</textarea>
+                <div class="block-report-panel ${(status === 'BLOCK' || status === 'SKIP' || status === 'SKIPPED') ? 'is-open' : ''}" id="block-panel-${tc.id}">
+                    <label class="block-report-title">${status === 'SKIP' || status === 'SKIPPED' ? 'JUSTIFICACION DEL SALTO' : 'JUSTIFICACION DEL BLOQUEO'}</label>
+                    <textarea class="block-input" data-tc-id="${tc.id}" placeholder="${status === 'SKIP' || status === 'SKIPPED' ? 'Indica por qué se salta este test...' : 'Indica por qué no se pudo ejecutar este test...'}" ${isLocked ? 'disabled' : ''}>${UI.escapeHTML(tc.observations || '')}</textarea>
                 </div>
 
                 <div class="tc-detail-footer">
@@ -321,46 +274,38 @@ export const ExecutionTab = {
     },
 
     renderDetailContent(tc) {
-        switch (this.detailTab) {
-            case 'steps':
-                const attachments = tc.attachments || [];
-                return `
-                    <div class="field-group">
-                        <label class="field-label">Instrucciones / Pasos</label>
-                        <div class="result-box">${UI.highlightSteps(tc.steps || 'Sin pasos.')}</div>
+        const attachments = tc.attachments || [];
+        return `
+            <div class="field-group">
+                <label class="field-label">Instrucciones / Pasos</label>
+                <div class="result-box">${UI.highlightSteps(tc.steps || 'Sin pasos.')}</div>
+            </div>
+            <div class="field-group">
+                <label class="field-label">Resultado Esperado</label>
+                <div class="result-box">${UI.escapeHTML(tc.expected_result || 'Sin resultado.')}</div>
+            </div>
+            <div class="exec-evidence-section">
+                <div class="exec-evidence-header">
+                    <label class="field-label">EVIDENCIAS (${attachments.length})</label>
+                    <div class="flex-center-gap-8">
+                        <span class="label-muted-xs">Categoría:</span>
+                        <select class="exec-category-select" data-tc-id="${tc.id}">
+                            <option value="GENERAL">General</option>
+                            <option value="FIGMA">Figma</option>
+                            <option value="DEV">Sistema</option>
+                            <option value="BUG">Error</option>
+                        </select>
                     </div>
-                    <div class="exec-evidence-section">
-                        <div class="exec-evidence-header">
-                            <label class="field-label">EVIDENCIAS (${attachments.length})</label>
-                            <div class="flex-center-gap-8">
-                                <span class="label-muted-xs">Categoría:</span>
-                                <select class="exec-category-select" data-tc-id="${tc.id}">
-                                    <option value="GENERAL">General</option>
-                                    <option value="FIGMA">Figma</option>
-                                    <option value="DEV">Sistema</option>
-                                    <option value="BUG">Error</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="exec-drop-zone" data-tc-id="${tc.id}">
-                            <input type="file" class="file-input-inline" data-tc-id="${tc.id}" accept="image/*,video/*">
-                            <div class="exec-drop-zone-text">Pega (Ctrl+V), arrastra o haz clic para adjuntar evidencia</div>
-                        </div>
-                        <div class="evidence-grid-mini">
-                            ${this.renderAttachments(tc)}
-                        </div>
-                    </div>
-                `;
-            case 'expected':
-                return `
-                    <div class="field-group">
-                        <label class="field-label">Resultado Esperado</label>
-                        <div class="result-box">${UI.escapeHTML(tc.expected_result || 'Sin resultado.')}</div>
-                    </div>
-                `;
-            default:
-                return '';
-        }
+                </div>
+                <div class="exec-drop-zone" data-tc-id="${tc.id}">
+                    <input type="file" class="file-input-inline" data-tc-id="${tc.id}" accept="image/*,video/*">
+                    <div class="exec-drop-zone-text">Pega (Ctrl+V), arrastra o haz clic para adjuntar evidencia</div>
+                </div>
+                <div class="evidence-grid-mini">
+                    ${this.renderAttachments(tc)}
+                </div>
+            </div>
+        `;
     },
 
     renderAttachments(tc) {
@@ -380,6 +325,136 @@ export const ExecutionTab = {
                 </div>
             `;
         }).join('');
+    },
+
+    emptyBugDraft(tc) {
+        return {
+            title: '',
+            description: '',
+            steps_to_reproduce: '',
+            expected_result: (tc && tc.expected_result) || '',
+            actual_result: '',
+            frequency: 'Siempre',
+            severity: 'Alta',
+            business_impact: ''
+        };
+    },
+
+    getBugDrafts(executionId, tc) {
+        if (!this.bugDrafts.has(executionId)) {
+            this.bugDrafts.set(executionId, [this.emptyBugDraft(tc)]);
+        }
+        return this.bugDrafts.get(executionId);
+    },
+
+    setBugDrafts(executionId, drafts) {
+        this.bugDrafts.set(executionId, drafts);
+    },
+
+    clearBugDrafts(executionId) {
+        this.bugDrafts.delete(executionId);
+    },
+
+    renderBugCardDraft(tc, index, draft, canRemove) {
+        return `
+            <div class="bug-card" data-bug-index="${index}" style="background: var(--apple-bg-elevated); border: 1px solid var(--apple-separator); border-radius: var(--apple-radius-md); padding: 12px; margin-bottom: 10px;">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                    <span style="font-size: 0.72rem; font-weight: 800; color: var(--apple-label-tertiary); text-transform: uppercase; letter-spacing: 0.04em;">🐞 Nuevo bug #${index + 1}</span>
+                    ${canRemove ? `<button class="btn-text btn-remove-bug-draft" data-tc-id="${tc.id}" data-bug-index="${index}" style="font-size: 0.7rem; color: var(--apple-red); padding: 2px 6px;">✕ Quitar</button>` : ''}
+                </div>
+                <div class="field-group">
+                    <label class="field-label">Título del Bug</label>
+                    <input type="text" class="bug-input" data-field="title" data-tc-id="${tc.id}" data-bug-index="${index}" placeholder="Resumen conciso del error..." value="${UI.escapeHTML(draft.title)}">
+                </div>
+                <div class="bug-row-2col">
+                    <div class="field-group">
+                        <label class="field-label">Descripción General</label>
+                        <textarea class="bug-input" data-field="description" data-tc-id="${tc.id}" data-bug-index="${index}" placeholder="Contexto del error...">${UI.escapeHTML(draft.description)}</textarea>
+                    </div>
+                    <div class="field-group">
+                        <label class="field-label">Impacto en el negocio</label>
+                        <input type="text" class="bug-input" data-field="business_impact" data-tc-id="${tc.id}" data-bug-index="${index}" placeholder="Ej: Bloquea edición..." value="${UI.escapeHTML(draft.business_impact)}">
+                    </div>
+                </div>
+                <div class="field-group">
+                    <div class="flex-between">
+                        <label class="field-label">Pasos para reproducir</label>
+                        <button class="btn btn-ghost btn-sm btn-copy-steps" data-tc-id="${tc.id}" data-bug-index="${index}" style="font-size: 0.7rem; padding: 2px 8px;">Copiar del TC</button>
+                    </div>
+                    <textarea class="bug-input" data-field="steps_to_reproduce" data-tc-id="${tc.id}" data-bug-index="${index}" placeholder="1. ...">${UI.escapeHTML(draft.steps_to_reproduce)}</textarea>
+                </div>
+                <div class="bug-result-compare">
+                    <div class="field-group">
+                        <div class="result-box-title expected">Resultado Esperado</div>
+                        <textarea class="bug-input" data-field="expected_result" data-tc-id="${tc.id}" data-bug-index="${index}">${UI.escapeHTML(draft.expected_result)}</textarea>
+                    </div>
+                    <div class="field-group">
+                        <div class="result-box-title actual">Resultado Actual</div>
+                        <textarea class="bug-input" data-field="actual_result" data-tc-id="${tc.id}" data-bug-index="${index}" placeholder="¿Qué pasó realmente?">${UI.escapeHTML(draft.actual_result)}</textarea>
+                    </div>
+                </div>
+                <div class="bug-grid-impact">
+                    <div class="field-group">
+                        <label class="field-label">Frecuencia</label>
+                        <select class="bug-input bug-select-compact" data-field="frequency" data-tc-id="${tc.id}" data-bug-index="${index}">
+                            <option value="Siempre" ${draft.frequency === 'Siempre' ? 'selected' : ''}>Siempre</option>
+                            <option value="Intermitente" ${draft.frequency === 'Intermitente' ? 'selected' : ''}>Intermitente</option>
+                            <option value="Una vez" ${draft.frequency === 'Una vez' ? 'selected' : ''}>Una vez</option>
+                        </select>
+                    </div>
+                    <div class="field-group">
+                        <label class="field-label">Severidad</label>
+                        <select class="bug-input bug-select-compact" data-field="severity" data-tc-id="${tc.id}" data-bug-index="${index}">
+                            <option value="Crítica" ${draft.severity === 'Crítica' ? 'selected' : ''}>Crítica</option>
+                            <option value="Alta" ${draft.severity === 'Alta' ? 'selected' : ''}>Alta</option>
+                            <option value="Media" ${draft.severity === 'Media' ? 'selected' : ''}>Media</option>
+                            <option value="Baja" ${draft.severity === 'Baja' ? 'selected' : ''}>Baja</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        `;
+    },
+
+    renderExistingBugCard(bug) {
+        const sevBg = (bug.severity === 'Crítica' || bug.severity === 'Alta') ? 'rgba(255,59,48,0.1)' : 'rgba(255,149,0,0.1)';
+        const sevColor = (bug.severity === 'Crítica' || bug.severity === 'Alta') ? 'var(--apple-red)' : 'var(--apple-orange)';
+        const dateStr = bug.created_at ? new Date(bug.created_at).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
+        return `
+            <div class="bug-card bug-card-existing" data-bug-id="${bug.id}" style="background: var(--apple-fill-tertiary); border: 1px solid var(--apple-separator); border-radius: var(--apple-radius-md); padding: 12px; margin-bottom: 10px;">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+                    <span style="font-size: 0.78rem; font-weight: 700; color: var(--apple-label);">🐞 #${bug.id} — ${UI.escapeHTML(bug.title || 'Sin título')}</span>
+                    <span style="display: inline-flex; align-items: center; gap: 3px; padding: 2px 8px; border-radius: 20px; font-size: 0.62rem; font-weight: 700; background: ${sevBg}; color: ${sevColor};">${UI.escapeHTML(bug.severity || 'Media')}</span>
+                </div>
+                <div style="font-size: 0.68rem; color: var(--apple-label-tertiary);">
+                    Reportado el ${UI.escapeHTML(dateStr)}${bug.is_historical ? ' · (ciclo previo)' : ''}
+                </div>
+            </div>
+        `;
+    },
+
+    renderBugList(tc) {
+        const executionId = tc.execution_id;
+        if (!executionId) {
+            return `<div style="font-size: 0.75rem; color: var(--text-muted); padding: 8px 0;">Guardá el resultado FAIL para poder reportar defectos.</div>`;
+        }
+        const existingBugs = tc.defects || [];
+        const drafts = this.getBugDrafts(executionId, tc);
+
+        const existingHtml = existingBugs.length > 0
+            ? existingBugs.map(b => this.renderExistingBugCard(b)).join('')
+            : '';
+
+        const draftsHtml = drafts.map((d, i) => this.renderBugCardDraft(tc, i, d, drafts.length > 1)).join('');
+
+        const counterTotal = existingBugs.length + drafts.length;
+        return `
+            ${existingBugs.length > 0 ? `<div style="font-size: 0.68rem; font-weight: 700; color: var(--apple-label-tertiary); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px;">Bugs ya reportados (${existingBugs.length})</div>${existingHtml}` : ''}
+            <div style="font-size: 0.68rem; font-weight: 700; color: var(--apple-label-tertiary); text-transform: uppercase; letter-spacing: 0.04em; margin: ${existingBugs.length > 0 ? '12px' : '0'} 0 6px;">Nuevos a crear (${drafts.length})</div>
+            ${draftsHtml}
+            <button class="btn btn-ghost btn-sm btn-add-bug-draft" data-tc-id="${tc.id}" style="width: 100%; margin-top: 4px; padding: 8px 12px; font-size: 0.78rem; border: 1px dashed var(--apple-separator); border-radius: var(--apple-radius-md); color: var(--apple-blue); background: transparent;">+ Crear nuevo Bug</button>
+            <div style="font-size: 0.65rem; color: var(--apple-label-tertiary); margin-top: 8px; text-align: right;">Se guardarán <strong>${counterTotal}</strong> bug${counterTotal === 1 ? '' : 's'} en total al pulsar Guardar.</div>
+        `;
     },
 
     toggleSuite(suiteId) {
@@ -472,20 +547,28 @@ export const ExecutionTab = {
                 const blockPanel = container.querySelector(`#block-panel-${tcId}`);
 
                 if (bugPanel) bugPanel.classList.toggle('is-open', status === 'FAIL');
-                if (blockPanel) blockPanel.classList.toggle('is-open', status === 'BLOCK');
+                if (blockPanel) {
+                    const needsJustification = (status === 'BLOCK' || status === 'SKIP');
+                    blockPanel.classList.toggle('is-open', needsJustification);
+                    if (needsJustification) {
+                        const titleEl = blockPanel.querySelector('.block-report-title');
+                        const textarea = blockPanel.querySelector('.block-input');
+                        if (status === 'SKIP') {
+                            if (titleEl) titleEl.textContent = 'JUSTIFICACION DEL SALTO';
+                            if (textarea) textarea.placeholder = 'Indica por qué se salta este test...';
+                        } else {
+                            if (titleEl) titleEl.textContent = 'JUSTIFICACION DEL BLOQUEO';
+                            if (textarea) textarea.placeholder = 'Indica por qué no se pudo ejecutar este test...';
+                        }
+                    }
+                }
             });
         });
 
-        container.querySelectorAll('.btn-copy-steps').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const tcId = parseInt(btn.dataset.tcId);
-                const suite = this.projectSuites.find(s => s.test_cases.some(tc => tc.id === tcId));
-                const tc = suite.test_cases.find(t => t.id === tcId);
-                const stepsArea = container.querySelector(`.bug-input[data-field="steps_to_reproduce"][data-tc-id="${tcId}"]`);
-                if (stepsArea) stepsArea.value = tc.steps || '';
-            });
-        });
+        // Inicializar eventos del panel de bugs para el TC expandido actualmente
+        if (this.expandedTCId) {
+            this._bindBugPanelEvents(container, this.expandedTCId);
+        }
 
         container.querySelectorAll('.exec-save-btn').forEach(btn => {
             btn.addEventListener('click', async (e) => {
@@ -497,21 +580,44 @@ export const ExecutionTab = {
                 const status = statusBtn.dataset.status;
                 const payload = { status };
 
-                if (status === 'BLOCK') {
+                if (status === 'BLOCK' || status === 'SKIP') {
                     const blockInput = container.querySelector(`.block-input[data-tc-id="${tcId}"]`);
-                    payload.observations = blockInput ? blockInput.value : 'Bloqueado sin observaciones.';
+                    const observations = (blockInput ? blockInput.value : '').trim();
+                    if (!observations) {
+                        const label = status === 'SKIP' ? 'salto' : 'bloqueo';
+                        if (blockInput) blockInput.focus();
+                        return UI.toast(`La justificación del ${label} es obligatoria`, 'warn');
+                    }
+                    payload.observations = observations;
                 }
 
                 if (status === 'FAIL') {
-                    const bugInputs = container.querySelectorAll(`.bug-input[data-tc-id="${tcId}"]`);
-                    bugInputs.forEach(input => {
-                        payload[`bug_${input.dataset.field}`] = input.value;
-                    });
+                    const tc = this._findTC(tcId);
+                    if (tc && tc.execution_id) {
+                        const drafts = this.getBugDrafts(tc.execution_id, tc);
+                        // Solo enviar drafts con título no vacío
+                        payload.bugs = drafts
+                            .filter(d => (d.title || '').trim() !== '')
+                            .map(d => ({
+                                title: d.title,
+                                description: d.description,
+                                severity: d.severity,
+                                steps_to_reproduce: d.steps_to_reproduce,
+                                expected_result: d.expected_result,
+                                actual_result: d.actual_result,
+                                frequency: d.frequency,
+                                business_impact: d.business_impact
+                            }));
+                    }
                 }
 
                 UI.showLoading();
                 const res = await ApiService.updateTestCase(tcId, payload);
                 if (res.ok) {
+                    const tc = this._findTC(tcId);
+                    if (tc && tc.execution_id) {
+                        this.clearBugDrafts(tc.execution_id);
+                    }
                     const resSuites = await ApiService.getTestSuites(null, Store.state.activeProjectId);
                     this.projectSuites = resSuites.testSuites || [];
                     this.render(container);
@@ -702,18 +808,6 @@ export const ExecutionTab = {
             });
         });
 
-        container.querySelectorAll('.btn-create-bug').forEach(btn => {
-            btn.addEventListener('click', async (e) => {
-                e.stopPropagation();
-                const tcId = parseInt(btn.dataset.tcId);
-                if (!tcId) {
-                    UI.toast('Selecciona un test case primero', 'warn');
-                    return;
-                }
-                await this.handleCreateBug(tcId, container);
-            });
-        });
-
         container.querySelectorAll('.clear-evidence-btn').forEach(btn => {
             btn.addEventListener('click', async (e) => {
                 e.stopPropagation();
@@ -746,23 +840,86 @@ export const ExecutionTab = {
         });
     },
 
-    async handleCreateBug(tcId, container) {
-        const suite = this.projectSuites.find(s => s.test_cases.some(tc => tc.id === tcId));
-        const tc = suite.test_cases.find(t => t.id === tcId);
-
-        if (!tc.execution_id) {
-            UI.toast('Debes guardar el resultado primero para generar un ID de ejecución.', 'warn');
-            return;
+    _findTC(tcId) {
+        for (const suite of this.projectSuites) {
+            const tc = (suite.test_cases || []).find(t => t.id === tcId);
+            if (tc) return tc;
         }
+        return null;
+    },
 
-        Modals.render('new-bug', {
-            executionId: tc.execution_id,
-            defaultTitle: `Bug en: ${tc.title}`,
-            onSuccess: async () => {
-                const resSuites = await ApiService.getTestSuites(null, Store.state.activeProjectId);
-                this.projectSuites = resSuites.testSuites || [];
-                this.render(container);
-            }
+    _rerenderBugPanel(container, tcId) {
+        const panel = container.querySelector(`#bug-panel-${tcId}`);
+        if (!panel) return;
+        const tc = this._findTC(tcId);
+        if (!tc) return;
+        const body = panel.querySelector('.bug-report-body');
+        if (body) body.innerHTML = this.renderBugList(tc);
+        // Re-bind events del nuevo HTML
+        this._bindBugPanelEvents(container, tcId);
+    },
+
+    _bindBugPanelEvents(container, tcId) {
+        const panel = container.querySelector(`#bug-panel-${tcId}`);
+        if (!panel) return;
+
+        panel.querySelectorAll('.btn-copy-steps').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const bugIndex = parseInt(btn.dataset.bugIndex);
+                const tc = this._findTC(tcId);
+                if (!tc) return;
+                const stepsArea = panel.querySelector(`.bug-input[data-field="steps_to_reproduce"][data-bug-index="${bugIndex}"]`);
+                if (stepsArea) stepsArea.value = tc.steps || '';
+            });
+        });
+
+        panel.querySelectorAll('.btn-add-bug-draft').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const tc = this._findTC(tcId);
+                if (!tc || !tc.execution_id) return;
+                const drafts = this.getBugDrafts(tc.execution_id, tc);
+                drafts.push(this.emptyBugDraft(tc));
+                this.setBugDrafts(tc.execution_id, drafts);
+                this._rerenderBugPanel(container, tcId);
+            });
+        });
+
+        panel.querySelectorAll('.btn-remove-bug-draft').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const bugIndex = parseInt(btn.dataset.bugIndex);
+                const tc = this._findTC(tcId);
+                if (!tc || !tc.execution_id) return;
+                const drafts = this.getBugDrafts(tc.execution_id, tc);
+                if (drafts.length <= 1) {
+                    return UI.toast('Debe quedar al menos un bug en la lista', 'warn');
+                }
+                drafts.splice(bugIndex, 1);
+                this.setBugDrafts(tc.execution_id, drafts);
+                this._rerenderBugPanel(container, tcId);
+            });
+        });
+
+        panel.querySelectorAll('.bug-input[data-bug-index]').forEach(input => {
+            const handler = () => {
+                const bugIndex = parseInt(input.dataset.bugIndex);
+                const field = input.dataset.field;
+                const tc = this._findTC(tcId);
+                if (!tc || !tc.execution_id) return;
+                const drafts = this.getBugDrafts(tc.execution_id, tc);
+                if (!drafts[bugIndex]) return;
+                drafts[bugIndex][field] = input.value;
+            };
+            input.addEventListener('input', handler);
+            input.addEventListener('change', handler);
+        });
+
+        // Auto-resize textareas
+        panel.querySelectorAll('textarea').forEach(tx => {
+            UI.autoResizeTextarea(tx);
+            tx.addEventListener('input', () => UI.autoResizeTextarea(tx));
         });
     }
 };

@@ -262,7 +262,7 @@ ${bug.evidences.map(f => `- ${f}`).join('\n')}
         const payload = {
             fields: {
                 project: { key: projectKey },
-                summary: `🐞 BUG: ${bugData.title}`,
+                summary: `🐞 BUG-${bugData.id}: ${bugData.title}`,
                 issuetype: { name: 'Bug' },
                 description: adfDescription
             }

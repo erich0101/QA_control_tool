@@ -3252,23 +3252,45 @@ app.put('/api/test-cases/:id', requireAuth, async (req, res) => {
                     [tcId, runId, req.user.name, status || 'PENDING', observations || '', obtained_result || '']);
                 execId = insertRes.lastID;
             }
-            const { bug_title, bug_description, bug_severity, bug_steps_to_reproduce, bug_expected_result, bug_actual_result, bug_frequency, bug_business_impact } = req.body;
-            if (bug_title && (status === 'FAIL' || status === 'WARNING')) {
-                // Heredar épica de la suite
+            const { bug_title, bug_description, bug_severity, bug_steps_to_reproduce, bug_expected_result, bug_actual_result, bug_frequency, bug_business_impact, bugs } = req.body;
+
+            // Helper local: crea un defect si el título no está vacío y no es duplicado exacto en la misma ejecución
+            const insertDefectIfValid = async (b) => {
+                if (!b || !b.title || !b.title.trim()) return;
                 const suiteInfo = await query(`
-                    SELECT s.jira_epic_key 
+                    SELECT s.jira_epic_key
                     FROM qa_test_suites s
                     JOIN qa_test_cases tc ON s.id = tc.suite_id
                     WHERE tc.id = ?
                 `, [tcId]);
                 const jira_epic_key = suiteInfo.rows[0]?.jira_epic_key || '';
 
-                // Evitar duplicados exactos en la misma ejecución
-                const existingBug = await query(`SELECT id FROM qa_defects WHERE execution_id = ? AND title = ?`, [execId, bug_title]);
+                const existingBug = await query(`SELECT id FROM qa_defects WHERE execution_id = ? AND title = ?`, [execId, b.title]);
                 if (existingBug.rows.length === 0) {
-                    await query(`INSERT INTO qa_defects (execution_id, title, description, severity, steps_to_reproduce, expected_result, actual_result, frequency, business_impact, status, jira_epic_key) 
-                                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?)`, 
-                        [execId, bug_title, bug_description || '', bug_severity || 'Media', bug_steps_to_reproduce || '', bug_expected_result || '', bug_actual_result || '', bug_frequency || 'Siempre', bug_business_impact || '', jira_epic_key]);
+                    await query(`INSERT INTO qa_defects (execution_id, title, description, severity, steps_to_reproduce, expected_result, actual_result, frequency, business_impact, status, jira_epic_key)
+                                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?)`,
+                        [execId, b.title, b.description || '', b.severity || 'Media', b.steps_to_reproduce || '', b.expected_result || '', b.actual_result || '', b.frequency || 'Siempre', b.business_impact || '', jira_epic_key]);
+                }
+            };
+
+            if ((status === 'FAIL' || status === 'WARNING')) {
+                // Nuevo formato: array de bugs
+                if (Array.isArray(bugs) && bugs.length > 0) {
+                    for (const b of bugs) {
+                        await insertDefectIfValid(b);
+                    }
+                } else if (bug_title) {
+                    // Compatibilidad con formato escalar legacy (modal "new-bug" o flujos previos)
+                    await insertDefectIfValid({
+                        title: bug_title,
+                        description: bug_description,
+                        severity: bug_severity,
+                        steps_to_reproduce: bug_steps_to_reproduce,
+                        expected_result: bug_expected_result,
+                        actual_result: bug_actual_result,
+                        frequency: bug_frequency,
+                        business_impact: bug_business_impact
+                    });
                 }
             }
             res.json({ ok: true, execution_id: execId });

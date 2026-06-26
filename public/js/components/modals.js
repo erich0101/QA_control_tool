@@ -1627,7 +1627,7 @@ getStartRunWizardContent({ suite, suites, cuTitle }) {
             <div id="batch-jira-phase-config" style="display: flex; flex-direction: column; gap: 20px;">
                 <div>
                     <h3 style="margin: 0 0 6px 0; font-size: 1.2rem; font-weight: 800; color: var(--text-main);">🚀 Crear ${bugs.length} ticket${bugs.length === 1 ? '' : 's'} en Jira</h3>
-                    <p style="color: var(--text-muted); font-size: 0.82rem; margin: 0;">Se enviarán en secuencia. Los campos aplicados a continuación se usarán en todos los tickets.</p>
+                    <p style="color: var(--text-muted); font-size: 0.82rem; margin: 0;">Se enviarán en secuencia. Épica y asignado se aplican a todos; la prioridad se puede ajustar por bug.</p>
                 </div>
 
                 <div id="batch-jira-context" style="background: var(--apple-fill-tertiary); padding: 16px; border-radius: var(--apple-radius-md); display: flex; flex-direction: column; gap: 14px;">
@@ -1639,15 +1639,18 @@ getStartRunWizardContent({ suite, suites, cuTitle }) {
 
                 <div>
                     <div style="font-size: 0.7rem; font-weight: 800; color: var(--apple-label-tertiary); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 8px;">Bugs a procesar (${bugs.length})</div>
-                    <div style="background: var(--apple-bg-elevated); border: 1px solid var(--apple-separator); border-radius: var(--apple-radius-md); max-height: 180px; overflow-y: auto;">
+                    <div id="batch-jira-bugs-list" style="background: var(--apple-bg-elevated); border: 1px solid var(--apple-separator); border-radius: var(--apple-radius-md); max-height: 240px; overflow-y: auto;">
                         ${bugs.map(bug => {
                             const sevBg = (bug.severity === 'Crítica' || bug.severity === 'Alta') ? 'rgba(255,59,48,0.1)' : 'rgba(255,149,0,0.1)';
                             const sevColor = (bug.severity === 'Crítica' || bug.severity === 'Alta') ? 'var(--apple-red)' : 'var(--apple-orange)';
                             return `
-                            <div style="display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-bottom: 1px solid var(--apple-separator); font-size: 0.82rem;">
+                            <div data-bug-row="${bug.id}" style="display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-bottom: 1px solid var(--apple-separator); font-size: 0.82rem;">
                                 <span style="font-size: 0.72rem; font-weight: 800; color: var(--apple-label-tertiary); min-width: 50px;">#${bug.id}</span>
                                 <span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--apple-label);">${UI.escapeHTML(bug.title || 'Sin título')}</span>
                                 <span style="display: inline-flex; align-items: center; gap: 3px; padding: 2px 8px; border-radius: 20px; font-size: 0.62rem; font-weight: 700; background: ${sevBg}; color: ${sevColor};">${UI.escapeHTML(bug.severity || 'Media')}</span>
+                                <select id="batch-priority-${bug.id}" data-priority-select="${bug.id}" style="font-size: 0.72rem; padding: 4px 8px; border-radius: var(--apple-radius-sm); background: var(--apple-bg-tertiary); border: 1px solid var(--apple-separator); color: var(--apple-label); cursor: pointer; min-width: 110px;" disabled>
+                                    <option value="">— Prioridad —</option>
+                                </select>
                             </div>
                             `;
                         }).join('')}
@@ -1699,6 +1702,22 @@ getStartRunWizardContent({ suite, suites, cuTitle }) {
             if (onComplete) await onComplete();
         };
 
+        // Estado compartido entre el loader de contexto y el handler de creación
+        let priorities = [];
+
+        // Mapear severidad del bug → nombre de prioridad de Jira (para el default por fila)
+        const SEVERITY_TO_PRIORITY_NAME = {
+            'Crítica': 'Highest',
+            'Alta': 'High',
+            'Media': 'Medium',
+            'Baja': 'Low'
+        };
+        const defaultPriorityIdFor = (severity) => {
+            const targetName = SEVERITY_TO_PRIORITY_NAME[severity] || 'Medium';
+            const found = priorities.find(p => p.name === targetName);
+            return (found || priorities.find(p => p.name === 'Medium') || priorities[0])?.id || '';
+        };
+
         // 1. Cargar contexto Jira y popular selects
         (async () => {
             const projectId = Store.state.activeProjectId;
@@ -1723,25 +1742,18 @@ getStartRunWizardContent({ suite, suites, cuTitle }) {
                 return;
             }
 
-            const { epics = [], users = [], priorities = [], customFields = [] } = jiraContext;
+            const { epics = [], users = [], priorities: loadedPriorities = [], customFields = [] } = jiraContext;
+            priorities = loadedPriorities;
             const inputStyle = "width:100%; padding:8px 12px; background:var(--apple-bg-tertiary); border:1px solid var(--apple-separator); border-radius:var(--apple-radius-md); color:var(--apple-label); font-size:0.85rem; outline:none; box-sizing:border-box; transition: border-color 0.15s;";
             const focusAttr = `onfocus="this.style.borderColor='var(--apple-blue)'" onblur="this.style.borderColor='var(--apple-separator)'"`;
 
             contextContainer.innerHTML = `
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-                    <div>
-                        <label style="display:block; font-size: 0.7rem; font-weight: 700; color: var(--apple-label-secondary); margin-bottom: 4px;">📌 Épica</label>
-                        <select id="batch-jira-epic" style="${inputStyle}" ${focusAttr}>
-                            <option value="">— Sin Épica —</option>
-                            ${epics.map(e => `<option value="${UI.escapeHTML(e.id)}">${UI.escapeHTML(e.key)} | ${UI.escapeHTML(e.summary)}</option>`).join('')}
-                        </select>
-                    </div>
-                    <div>
-                        <label style="display:block; font-size: 0.7rem; font-weight: 700; color: var(--apple-label-secondary); margin-bottom: 4px;">🎯 Prioridad</label>
-                        <select id="batch-jira-priority" style="${inputStyle}" ${focusAttr}>
-                            ${priorities.map(p => `<option value="${UI.escapeHTML(p.id)}" ${p.name === 'Medium' ? 'selected' : ''}>${UI.escapeHTML(p.name)}</option>`).join('')}
-                        </select>
-                    </div>
+                <div>
+                    <label style="display:block; font-size: 0.7rem; font-weight: 700; color: var(--apple-label-secondary); margin-bottom: 4px;">📌 Épica</label>
+                    <select id="batch-jira-epic" style="${inputStyle}" ${focusAttr}>
+                        <option value="">— Sin Épica —</option>
+                        ${epics.map(e => `<option value="${UI.escapeHTML(e.id)}">${UI.escapeHTML(e.key)} | ${UI.escapeHTML(e.summary)}</option>`).join('')}
+                    </select>
                 </div>
                 <div>
                     <label style="display:block; font-size: 0.7rem; font-weight: 700; color: var(--apple-label-secondary); margin-bottom: 4px;">👤 Asignado a</label>
@@ -1757,6 +1769,18 @@ getStartRunWizardContent({ suite, suites, cuTitle }) {
                     </div>
                 ` : ''}
             `;
+
+            // Popular el select de prioridad de cada fila del listado "Bugs a procesar"
+            for (const bug of bugs) {
+                const rowSelect = document.getElementById(`batch-priority-${bug.id}`);
+                if (!rowSelect) continue;
+                rowSelect.innerHTML = priorities.map(p =>
+                    `<option value="${UI.escapeHTML(p.id)}">${UI.escapeHTML(p.name)}</option>`
+                ).join('');
+                const defaultId = defaultPriorityIdFor(bug.severity);
+                if (defaultId) rowSelect.value = defaultId;
+                rowSelect.disabled = priorities.length === 0;
+            }
 
             // Renderizar custom fields
             if (customFields.length > 0) {
@@ -1802,7 +1826,6 @@ getStartRunWizardContent({ suite, suites, cuTitle }) {
 
             const epicId = document.getElementById('batch-jira-epic')?.value || '';
             const assigneeId = document.getElementById('batch-jira-assignee')?.value || '';
-            const priorityId = document.getElementById('batch-jira-priority')?.value || '';
 
             const customFieldValues = {};
             document.querySelectorAll('[id^="batch-cf-"]').forEach(el => {
@@ -1816,15 +1839,31 @@ getStartRunWizardContent({ suite, suites, cuTitle }) {
                 }
             });
 
+            // Snapshot de la prioridad elegida por bug para usarla al crear y mostrarla en el progreso
+            const bugPriorityById = {};
+            for (const bug of bugs) {
+                const sel = document.getElementById(`batch-priority-${bug.id}`);
+                const id = sel?.value || '';
+                const p = priorities.find(x => x.id === id);
+                bugPriorityById[bug.id] = { id, name: p ? p.name : '' };
+            }
+
             // Inicializar lista visual
-            progressList.innerHTML = bugs.map(bug => `
+            progressList.innerHTML = bugs.map(bug => {
+                const pInfo = bugPriorityById[bug.id];
+                const priorityChip = pInfo && pInfo.name
+                    ? `<span data-priority-chip style="display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 20px; font-size: 0.62rem; font-weight: 700; background: rgba(0,122,255,0.1); color: var(--apple-blue);">${UI.escapeHTML(pInfo.name)}</span>`
+                    : '';
+                return `
                 <div id="batch-row-${bug.id}" data-status="pending" style="display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-bottom: 1px solid var(--apple-separator); font-size: 0.82rem;">
                     <span style="font-size: 0.85rem; min-width: 22px; text-align: center;" data-icon>⏳</span>
                     <span style="font-size: 0.72rem; font-weight: 800; color: var(--apple-label-tertiary); min-width: 50px;">#${bug.id}</span>
                     <span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--apple-label);">${UI.escapeHTML(bug.title || 'Sin título')}</span>
+                    ${priorityChip}
                     <span data-result style="font-size: 0.7rem; color: var(--apple-label-tertiary); font-weight: 600;">Pendiente</span>
                 </div>
-            `).join('');
+                `;
+            }).join('');
 
             // Cambiar fase
             phaseConfig.style.display = 'none';
@@ -1849,7 +1888,7 @@ getStartRunWizardContent({ suite, suites, cuTitle }) {
                 if (row) row.style.background = 'rgba(0,122,255,0.04)';
 
                 try {
-                    const result = await ApiService.createJiraBug(bug.id, epicId, assigneeId, priorityId, customFieldValues);
+                    const result = await ApiService.createJiraBug(bug.id, epicId, assigneeId, bugPriorityById[bug.id]?.id || '', customFieldValues);
                     if (row) row.dataset.status = 'ok';
                     if (iconEl) iconEl.textContent = '✅';
                     if (resultEl) {
