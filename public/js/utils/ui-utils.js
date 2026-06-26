@@ -65,6 +65,23 @@ export const UI = {
         document.getElementById('global-loader')?.remove();
     },
 
+    // Genera un bloque skeleton (placeholder animado) estilo macOS.
+    // `rows`: cuántas filas; `cols`: cuántas columnas por fila. Cada celda es
+    // una barra con shimmer que aparece mientras llega la data.
+    skeletonHTML(rows = 6, cols = 3) {
+        const cell = (width = '100%') => `<div class="ui-skeleton-cell" style="width:${width};"></div>`;
+        const row = () => `<div class="ui-skeleton-row">${Array.from({ length: cols }, () => cell()).join('')}</div>`;
+        return `
+            <div class="ui-skeleton-wrap" style="padding: 20px 24px; display: flex; flex-direction: column; gap: 12px;">
+                <div class="ui-skeleton-header" style="display: flex; gap: 12px; margin-bottom: 8px;">
+                    <div class="ui-skeleton-cell" style="width: 140px; height: 18px;"></div>
+                    <div class="ui-skeleton-cell" style="width: 60px; height: 18px;"></div>
+                </div>
+                ${Array.from({ length: rows }, row).join('')}
+            </div>
+        `;
+    },
+
     escapeHTML(str) {
         if (!str) return '';
         return String(str)

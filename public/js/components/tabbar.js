@@ -13,12 +13,13 @@ const TABS = [
     { id: 'dashboard', icon: '📊', label: 'Dashboard' },
     { id: 'hallazgos', icon: '🔍', label: 'Hallazgos' },
     { id: 'mi-jira', icon: '👤', label: 'Mi JIRA' },
-    { id: 'team', icon: '👥', label: 'Gestión de Equipo' }
+    { id: 'team', icon: '👥', label: 'Gestión de Equipo', requiresAdmin: true }
 ];
 
 export const TabBar = {
     render(container) {
-        const { activeTab, useCases, testSuites } = Store.state;
+        const { activeTab, useCases, testSuites, user } = Store.state;
+        const isAdmin = user?.perfil === 'admin';
 
         const getCounts = (tabId) => {
             if (tabId === 'use-cases') return useCases.length;
@@ -26,7 +27,10 @@ export const TabBar = {
             return 0;
         };
 
-        container.innerHTML = TABS.map(tab => `
+        // Filtrar tabs restringidos según perfil del usuario
+        const visibleTabs = TABS.filter(t => !t.requiresAdmin || isAdmin);
+
+        container.innerHTML = visibleTabs.map(tab => `
             <div class="tab-item ${activeTab === tab.id ? 'active' : ''}" data-tab="${tab.id}">
                 <span>${tab.icon}</span>
                 <span>${tab.label}</span>

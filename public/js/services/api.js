@@ -166,8 +166,8 @@ export const ApiService = {
     async startTestCaseExecution(id) {
         return fetch(`/api/test-cases/${id}/start-execution`, { method: 'POST' }).then(json);
     },
-    async getHistory(projectId) {
-        return fetch(`/api/history?project_id=${projectId}`).then(json);
+    async getHistory(projectId, page = 1, limit = 50) {
+        return fetch(`/api/history?project_id=${projectId}&page=${page}&limit=${limit}`).then(json);
     },
     async getRunBugs(runId) {
         return fetch(`/api/runs/${runId}/bugs`).then(json);
@@ -188,6 +188,9 @@ export const ApiService = {
     },
     async updateDefectStatus(id, status) {
         return fetch(`/api/defects/${id}/status`, { method: 'PUT', body: JSON.stringify({ status }), headers }).then(json);
+    },
+    async dismissDefect(id, dismissed) {
+        return fetch(`/api/defects/${id}/dismiss`, { method: 'POST', body: JSON.stringify({ dismissed }), headers }).then(json);
     },
     async getProjectDefects(projectId) {
         return fetch(`/api/defects?project_id=${projectId}`).then(json);

@@ -4,6 +4,7 @@ import { UI } from '../utils/ui-utils.js';
 import { ExecutionTab } from './execution-tab.js';
 import { Modals } from './modals.js';
 import { modalManager } from '../utils/modal-manager.js';
+import { getCachedTab, setCachedTab, invalidateTabCache } from '../store/state.js';
 
 export const HistoryTab = {
     runs: [],
@@ -17,6 +18,11 @@ export const HistoryTab = {
     bugsDateTo: '',
     expandedGroups: new Set(), // ids de grupos expandidos (year, month, day) — runs
     expandedBugGroups: new Set(), // ids de grupos expandidos (year, month, day) — bugs
+    // Paginación de runs (server-side)
+    currentRunsPage: 1,
+    runsPageSize: 50,
+    totalRuns: 0,
+    totalRunsPages: 1,
 
     async render(container) {
         const scrollPos = container.scrollTop;
@@ -26,15 +32,43 @@ export const HistoryTab = {
             return;
         }
 
-        UI.showLoading();
+        // Si la cache no tiene data, mostrar skeleton inmediatamente para evitar
+        // pantalla en blanco mientras llega la respuesta del backend.
+        const subKey = this.currentTab === 'runs' ? 'history::runs' : 'history::bugs';
+        const cached = getCachedTab(subKey, activeProjectId);
+        if (!cached) {
+            container.innerHTML = UI.skeletonHTML(this.currentTab === 'runs' ? 8 : 10, 4);
+        }
+
         try {
             if (this.currentTab === 'runs') {
-                const res = await ApiService.getHistory(activeProjectId);
-                this.runs = res.runs || [];
+                if (cached) {
+                    this.runs = cached.data.runs || [];
+                    this.totalRuns = cached.data.total || this.runs.length;
+                    this.totalRunsPages = cached.data.totalPages || 1;
+                    this.currentRunsPage = cached.data.page || 1;
+                } else {
+                    const res = await ApiService.getHistory(activeProjectId, this.currentRunsPage, this.runsPageSize);
+                    this.runs = res.runs || [];
+                    this.totalRuns = res.total || this.runs.length;
+                    this.totalRunsPages = res.totalPages || 1;
+                    this.currentRunsPage = res.page || 1;
+                    setCachedTab('history::runs', activeProjectId, {
+                        runs: this.runs,
+                        total: this.totalRuns,
+                        totalPages: this.totalRunsPages,
+                        page: this.currentRunsPage
+                    });
+                }
             } else {
-                const res = await ApiService.getProjectDefects(activeProjectId);
-                this.bugs = res.defects || [];
-
+                const bugsCached = getCachedTab('history::bugs', activeProjectId);
+                if (bugsCached) {
+                    this.bugs = bugsCached.data.bugs || [];
+                } else {
+                    const res = await ApiService.getProjectDefects(activeProjectId);
+                    this.bugs = res.defects || [];
+                    setCachedTab('history::bugs', activeProjectId, { bugs: this.bugs });
+                }
                 const jiraRes = await ApiService.getDefectsJiraStatus(activeProjectId);
                 const jiraStatuses = jiraRes.statuses || {};
                 for (const bug of this.bugs) {
@@ -84,6 +118,7 @@ export const HistoryTab = {
             <div class="tt-container" style="padding: 16px 24px;">
                 ${this.currentTab === 'runs' ? this.renderRunsView() : this.renderBugsView()}
             </div>
+            ${this.currentTab === 'runs' ? this.renderRunsPaginator() : ''}
         `;
 
         this.bindEvents(container);
@@ -260,6 +295,29 @@ export const HistoryTab = {
         `;
     },
 
+    renderRunsPaginator() {
+        if (this.totalRunsPages <= 1 && this.totalRuns <= this.runsPageSize) {
+            if (this.totalRuns === 0) return '';
+            return `
+                <div style="display: flex; justify-content: center; align-items: center; gap: 12px; padding: 16px 24px; font-size: 0.75rem; color: var(--apple-label-tertiary);">
+                    <span>${this.totalRuns} ciclo${this.totalRuns === 1 ? '' : 's'} en total</span>
+                </div>
+            `;
+        }
+        const canPrev = this.currentRunsPage > 1;
+        const canNext = this.currentRunsPage < this.totalRunsPages;
+        const start = (this.currentRunsPage - 1) * this.runsPageSize + 1;
+        const end = Math.min(this.currentRunsPage * this.runsPageSize, this.totalRuns);
+        return `
+            <div style="display: flex; justify-content: center; align-items: center; gap: 10px; padding: 16px 24px; font-size: 0.75rem; color: var(--apple-label-secondary);">
+                <button id="runs-page-prev" class="btn btn-ghost btn-sm" ${canPrev ? '' : 'disabled style="opacity:0.4;cursor:not-allowed;"'}>‹ Anterior</button>
+                <span style="padding: 0 12px; font-weight: 600;">${start}–${end} de ${this.totalRuns}</span>
+                <span style="color: var(--apple-label-tertiary);">Página ${this.currentRunsPage}/${this.totalRunsPages}</span>
+                <button id="runs-page-next" class="btn btn-ghost btn-sm" ${canNext ? '' : 'disabled style="opacity:0.4;cursor:not-allowed;"'}>Siguiente ›</button>
+            </div>
+        `;
+    },
+
     renderBugsView() {
         const filtered = this.getFilteredBugs();
         const tree = this.buildBugsTree(filtered);
@@ -380,20 +438,22 @@ export const HistoryTab = {
     },
 
     renderBugRowCompact(bug) {
-        const canSelect = !bug.jira_key;
+        const isDismissed = bug.status === 'DISMISSED';
+        const canSelect = !bug.jira_key && !isDismissed;
         const isSelected = this.selectedBugIds.has(bug.id);
         const sevBg = (bug.severity === 'Crítica' || bug.severity === 'Alta') ? 'rgba(255,59,48,0.1)' : 'rgba(255,149,0,0.1)';
         const sevColor = (bug.severity === 'Crítica' || bug.severity === 'Alta') ? 'var(--apple-red)' : 'var(--apple-orange)';
         const dateStr = new Date(bug.created_at).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' });
+        const rowOpacity = isDismissed ? 'opacity: 0.5;' : '';
 
         return `
-            <div style="display: flex; align-items: center; gap: 12px; padding: 10px 16px 10px 84px; border-bottom: 1px solid var(--apple-separator); background: ${isSelected ? 'var(--apple-blue-soft)' : 'transparent'};">
+            <div style="display: flex; align-items: center; gap: 12px; padding: 10px 16px 10px 84px; border-bottom: 1px solid var(--apple-separator); background: ${isSelected ? 'var(--apple-blue-soft)' : 'transparent'}; ${rowOpacity}">
                 <input type="checkbox" class="bug-checkbox" data-id="${bug.id}" ${isSelected ? 'checked' : ''} ${canSelect ? '' : 'disabled'} style="cursor: ${canSelect ? 'pointer' : 'not-allowed'}; flex-shrink: 0;">
                 <span style="font-size: 0.7rem; color: var(--apple-label-tertiary); min-width: 36px;">#${bug.id}</span>
                 <div style="flex: 1; min-width: 0;">
                     <div style="font-size: 0.8rem; font-weight: 600; color: var(--apple-label); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${UI.escapeHTML(bug.title || 'Sin título')}</div>
                     <div style="font-size: 0.65rem; color: var(--apple-label-tertiary); margin-top: 2px;">
-                        🏷 ${UI.escapeHTML(bug.tc_key || '—')} · 👤 ${UI.escapeHTML(bug.tester_name || '—')}
+                        🏷 ${UI.escapeHTML(bug.tc_key || '—')} · 👤 ${UI.escapeHTML(bug.tester_name || '—')}${isDismissed ? ' · <span style="color: var(--apple-label-tertiary); font-weight: 700;">DESCARTADO</span>' : ''}
                     </div>
                 </div>
                 <span style="display: inline-flex; align-items: center; gap: 3px; padding: 2px 8px; border-radius: 20px; font-size: 0.65rem; font-weight: 600; background: ${sevBg}; color: ${sevColor};">
@@ -406,7 +466,8 @@ export const HistoryTab = {
                     }
                 </div>
                 <span style="font-size: 0.65rem; color: var(--apple-label-tertiary); min-width: 50px; text-align: right;">${dateStr}</span>
-                <button class="btn btn-ghost btn-sm btn-view-bug-details" data-id="${bug.id}" title="Ver Detalle" style="padding: 3px 8px; border-radius: var(--apple-radius-sm); font-size: 0.7rem; flex-shrink: 0;">🔍</button>
+                <button class="btn btn-sm btn-dismiss-bug" data-id="${bug.id}" data-dismissed="${isDismissed ? '1' : '0'}" title="${isDismissed ? 'Reabrir bug' : 'Descartar bug'}" style="padding: 3px 10px; border-radius: var(--apple-radius-sm); font-size: 0.7rem; font-weight: 600; flex-shrink: 0; background: ${isDismissed ? 'var(--apple-green)' : 'var(--apple-red)'}; color: white; border: none;">${isDismissed ? 'Reabrir' : 'Descartar'}</button>
+                <button class="btn btn-sm btn-view-bug-details" data-id="${bug.id}" title="Ver Detalle" style="padding: 3px 10px; border-radius: var(--apple-radius-sm); font-size: 0.7rem; font-weight: 600; flex-shrink: 0; background: var(--apple-blue); color: white; border: none;">Ver</button>
             </div>
         `;
     },
@@ -509,11 +570,35 @@ export const HistoryTab = {
     },
 
     bindEvents(container) {
-        container.querySelector('#btn-refresh-history')?.addEventListener('click', () => this.render(container));
+        container.querySelector('#btn-refresh-history')?.addEventListener('click', () => {
+            // Forzar reload ignorando cache
+            const subKey = this.currentTab === 'runs' ? 'history::runs' : 'history::bugs';
+            invalidateTabCache(subKey, Store.state.activeProjectId);
+            this.render(container);
+        });
+
+        container.querySelector('#runs-page-prev')?.addEventListener('click', () => {
+            if (this.currentRunsPage > 1) {
+                this.currentRunsPage--;
+                invalidateTabCache('history::runs', Store.state.activeProjectId);
+                this.render(container);
+            }
+        });
+        container.querySelector('#runs-page-next')?.addEventListener('click', () => {
+            if (this.currentRunsPage < this.totalRunsPages) {
+                this.currentRunsPage++;
+                invalidateTabCache('history::runs', Store.state.activeProjectId);
+                this.render(container);
+            }
+        });
 
         container.querySelectorAll('.sub-tab-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 this.currentTab = btn.dataset.tab;
+                if (this.currentTab === 'runs') {
+                    // Reset paginación al volver a runs
+                    this.currentRunsPage = 1;
+                }
                 this.render(container);
             });
         });
@@ -644,6 +729,32 @@ export const HistoryTab = {
                         const content = this.getBugDetailsHtml(bug);
                         UI.showSidePanel('DETALLE TÉCNICO DE DEFECTO', content);
                         this.initJiraIntegration(bug);
+                    }
+                });
+            });
+
+            // Descartar / reabrir bug (toggle de status)
+            container.querySelectorAll('.btn-dismiss-bug').forEach(btn => {
+                btn.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    const id = parseInt(btn.dataset.id);
+                    const wasDismissed = btn.dataset.dismissed === '1';
+                    const next = !wasDismissed; // si estaba descartado, ahora reopen
+                    try {
+                        const res = await ApiService.dismissDefect(id, next);
+                        if (res.ok) {
+                            // Update local cache + re-render
+                            const bug = this.bugs.find(b => b.id === id);
+                            if (bug) {
+                                bug.status = next ? 'DISMISSED' : 'OPEN';
+                                // Limpiar selección si estaba seleccionado
+                                if (next) this.selectedBugIds.delete(id);
+                            }
+                            UI.toast(next ? 'Bug descartado' : 'Bug reabierto', 'ok');
+                            this.render(container);
+                        }
+                    } catch (err) {
+                        UI.toast(err.message, 'error');
                     }
                 });
             });
@@ -1019,5 +1130,22 @@ export const HistoryTab = {
                 </div>
             </div>
         `;
+    },
+
+    _isListening: false,
+    setupRealtimeListener() {
+        if (this._isListening) return;
+        window.addEventListener('realtime-refresh', async () => {
+            this.runs = [];
+            this.bugs = [];
+            // El realtime ya invalidó la cache desde realtime.js, pero por seguridad
+            invalidateTabCache('history::runs', Store.state.activeProjectId);
+            invalidateTabCache('history::bugs', Store.state.activeProjectId);
+            const container = document.getElementById('tab-content');
+            if (Store.state.activeTab === 'history' && container) {
+                await this.render(container);
+            }
+        });
+        this._isListening = true;
     }
 };

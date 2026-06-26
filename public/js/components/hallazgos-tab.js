@@ -1,6 +1,7 @@
 import { Store } from '../store/state.js';
 import { ApiService } from '../services/api.js';
 import { UI } from '../utils/ui-utils.js';
+import { getCachedTab, setCachedTab, invalidateTabCache } from '../store/state.js';
 
 const STATUS_COLORS = {
     'OPEN': 'var(--apple-red)',
@@ -86,22 +87,31 @@ export const HallazgosTab = {
         }
 
         if (this.loadedProjectId !== Store.state.activeProjectId) {
-            try {
-                UI.showLoading();
-                const [hallazgosRes, suggestionsRes] = await Promise.all([
-                    ApiService.getHallazgos(Store.state.activeProjectId),
-                    ApiService.getSuggestions(Store.state.activeProjectId).catch(() => ({ suggestions: [] }))
-                ]);
+            const cached = getCachedTab('hallazgos', Store.state.activeProjectId);
+            if (cached) {
                 this.loadedProjectId = Store.state.activeProjectId;
-                Store.setHallazgos(hallazgosRes.hallazgos || []);
-                Store.setSuggestions(suggestionsRes.suggestions || []);
-                this.selectedId = null;
-                this.isCreating = false;
-                UI.hideLoading();
-            } catch (err) {
-                UI.hideLoading();
-                container.innerHTML = `<div class="empty-state">Error cargando hallazgos: ${UI.escapeHTML(err.message)}</div>`;
-                return;
+                Store.setHallazgos(cached.data.hallazgos || []);
+                Store.setSuggestions(cached.data.suggestions || []);
+            } else {
+                container.innerHTML = UI.skeletonHTML(8, 3);
+                try {
+                    const [hallazgosRes, suggestionsRes] = await Promise.all([
+                        ApiService.getHallazgos(Store.state.activeProjectId),
+                        ApiService.getSuggestions(Store.state.activeProjectId).catch(() => ({ suggestions: [] }))
+                    ]);
+                    this.loadedProjectId = Store.state.activeProjectId;
+                    Store.setHallazgos(hallazgosRes.hallazgos || []);
+                    Store.setSuggestions(suggestionsRes.suggestions || []);
+                    setCachedTab('hallazgos', Store.state.activeProjectId, {
+                        hallazgos: hallazgosRes.hallazgos || [],
+                        suggestions: suggestionsRes.suggestions || []
+                    });
+                    this.selectedId = null;
+                    this.isCreating = false;
+                } catch (err) {
+                    container.innerHTML = `<div class="empty-state">Error cargando hallazgos: ${UI.escapeHTML(err.message)}</div>`;
+                    return;
+                }
             }
         }
 
@@ -185,6 +195,7 @@ export const HallazgosTab = {
     renderSidebarCard(h) {
         const active = this.selectedId === h.id && !this.isCreating;
         const isBugs = this.subTab === 'bugs';
+        const isDismissed = isBugs && h.status === 'DISMISSED';
         const statusColor = isBugs
             ? (STATUS_COLORS[h.status] || 'var(--apple-label-tertiary)')
             : (SUGGESTION_STATUS_COLORS[h.status] || 'var(--apple-label-tertiary)');
@@ -219,12 +230,13 @@ export const HallazgosTab = {
             })();
 
         return `
-            <div class="h-card ${active ? 'active' : ''}" data-id="${h.id}" style="padding: 12px; cursor: pointer; transition: all 0.15s ease; border-bottom: 1px solid var(--apple-separator); ${selectedStyle}"
+            <div class="h-card ${active ? 'active' : ''}" data-id="${h.id}" style="padding: 12px; cursor: pointer; transition: all 0.15s ease; border-bottom: 1px solid var(--apple-separator); ${selectedStyle} ${isDismissed ? 'opacity: 0.5;' : ''}"
                 onmouseover="if(!this.classList.contains('active')) this.style.background='var(--apple-fill)'"
                 onmouseout="if(!this.classList.contains('active')) this.style.background='transparent'">
                 <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
                     <span style="font-size: 0.65rem; font-weight: 700; color: var(--apple-label-tertiary);">#${h.id}</span>
                     <span style="display: inline-flex; align-items: center; gap: 3px; padding: 2px 8px; border-radius: 20px; background: ${statusBg}; color: ${statusColor}; font-size: 0.58rem; font-weight: 600;">${h.status || 'OPEN'}</span>
+                    ${isDismissed ? `<span style="font-size: 0.58rem; font-weight: 700; color: var(--apple-label-tertiary); text-transform: uppercase;">Descartado</span>` : ''}
                 </div>
                 <div style="font-size: 0.82rem; font-weight: 600; color: var(--apple-label); margin-bottom: 6px; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${UI.escapeHTML(h.title)}</div>
                 <div style="display: flex; align-items: center; gap: 8px; font-size: 0.68rem; color: var(--apple-label-tertiary);">
@@ -399,7 +411,7 @@ export const HallazgosTab = {
                     </div>
                 </div>
 
-                ${h.jira_key ? '' : `
+                ${h.jira_key || h.status === 'DISMISSED' ? '' : `
                 <div style="background: var(--apple-bg-elevated); border-radius: var(--apple-radius-lg); border: 1px solid var(--apple-separator); margin-bottom: 16px;" id="h-jira-section">
                     <div style="padding: 12px 16px; border-bottom: 1px solid var(--apple-separator); background: var(--apple-fill); display: flex; justify-content: space-between; align-items: center;">
                         <span style="font-size: 0.75rem; font-weight: 700; color: var(--apple-label);">🎯 Exportar a Jira</span>
@@ -418,6 +430,11 @@ export const HallazgosTab = {
                         </div>
                     </div>
                 </div>`}
+                ${h.status === 'DISMISSED' ? `
+                <div style="background: var(--apple-fill); border-radius: var(--apple-radius-lg); border: 1px solid var(--apple-separator); margin-bottom: 16px; padding: 12px 16px;">
+                    <span style="font-size: 0.75rem; color: var(--apple-label-secondary);">⚠️ Este bug está descartado y no se cuenta en las estadísticas. Reabrí para exportar a Jira.</span>
+                </div>
+                ` : ''}
 
                 <div style="background: var(--apple-bg-elevated); border-radius: var(--apple-radius-lg); border: 1px solid var(--apple-separator); margin-bottom: 16px;">
                     <div style="padding: 12px 16px; border-bottom: 1px solid var(--apple-separator); background: var(--apple-fill);">
@@ -437,6 +454,10 @@ export const HallazgosTab = {
                                 ${(Store.state.team || []).map(u => `<option value="${u.id}" ${u.id === h.assigned_to ? 'selected' : ''}>${UI.escapeHTML(u.name)}</option>`).join('')}
                             </select>
                             <button class="btn btn-sm" id="h-btn-assign" style="${btnStyle} background:var(--apple-fill); color:var(--apple-label); border:1px solid var(--apple-separator);">Asignar</button>
+
+                            <div style="width:1px; height:20px; background:var(--apple-separator);"></div>
+
+                            <button class="btn btn-sm" id="h-btn-dismiss" data-dismissed="${h.status === 'DISMISSED' ? '1' : '0'}" style="${btnStyle} background:${h.status === 'DISMISSED' ? 'var(--apple-green)' : 'var(--apple-red)'}; color:white; border:none; font-weight:700;">${h.status === 'DISMISSED' ? 'Reabrir bug' : 'Descartar bug'}</button>
 
                             ${!h.converted_to_tc ? `
                             <div style="width:1px; height:20px; background:var(--apple-separator);"></div>
@@ -777,6 +798,24 @@ export const HallazgosTab = {
                 this.selectedId = null;
                 this.loadedProjectId = null;
                 await this.render(container.closest('.hallazgos-layout')?.parentElement || container);
+            } catch (err) {
+                UI.toast(err.message, 'error');
+            }
+        });
+
+        container.querySelector('#h-btn-dismiss')?.addEventListener('click', async () => {
+            const wasDismissed = h.status === 'DISMISSED';
+            const next = !wasDismissed;
+            try {
+                const res = await ApiService.dismissDefect(h.id, next);
+                if (res.ok) {
+                    h.status = res.status;
+                    UI.toast(next ? 'Bug descartado (no cuenta en estadísticas)' : 'Bug reabierto', 'ok');
+                    // Re-render del detalle para reflejar el cambio de UI
+                    const rightPane = container.querySelector('.h-right-pane') || container;
+                    if (rightPane) rightPane.innerHTML = this.renderDetailForm(h);
+                    this.bindDetailEvents(rightPane, h);
+                }
             } catch (err) {
                 UI.toast(err.message, 'error');
             }
@@ -1303,5 +1342,21 @@ export const HallazgosTab = {
         } catch (err) {
             grid.innerHTML = `<div style="color: var(--apple-red);">Error: ${UI.escapeHTML(err.message)}</div>`;
         }
+    },
+
+    _isListening: false,
+    setupRealtimeListener() {
+        if (this._isListening) return;
+        window.addEventListener('realtime-refresh', async () => {
+            this.loadedProjectId = null;
+            this.selectedId = null;
+            this.isCreating = false;
+            invalidateTabCache('hallazgos', Store.state.activeProjectId);
+            const container = document.getElementById('tab-content');
+            if (Store.state.activeTab === 'hallazgos' && container) {
+                await this.render(container);
+            }
+        });
+        this._isListening = true;
     }
 };

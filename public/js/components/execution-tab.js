@@ -17,6 +17,7 @@ export const ExecutionTab = {
     filterStatus: 'all',
     _isListening: false,
     _lastScroll: 0,
+    _refreshPending: false,
     // Drafts de bugs en memoria por executionId: array de objetos {title, description, steps_to_reproduce, expected_result, actual_result, frequency, severity, business_impact}
     bugDrafts: new Map(),
 
@@ -162,17 +163,46 @@ export const ExecutionTab = {
         `;
     },
 
+    // Cantidad de TCs renderizados por chunk (para mantener el DOM chico
+    // en suites con cientos de casos). El resto se muestra con "Cargar más".
+    tcChunkSize: 50,
+    renderedTcCount: 0,
+
     renderTCList(tcs, suite, childPrefix) {
         if (tcs.length === 0) {
             return `<div class="tc-empty">Sin casos de prueba</div>`;
         }
 
+        // Si cambió la suite o el filtro visible, reiniciar el chunk.
+        const sig = `${suite.id}::${tcs.length}::${this.selectedCUId || ''}::${this.filterStatus}`;
+        if (this._tcListSig !== sig) {
+            this._tcListSig = sig;
+            this.renderedTcCount = 0;
+        }
+        // Determinar cuántos renderizar (cap por chunk)
+        const cap = Math.min(tcs.length, this.renderedTcCount + this.tcChunkSize);
+        if (this.renderedTcCount === 0) {
+            this.renderedTcCount = Math.min(tcs.length, this.tcChunkSize);
+        }
+
         let html = '';
-        tcs.forEach((tc, idx) => {
+        const limit = this.renderedTcCount;
+        for (let idx = 0; idx < limit; idx++) {
+            const tc = tcs[idx];
             const isLast = idx === tcs.length - 1;
             const prefix = isLast ? '└──' : '├──';
             html += this.renderTCRow(tc, suite, childPrefix, prefix, isLast);
-        });
+        }
+        if (limit < tcs.length) {
+            const remaining = tcs.length - limit;
+            html += `
+                <div style="display: flex; justify-content: center; padding: 14px;">
+                    <button class="btn btn-ghost btn-sm btn-tc-load-more" data-suite-id="${suite.id}" data-tc-total="${tcs.length}" data-tc-rendered="${limit}" style="font-size: 0.74rem; padding: 6px 18px; border: 1px solid var(--apple-separator); border-radius: var(--apple-radius-md);">
+                        Cargar ${Math.min(this.tcChunkSize, remaining)} más (${remaining} restantes)
+                    </button>
+                </div>
+            `;
+        }
         return html;
     },
 
@@ -514,16 +544,38 @@ export const ExecutionTab = {
     setupRealtimeListener() {
         if (this._isListening) return;
 
-        window.addEventListener('realtime-refresh', async () => {
+        window.addEventListener('realtime-refresh', async (evt) => {
+            // Solo procesar si el evento es para esta tab
+            if (evt && evt.detail && evt.detail.tabKey && evt.detail.tabKey !== 'execution') return;
+
+            // Si el usuario está editando activamente (input/textarea con foco
+            // o TC expandido con inputs llenos), NO re-renderizar: perdería
+            // el foco y el contenido en draft. El cambio ya está parcheado
+            // in-place en Store.state; el próximo render natural lo reflejará.
+            const container = document.getElementById('tab-content');
+            if (!container || Store.state.activeTab !== 'execution') return;
+
+            const active = document.activeElement;
+            const isUserEditing = active && (
+                active.tagName === 'INPUT' ||
+                active.tagName === 'TEXTAREA' ||
+                active.tagName === 'SELECT'
+            ) && this.expandedTCId !== null;
+
+            if (isUserEditing) {
+                console.log('⚠️ Realtime refresh diferido: usuario editando TC expandido.');
+                // Invalidar cache y marcar para refrescar en el próximo "blur" o
+                // cuando el usuario cambie de tab y vuelva
+                this._refreshPending = true;
+                return;
+            }
+
             this.projectSuites = [];
             console.log('⚡ Realtime: Execution cache invalidated.');
 
-            const container = document.getElementById('tab-content');
-            if (Store.state.activeTab === 'execution' && container) {
-                console.log('⚡ Realtime: Refreshing Execution UI...');
-                await this.render(container);
-                this.lastRefresh = new Date().toLocaleTimeString();
-            }
+            await this.render(container);
+            this.lastRefresh = new Date().toLocaleTimeString();
+            this._refreshPending = false;
         });
         this._isListening = true;
     },
@@ -532,6 +584,22 @@ export const ExecutionTab = {
         container.querySelectorAll('textarea').forEach(tx => {
             UI.autoResizeTextarea(tx);
             tx.addEventListener('input', () => UI.autoResizeTextarea(tx));
+        });
+
+        // "Cargar más TCs" del chunked-render
+        container.querySelectorAll('.btn-tc-load-more').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const rendered = parseInt(btn.dataset.tcRendered) || 0;
+                this.renderedTcCount = rendered + this.tcChunkSize;
+                // Re-render solo la suite-tree (no el full render, para preservar scroll)
+                const tree = container.querySelector('.exec-tree-container');
+                if (tree) {
+                    const activeSuites = this.projectSuites.filter(s => s.activeRun);
+                    tree.innerHTML = this.renderSuiteTree(activeSuites);
+                    this.bindEvents(container);
+                }
+            });
         });
 
         container.querySelectorAll('.btn-status').forEach(btn => {

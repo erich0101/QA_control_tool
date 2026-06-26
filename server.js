@@ -173,6 +173,7 @@ await query(`CREATE INDEX IF NOT EXISTS idx_defects_proj_exec ON qa_defects (pro
         await query(`CREATE INDEX IF NOT EXISTS idx_suggestions_assigned   ON qa_suggestions (assigned_to)`);
         await query(`ALTER TABLE qa_attachments ADD COLUMN IF NOT EXISTS suggestion_id INTEGER REFERENCES qa_suggestions(id) ON DELETE CASCADE`);
         await query(`CREATE INDEX IF NOT EXISTS idx_attachments_suggestion ON qa_attachments (suggestion_id)`);
+        await query(`CREATE INDEX IF NOT EXISTS idx_attachments_execution_id ON qa_attachments (execution_id) WHERE execution_id IS NOT NULL`);
         await query(`CREATE INDEX IF NOT EXISTS idx_perms_user_id     ON qa_user_permissions (user_id)`);
         await query(`CREATE INDEX IF NOT EXISTS idx_proj_users_uid    ON qa_project_users (user_id)`);
         await query(`CREATE INDEX IF NOT EXISTS idx_proj_users_pid    ON qa_project_users (project_id)`);
@@ -893,14 +894,14 @@ app.get('/api/jira/projects/:id/epic-stats', requireAuth, async (req, res) => {
             });
         }
 
-        // Defects found during QA
+        // Defects found during QA (excluir descartados de las estadísticas)
         let qaDefectsRes = { rows: [] };
         if (qaCaseIds.length > 0) {
             qaDefectsRes = await query(`
                 SELECT d.id, d.title, d.severity
                 FROM qa_defects d
                 JOIN qa_executions e ON d.execution_id = e.id
-                WHERE e.tc_id = ANY(?)
+                WHERE e.tc_id = ANY(?) AND d.status != 'DISMISSED'
             `, [qaCaseIds]);
         }
 
@@ -918,7 +919,7 @@ app.get('/api/jira/projects/:id/epic-stats', requireAuth, async (req, res) => {
                 SELECT d.severity, COUNT(*)::INT as cnt
                 FROM qa_defects d
                 JOIN qa_executions e ON d.execution_id = e.id
-                WHERE e.tc_id = ANY(?)
+                WHERE e.tc_id = ANY(?) AND d.status != 'DISMISSED'
                 GROUP BY d.severity
             `, [qaCaseIds]);
             qaDefectsBySevRes.rows.forEach(r => {
@@ -1094,7 +1095,7 @@ app.get('/api/jira/projects/:id/tracking', requireAuth, async (req, res) => {
             JOIN qa_test_cases tc ON e.tc_id = tc.id
             JOIN qa_test_suites s ON tc.suite_id = s.id
             JOIN qa_use_cases cu ON s.use_case_id = cu.id
-            WHERE cu.project_id = ? AND d.jira_key IS NOT NULL
+            WHERE cu.project_id = ? AND d.jira_key IS NOT NULL AND d.status != 'DISMISSED'
         `, [projectId]);
 
         if (dbBugs.rows.length === 0) return res.json({ tracking: [] });
@@ -1168,6 +1169,11 @@ app.post('/api/jira/defects/:id/create-ticket', requireAuth, async (req, res) =>
 
         if (bugRes.rows.length === 0) return res.status(404).json({ error: 'Defecto no encontrado.' });
         const bug = bugRes.rows[0];
+
+        // No se puede crear ticket Jira de un bug descartado
+        if (bug.status === 'DISMISSED') {
+            return res.status(400).json({ error: 'No se puede crear un ticket de Jira de un bug descartado. Reabrí el bug primero.' });
+        }
 
         // 2. Obtener el project_id real desde el caso de uso
         const ucRes = await query(`SELECT project_id FROM qa_use_cases WHERE id = ?`, [bug.use_case_id]);
@@ -1654,37 +1660,73 @@ app.get('/api/test-suites', requireAuth, async (req, res) => {
         `, [suiteIds]);
         const allInconsistencies = incRes.rows;
 
+        // Pre-indexar lookups O(1) para evitar O(N²) en el map por TC
+        const activeRunById = new Map(activeRuns.map(r => [r.id, r]));
+        // Execs del run activo: tc_id -> exec
+        const activeRunExecByTc = new Map();
+        for (const e of activeRunExecs) activeRunExecByTc.set(e.tc_id, e);
+        // Latest exec (sin run activo): tc_id -> exec
+        const latestExecByTc = new Map();
+        for (const e of latestExecs) latestExecByTc.set(e.tc_id, e);
+        // Parent execs (RETEST): tc_id -> exec
+        const parentExecByTc = new Map();
+        for (const e of parentExecs) parentExecByTc.set(e.tc_id, e);
+        // Defects por execution_id
+        const defectsByExec = new Map();
+        for (const d of allDefects) {
+            if (!defectsByExec.has(d.execution_id)) defectsByExec.set(d.execution_id, []);
+            defectsByExec.get(d.execution_id).push(d);
+        }
+        // Attachments por execution_id
+        const attachmentsByExec = new Map();
+        for (const a of allAttachments) {
+            if (!attachmentsByExec.has(a.execution_id)) attachmentsByExec.set(a.execution_id, []);
+            attachmentsByExec.get(a.execution_id).push(a);
+        }
+        // TCs por suite_id
+        const tcsBySuite = new Map();
+        for (const tc of allTestCases) {
+            if (!tcsBySuite.has(tc.suite_id)) tcsBySuite.set(tc.suite_id, []);
+            tcsBySuite.get(tc.suite_id).push(tc);
+        }
+        // Inconsistencias por suite_id
+        const incsBySuite = new Map();
+        for (const inc of allInconsistencies) {
+            if (!incsBySuite.has(inc.suite_id)) incsBySuite.set(inc.suite_id, []);
+            incsBySuite.get(inc.suite_id).push(inc);
+        }
+
         const result = suites.map(suite => {
-            const activeRun = activeRuns.find(r => r.id === suite.active_run_id) || null;
-            const suiteCases = allTestCases.filter(tc => tc.suite_id === suite.id);
-            const suiteInconsistencies = allInconsistencies.filter(inc => inc.suite_id === suite.id);
+            const activeRun = activeRunById.get(suite.active_run_id) || null;
+            const suiteCases = tcsBySuite.get(suite.id) || [];
+            const suiteInconsistencies = incsBySuite.get(suite.id) || [];
 
             const processedCases = suiteCases.map(tc => {
                 let exec = null;
                 if (activeRun) {
-                    exec = activeRunExecs.find(e => e.tc_id === tc.id && e.run_id === activeRun.id) || null;
+                    exec = activeRunExecByTc.get(tc.id) || null;
                     if (!exec && activeRun.run_type !== 'RETEST' && activeRun.parent_run_id) {
-                        const pExec = parentExecs.find(e => e.tc_id === tc.id && e.run_id === activeRun.parent_run_id);
+                        const pExec = parentExecByTc.get(tc.id);
                         if (pExec) exec = { ...pExec, is_from_parent: true };
                     }
                 } else {
-                    exec = latestExecs.find(e => e.tc_id === tc.id) || null;
+                    exec = latestExecByTc.get(tc.id) || null;
                 }
 
                 if (activeRun && !exec) return null;
 
-                const attachments = allAttachments
-                    .filter(a => a.execution_id === (exec ? exec.id : -1))
+                const attachments = (attachmentsByExec.get(exec ? exec.id : -1) || [])
                     .map(a => ({ id: a.id, category: a.evidence_category, src: `api/evidence/${a.id}` }));
 
-                const defects = allDefects.filter(d => d.execution_id === (exec ? exec.id : -1));
+                const defects = defectsByExec.get(exec ? exec.id : -1) || [];
 
                 if (activeRun && activeRun.run_type === 'RETEST' && exec && exec.status === 'PENDING' && activeRun.parent_run_id) {
-                    const pExec = parentExecs.find(e => e.tc_id === tc.id && e.run_id === activeRun.parent_run_id);
+                    const pExec = parentExecByTc.get(tc.id);
                     if (pExec) {
-                        allDefects.filter(d => d.execution_id === pExec.id).forEach(hd => {
+                        const historicalDefs = defectsByExec.get(pExec.id) || [];
+                        for (const hd of historicalDefs) {
                             if (!defects.find(d => d.id === hd.id)) defects.push({ ...hd, is_historical: true });
-                        });
+                        }
                     }
                 }
 
@@ -1705,7 +1747,9 @@ app.get('/api/test-suites', requireAuth, async (req, res) => {
             return { ...suite, activeRun, test_cases: processedCases, test_cases_count: suiteCases.length, inconsistencies: suiteInconsistencies };
         });
 
-        console.log(`GET /api/test-suites optimized: ${Date.now() - start}ms`);
+        const tcs = result.reduce((acc, s) => acc + (s.test_cases ? s.test_cases.length : 0), 0);
+        const defs = result.reduce((acc, s) => acc + (s.test_cases || []).reduce((a, tc) => a + (tc.defects ? tc.defects.length : 0), 0), 0);
+        console.log(`GET /api/test-suites ${Date.now() - start}ms suites=${result.length} tcs=${tcs} defects=${defs}`);
         res.json({ testSuites: result });
     } catch (err) {
         console.error('Error in GET /api/test-suites:', err);
@@ -2621,9 +2665,25 @@ app.post('/api/test-suites/:id/finish-execution', requireAuth, async (req, res) 
 // --- HISTORIAL & BUGS ---
 
 app.get('/api/history', requireAuth, async (req, res) => {
+    const start = Date.now();
     try {
         const { project_id } = req.query;
         if (!project_id) return res.status(400).json({ error: 'project_id requerido' });
+
+        // Paginación: ?page=1&limit=50 (defaults: page=1, limit=50)
+        const page = Math.max(1, parseInt(req.query.page) || 1);
+        const limit = Math.min(200, Math.max(1, parseInt(req.query.limit) || 50));
+        const offset = (page - 1) * limit;
+
+        // Total para el paginador (es la única query extra; el resto del endpoint sigue escalando)
+        const totalRes = await query(`
+            SELECT COUNT(*)::int AS total
+            FROM qa_test_runs r
+            JOIN qa_test_suites s ON r.suite_id = s.id
+            JOIN qa_use_cases uc ON s.use_case_id = uc.id
+            WHERE uc.project_id = ? AND r.status = 'FINISHED'
+        `, [project_id]);
+        const total = totalRes.rows[0] ? totalRes.rows[0].total : 0;
 
         const runs = await query(`
             SELECT r.*, s.title as suite_title, u.name as tester_name
@@ -2633,26 +2693,47 @@ app.get('/api/history', requireAuth, async (req, res) => {
             LEFT JOIN qa_users u ON r.created_by = u.id
             WHERE uc.project_id = ? AND r.status = 'FINISHED'
             ORDER BY r.finished_at DESC
-        `, [project_id]);
+            LIMIT ? OFFSET ?
+        `, [project_id, limit, offset]);
 
-        const result = [];
-        for (const run of runs.rows) {
-            // Calcular stats al vuelo para el historial
-            const execs = await query(`SELECT status FROM qa_executions WHERE run_id = ?`, [run.id]);
-            result.push({
-                ...run,
-                stats: {
-                    total: execs.rows.length,
-                    pass: execs.rows.filter(e => e.status === 'PASS' || e.status === 'OK').length,
-                    fail: execs.rows.filter(e => e.status === 'FAIL').length,
-                    warn: execs.rows.filter(e => e.status === 'WARNING').length,
-                    block: execs.rows.filter(e => e.status === 'BLOCK').length,
-                    skipped: execs.rows.filter(e => e.status === 'SKIPPED' || e.status === 'SKIP').length
-                }
-            });
+        if (runs.rows.length === 0) {
+            console.log(`GET /api/history ${Date.now() - start}ms page=${page} limit=${limit} total=${total} runs=0`);
+            return res.json({ runs: [], total, page, limit, totalPages: Math.ceil(total / limit) });
         }
 
-        res.json({ runs: result });
+        // Una sola query agregada en lugar de N+1
+        const runIds = runs.rows.map(r => r.id);
+        const statsRes = await query(`
+            SELECT run_id, status, COUNT(*)::int AS count
+            FROM qa_executions
+            WHERE run_id = ANY(?)
+            GROUP BY run_id, status
+        `, [runIds]);
+
+        // Indexar stats por run_id para lookup O(1)
+        const statsByRun = new Map();
+        for (const row of statsRes.rows) {
+            let s = statsByRun.get(row.run_id);
+            if (!s) {
+                s = { total: 0, pass: 0, fail: 0, warn: 0, block: 0, skipped: 0 };
+                statsByRun.set(row.run_id, s);
+            }
+            const count = row.count;
+            s.total += count;
+            if (row.status === 'PASS' || row.status === 'OK') s.pass += count;
+            else if (row.status === 'FAIL') s.fail += count;
+            else if (row.status === 'WARNING') s.warn += count;
+            else if (row.status === 'BLOCK') s.block += count;
+            else if (row.status === 'SKIPPED' || row.status === 'SKIP') s.skipped += count;
+        }
+
+        const result = runs.rows.map(run => ({
+            ...run,
+            stats: statsByRun.get(run.id) || { total: 0, pass: 0, fail: 0, warn: 0, block: 0, skipped: 0 }
+        }));
+
+        console.log(`GET /api/history ${Date.now() - start}ms page=${page} limit=${limit} total=${total} runs=${result.length}`);
+        res.json({ runs: result, total, page, limit, totalPages: Math.ceil(total / limit) });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -2892,6 +2973,24 @@ app.put('/api/defects/:id/status', requireAuth, async (req, res) => {
         if (!status) return res.status(400).json({ error: 'status requerido' });
         await query(`UPDATE qa_defects SET status = ? WHERE id = ?`, [status, req.params.id]);
         res.json({ ok: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Descartar / reabrir un bug (cualquier tester del proyecto).
+// `dismissed` = true → status='DISMISSED', false → status='OPEN'.
+// El bug descartado sigue visible (con badge atenuado) pero NO se cuenta en
+// las estadísticas agregadas (epic report, jira tracking).
+app.post('/api/defects/:id/dismiss', requireAuth, async (req, res) => {
+    try {
+        const { dismissed } = req.body;
+        const newStatus = dismissed ? 'DISMISSED' : 'OPEN';
+        const upd = await query(`UPDATE qa_defects SET status = ? WHERE id = ?`, [newStatus, req.params.id]);
+        if (upd.changes === 0) {
+            return res.status(404).json({ error: 'Bug no encontrado' });
+        }
+        res.json({ ok: true, status: newStatus });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -3784,6 +3883,10 @@ app.post('/api/jira/hallazgos/:id/create-ticket', requireAuth, async (req, res) 
         `, [hallazgoId]);
         if (bugRes.rows.length === 0) return res.status(404).json({ error: 'Hallazgo no encontrado.' });
         const bug = bugRes.rows[0];
+
+        if (bug.status === 'DISMISSED') {
+            return res.status(400).json({ error: 'No se puede crear un ticket de Jira de un bug descartado. Reabrí el bug primero.' });
+        }
 
         const projectId = bug.project_id;
 

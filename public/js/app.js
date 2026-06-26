@@ -97,6 +97,10 @@ async function init() {
         RealtimeService.init();
         TestSuitesTab.setupRealtimeListener();
         ExecutionTab.setupRealtimeListener();
+        HistoryTab.setupRealtimeListener();
+        HallazgosTab.setupRealtimeListener();
+        JiraTrackingTab.setupRealtimeListener();
+        MiJiraTab.setupRealtimeListener();
 
     } catch (error) {
         UI.hideLoading();
@@ -111,7 +115,14 @@ function renderActiveTab(container, state) {
     const containerScroll = container.scrollTop;
     const windowScrollY = window.scrollY;
 
-    switch (state.activeTab) {
+    // Guard: si el tab activo requiere admin y el usuario no lo es, forzar fallback.
+    const isAdmin = state.user?.perfil === 'admin';
+    let activeTab = state.activeTab;
+    if (activeTab === 'team' && !isAdmin) {
+        activeTab = 'use-cases';
+    }
+
+    switch (activeTab) {
         case 'use-cases':
             UserStories.render(container);
             break;

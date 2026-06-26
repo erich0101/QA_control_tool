@@ -42,7 +42,7 @@ export const DashboardTab = {
                 <div class="sub-tab-item ${this.activeSubTab === 'team' ? 'active' : ''}" data-subtab="team" style="padding: 12px 4px; font-size: 0.8rem; font-weight: 700; cursor: pointer; color: ${this.activeSubTab === 'team' ? 'var(--brand)' : 'var(--text-muted)'}; border-bottom: 2px solid ${this.activeSubTab === 'team' ? 'var(--brand)' : 'transparent'};">Productividad</div>
                 <div class="sub-tab-item ${this.activeSubTab === 'epic-report' ? 'active' : ''}" data-subtab="epic-report" style="padding: 12px 4px; font-size: 0.8rem; font-weight: 700; cursor: pointer; color: ${this.activeSubTab === 'epic-report' ? 'var(--brand)' : 'var(--text-muted)'}; border-bottom: 2px solid ${this.activeSubTab === 'epic-report' ? 'var(--brand)' : 'transparent'};">📋 Reporte Cliente</div>
             </div>
-            <div id="dashboard-content-area"></div>
+            <div id="dashboard-content-area">${UI.skeletonHTML(6, 3)}</div>
         `;
 
         const contentArea = container.querySelector('#dashboard-content-area');

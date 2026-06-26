@@ -189,3 +189,39 @@ export const Store = {
         this.notify();
     }
 };
+
+// Cache simple por tab/proyecto con TTL.
+// Permite que cambiar de tab no re-pegue al backend si los datos siguen frescos.
+// Forma de la clave: `${tabKey}::${projectId}`. Valor: { ts, data, promise? }.
+const TAB_CACHE_TTL_MS = 30000;
+const tabCache = new Map();
+
+export function getCachedTab(tabKey, projectId) {
+    const key = `${tabKey}::${projectId || ''}`;
+    const entry = tabCache.get(key);
+    if (!entry) return null;
+    if (Date.now() - entry.ts > TAB_CACHE_TTL_MS) {
+        tabCache.delete(key);
+        return null;
+    }
+    return entry;
+}
+
+export function setCachedTab(tabKey, projectId, data) {
+    const key = `${tabKey}::${projectId || ''}`;
+    tabCache.set(key, { ts: Date.now(), data });
+}
+
+export function invalidateTabCache(tabKey, projectId) {
+    if (tabKey) {
+        if (projectId != null) {
+            tabCache.delete(`${tabKey}::${projectId}`);
+        } else {
+            for (const k of tabCache.keys()) {
+                if (k.startsWith(`${tabKey}::`)) tabCache.delete(k);
+            }
+        }
+    } else {
+        tabCache.clear();
+    }
+}

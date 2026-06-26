@@ -1,6 +1,7 @@
 import { Store } from '../store/state.js';
 import { ApiService } from '../services/api.js';
 import { UI } from '../utils/ui-utils.js';
+import { getCachedTab, setCachedTab, invalidateTabCache } from '../store/state.js';
 
 export const MiJiraTab = {
     activeSubTab: 'assigned',
@@ -61,6 +62,8 @@ export const MiJiraTab = {
         });
 
         container.querySelector('#mi-jira-refresh')?.addEventListener('click', async () => {
+            // Forzar reload ignorando cache
+            invalidateTabCache(`mi-jira::${this.activeSubTab}`, Store.state.activeProjectId);
             await this.loadTickets();
         });
     },
@@ -80,15 +83,30 @@ export const MiJiraTab = {
         const count = document.getElementById('mi-jira-count');
 
         this.loading = true;
-        UI.showLoading();
 
         const titles = { assigned: 'Asignados a Mí', created: 'Creados por Mí', mentions: 'Donde me mencionaron' };
         title.textContent = titles[this.activeSubTab] || 'Mi JIRA';
         count.textContent = '';
-        grid.innerHTML = this.renderLoading();
+
+        // Cache: por subTab + projectId (cada subTab cachea por separado)
+        const cacheKey = `mi-jira::${this.activeSubTab}`;
+        const cached = getCachedTab(cacheKey, projectId);
+
+        // Skeleton solo si no hay cache (sino, mantenemos el contenido actual)
+        if (!cached) {
+            grid.innerHTML = UI.skeletonHTML(8, 4);
+        } else {
+            grid.innerHTML = this.renderLoading();
+        }
 
         try {
-            const res = await ApiService.getMyJiraTickets(projectId, this.activeSubTab, 50);
+            let res;
+            if (cached) {
+                res = cached.data;
+            } else {
+                res = await ApiService.getMyJiraTickets(projectId, this.activeSubTab, 50);
+                setCachedTab(cacheKey, projectId, res);
+            }
             this.tickets = res.tickets || [];
 
             count.textContent = `${this.tickets.length} tickets`;
@@ -286,11 +304,26 @@ export const MiJiraTab = {
     },
 
     formatDate(dateStr) {
-        if (!dateStr) return '—';
         const date = new Date(dateStr);
         const day = String(date.getDate()).padStart(2, '0');
         const month = String(date.getMonth() + 1).padStart(2, '0');
         const year = date.getFullYear();
         return `${day}/${month}/${year}`;
+    },
+
+    _isListening: false,
+    setupRealtimeListener() {
+        if (this._isListening) return;
+        window.addEventListener('realtime-refresh', async () => {
+            this.tickets = [];
+            invalidateTabCache('mi-jira::assigned', Store.state.activeProjectId);
+            invalidateTabCache('mi-jira::created', Store.state.activeProjectId);
+            invalidateTabCache('mi-jira::mentions', Store.state.activeProjectId);
+            const container = document.getElementById('tab-content');
+            if (Store.state.activeTab === 'mi-jira' && container) {
+                await this.render(container);
+            }
+        });
+        this._isListening = true;
     }
 };

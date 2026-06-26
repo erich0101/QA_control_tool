@@ -1,6 +1,7 @@
 import { Store } from '../store/state.js';
 import { ApiService } from '../services/api.js';
 import { UI } from '../utils/ui-utils.js';
+import { getCachedTab, setCachedTab, invalidateTabCache } from '../store/state.js';
 
 export const JiraTrackingTab = {
     data: [],
@@ -14,19 +15,24 @@ export const JiraTrackingTab = {
             return;
         }
 
-        UI.showLoading();
-        try {
-            const res = await ApiService.getJiraTracking(activeProjectId);
-            this.data = res.tracking || [];
-            
-            // Inicialmente expandir todas las épicas
+        // Cache hit: reusar data sin re-pegar al backend
+        const cached = getCachedTab('jira-tracking', activeProjectId);
+        if (cached) {
+            this.data = cached.data.tracking || [];
             const epics = [...new Set(this.data.map(item => item.jira_epic_key))];
             epics.forEach(e => this.expandedEpics.add(e));
-
-        } catch (err) {
-            UI.toast(err.message, 'error');
+        } else {
+            container.innerHTML = UI.skeletonHTML(10, 4);
+            try {
+                const res = await ApiService.getJiraTracking(activeProjectId);
+                this.data = res.tracking || [];
+                setCachedTab('jira-tracking', activeProjectId, { tracking: this.data });
+                const epics = [...new Set(this.data.map(item => item.jira_epic_key))];
+                epics.forEach(e => this.expandedEpics.add(e));
+            } catch (err) {
+                UI.toast(err.message, 'error');
+            }
         }
-        UI.hideLoading();
 
         container.innerHTML = `
             <div class="tab-toolbar" style="padding: 20px;">
@@ -372,5 +378,20 @@ export const JiraTrackingTab = {
         }
 
         return text;
+    },
+
+    _isListening: false,
+    setupRealtimeListener() {
+        if (this._isListening) return;
+        window.addEventListener('realtime-refresh', async () => {
+            this.data = [];
+            this.expandedEpics = new Set();
+            invalidateTabCache('jira-tracking', Store.state.activeProjectId);
+            const container = document.getElementById('tab-content');
+            if (Store.state.activeTab === 'jira-tracking' && container) {
+                await this.render(container);
+            }
+        });
+        this._isListening = true;
     }
 };

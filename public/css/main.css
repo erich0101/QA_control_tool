@@ -3269,3 +3269,36 @@ input:checked + .slider:before {
     transform: translateY(-1px);
 }
 
+/* ── Skeleton loader (shimmer, macOS-style) ── */
+.ui-skeleton-cell {
+    height: 14px;
+    border-radius: 6px;
+    background: linear-gradient(
+        90deg,
+        var(--apple-fill-tertiary) 0%,
+        var(--apple-fill) 50%,
+        var(--apple-fill-tertiary) 100%
+    );
+    background-size: 200% 100%;
+    animation: ui-skeleton-shimmer 1.4s ease-in-out infinite;
+}
+
+.ui-skeleton-header .ui-skeleton-cell {
+    border-radius: 8px;
+}
+
+.ui-skeleton-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 12px;
+    padding: 12px 14px;
+    background: var(--apple-bg-elevated);
+    border: 1px solid var(--apple-separator);
+    border-radius: var(--apple-radius-md);
+}
+
+@keyframes ui-skeleton-shimmer {
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
