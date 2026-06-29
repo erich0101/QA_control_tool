@@ -98,6 +98,7 @@ qa_report_builder.py
 .antigravityrules
 .cursorrules
 .windsurfrules
+.unlighthouse/
 
 # ============================================================
 # IDEs Y EDITORES
@@ -143,3 +144,28 @@ coverage/
 # SHARP (binarios nativos compilados)
 # ============================================================
 build/Release/
+status_report.py
+q4_verify_attachments.py
+q4_validate.py
+q4_validate_daily27.py
+q4_validate_daily.py
+q4_slide_5.png
+q4_slide_4.png
+q4_slide_3.png
+q4_slide_2.png
+q4_slide_1.png
+q4_explore_extra.py
+q4_debug.py
+q4_dashboard_builder.py
+q4_compare_e2e3.py
+q4_dashboard_project5.html
+q4_compare_e2e2.py
+q4_compare_e2e.py
+q4_check_status.py
+q4_check_defects.py
+q4_check_dates.py
+daily_2026-06-27_home.png
+daily_2026-06-26_home.png
+daily_2026-06-26_main.png
+daily_bugs_proyecto5_2026-06-26.html
+daily_bugs_proyecto5_2026-06-27.html
