@@ -62,11 +62,16 @@ await query(`ALTER TABLE qa_defects ADD COLUMN IF NOT EXISTS observations TEXT`)
         await query(`ALTER TABLE qa_test_runs ADD COLUMN IF NOT EXISTS last_resume_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP`);
         await query(`ALTER TABLE qa_test_runs ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'RUNNING'`);
         
+        // Migraciones para qa_use_cases
+        await query(`ALTER TABLE qa_use_cases ADD COLUMN IF NOT EXISTS created_by INTEGER REFERENCES qa_users(id)`);
+        await query(`ALTER TABLE qa_use_cases ADD COLUMN IF NOT EXISTS updated_by INTEGER REFERENCES qa_users(id)`);
+
         // Migraciones para qa_user_stories
         await query(`ALTER TABLE qa_user_stories ADD COLUMN IF NOT EXISTS project_id INTEGER REFERENCES qa_projects(id) ON DELETE CASCADE`);
         await query(`ALTER TABLE qa_user_stories ADD COLUMN IF NOT EXISTS hu_detallada TEXT`);
         await query(`ALTER TABLE qa_user_stories ADD COLUMN IF NOT EXISTS created_by INTEGER REFERENCES qa_users(id)`);
-        
+        await query(`ALTER TABLE qa_user_stories ADD COLUMN IF NOT EXISTS updated_by INTEGER REFERENCES qa_users(id)`);
+
         // Migraciones para qa_test_cases
         await query(`ALTER TABLE qa_test_cases ADD COLUMN IF NOT EXISTS key_id VARCHAR(50)`);
         await query(`ALTER TABLE qa_test_cases ADD COLUMN IF NOT EXISTS steps TEXT`);
@@ -75,6 +80,14 @@ await query(`ALTER TABLE qa_defects ADD COLUMN IF NOT EXISTS observations TEXT`)
         await query(`ALTER TABLE qa_test_cases ADD COLUMN IF NOT EXISTS acceptance_criteria TEXT`);
         await query(`ALTER TABLE qa_test_cases ADD COLUMN IF NOT EXISTS scenario_id INTEGER REFERENCES qa_scenarios(id) ON DELETE CASCADE`);
         await query(`ALTER TABLE qa_test_cases ADD COLUMN IF NOT EXISTS preconditions TEXT`);
+        await query(`ALTER TABLE qa_test_cases ADD COLUMN IF NOT EXISTS created_by INTEGER REFERENCES qa_users(id)`);
+        await query(`ALTER TABLE qa_test_cases ADD COLUMN IF NOT EXISTS updated_by INTEGER REFERENCES qa_users(id)`);
+        await query(`ALTER TABLE qa_test_cases ADD COLUMN IF NOT EXISTS jira_epic_key TEXT`);
+
+        // qa_executions: run_id lo usa server.js:2463+ en cada INSERT de ejecucion
+        await query(`ALTER TABLE qa_executions ADD COLUMN IF NOT EXISTS run_id INTEGER REFERENCES qa_test_runs(id) ON DELETE CASCADE`);
+        await query(`ALTER TABLE qa_executions ADD COLUMN IF NOT EXISTS accumulated_seconds INTEGER DEFAULT 0`);
+        await query(`ALTER TABLE qa_executions ADD COLUMN IF NOT EXISTS last_resume_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP`);
 
         // Migraciones para qa_test_suites
         await query(`ALTER TABLE qa_test_suites ADD COLUMN IF NOT EXISTS key_id VARCHAR(50)`);
@@ -139,6 +152,12 @@ await query(`ALTER TABLE qa_defects ADD COLUMN IF NOT EXISTS observations TEXT`)
         await query(`CREATE INDEX IF NOT EXISTS idx_defects_jira_key  ON qa_defects (jira_key) WHERE jira_key IS NOT NULL`);
         await query(`CREATE INDEX IF NOT EXISTS idx_defects_project_id ON qa_defects (project_id)`);
 await query(`CREATE INDEX IF NOT EXISTS idx_defects_proj_exec ON qa_defects (project_id, execution_id)`);
+        await query(`CREATE TABLE IF NOT EXISTS qa_project_sequences (
+            project_id INTEGER NOT NULL REFERENCES qa_projects(id) ON DELETE CASCADE,
+            prefix VARCHAR(20) NOT NULL,
+            last_number INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (project_id, prefix)
+        )`);
         await query(`CREATE TABLE IF NOT EXISTS qa_hallazgo_tc (
             hallazgo_id INTEGER REFERENCES qa_defects(id) ON DELETE CASCADE,
             tc_id INTEGER REFERENCES qa_test_cases(id) ON DELETE CASCADE,
