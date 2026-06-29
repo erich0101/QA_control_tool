@@ -55,6 +55,9 @@ await query(`ALTER TABLE qa_defects ADD COLUMN IF NOT EXISTS assigned_to INTEGER
 await query(`ALTER TABLE qa_defects ADD COLUMN IF NOT EXISTS created_by INTEGER REFERENCES qa_users(id)`);
 await query(`ALTER TABLE qa_defects ADD COLUMN IF NOT EXISTS preconditions TEXT`);
 await query(`ALTER TABLE qa_defects ADD COLUMN IF NOT EXISTS observations TEXT`);
+        await query(`ALTER TABLE qa_defects ADD COLUMN IF NOT EXISTS execution_id INTEGER REFERENCES qa_executions(id) ON DELETE CASCADE`);
+        await query(`ALTER TABLE qa_attachments ADD COLUMN IF NOT EXISTS execution_id INTEGER REFERENCES qa_executions(id) ON DELETE CASCADE`);
+        await query(`ALTER TABLE qa_attachments ADD COLUMN IF NOT EXISTS defect_id INTEGER REFERENCES qa_defects(id) ON DELETE CASCADE`);
         await query(`ALTER TABLE qa_test_runs ADD COLUMN IF NOT EXISTS accumulated_seconds INTEGER DEFAULT 0`);
         await query(`ALTER TABLE qa_test_runs ADD COLUMN IF NOT EXISTS last_resume_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP`);
         await query(`ALTER TABLE qa_test_runs ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'RUNNING'`);
