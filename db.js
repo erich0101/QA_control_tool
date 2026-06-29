@@ -92,7 +92,11 @@ async function query(sql, params = []) {
             const { data, error } = await supabase.rpc('exec_query', { query_text: finalSql }, { signal: controller.signal });
 
             if (error) throw new Error(error.message);
-            if (data && data.error) throw new Error(data.error + (data.detail ? ' (' + data.detail + ')' : ''));
+            if (data && data.error) {
+                const err = new Error(data.error + (data.detail ? ' (' + data.detail + ')' : '') + (data.code ? ' [code ' + data.code + ']' : ''));
+                err.sqlState = data.code;
+                throw err;
+            }
 
             clearTimeout(timer);
             return mapResult(data || { rows: [], rowCount: 0 });

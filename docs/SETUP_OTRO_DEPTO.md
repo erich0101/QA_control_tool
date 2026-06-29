@@ -52,7 +52,9 @@ npm install
 
 ## 4. Crear la función RPC `exec_query` (OBLIGATORIO)
 
-La aplicación usa una función SQL personalizada llamada `exec_query` para correr queries dinámicas. **Sin esta función el backend NO arranca.**
+La aplicación usa una función SQL personalizada llamada `exec_query` para correr queries dinámicas. **Sin esta función el backend NO arranca, y peor, podría decir que todo está bien cuando las tablas no se crearon.**
+
+> ⚠️ **Síntoma típico del problema:** ves en consola `✅ Esquema de base de datos verificado y actualizado.` pero al entrar a la app no hay tablas. Eso significa que la función `exec_query` está mal escrita y `server.js` se tragó el error silenciosamente.
 
 1. En tu proyecto Supabase, ve a **SQL Editor** (icono de base de datos en el menú izquierdo).
 2. Abre el archivo `docs/sql/create_exec_query_function.sql` que viene con este repo.
@@ -61,6 +63,24 @@ La aplicación usa una función SQL personalizada llamada `exec_query` para corr
 5. Debe aparecer el mensaje `Success. No rows returned`.
 
 > Si ves un error tipo "function already exists", está bien: el script usa `CREATE OR REPLACE`, es idempotente.
+
+### Verificar que la función quedó bien
+
+Copia y corre cada uno de estos SELECTs por separado en el SQL Editor. Deben devolver:
+
+```sql
+-- 1) DML con SELECT: debe devolver [{"id":1,"nombre":"hola"}]
+SELECT public.exec_query('SELECT 1 AS id, ''hola''::text AS nombre');
+
+-- 2) DDL: debe devolver {"ok": true, "affected": 0}
+SELECT public.exec_query('CREATE TABLE _test_exec_query (id int)');
+SELECT public.exec_query('DROP TABLE _test_exec_query');
+
+-- 3) Error intencional: debe devolver JSON con "error" (no crashear)
+SELECT public.exec_query('SELECT * FROM tabla_inexistente');
+```
+
+Si los tres pasan, tu función está bien y el backend creará las tablas al arrancar.
 
 ---
 
@@ -174,8 +194,15 @@ En resumen: **aislamiento total**.
 
 ## 10. Problemas frecuentes
 
-### "Error en verificación de esquema"
-- No corriste el SQL del paso 4, o el SQL falló. Vuelve al SQL Editor, borra la función con `DROP FUNCTION IF EXISTS public.exec_query(text);` y vuelve a correr el script.
+### "Veo `✅ Esquema verificado y actualizado` pero no hay tablas"
+- **Esta es la falla más común.** Significa que la función `exec_query` no puede ejecutar DDL. Tu versión de la función está envolviendo todo en un subquery `SELECT json_agg(t) FROM (sql) t`, lo cual rompe los `CREATE TABLE` / `ALTER TABLE`.
+- **Solución:** vuelve al SQL Editor de Supabase, corre de nuevo `docs/sql/create_exec_query_function.sql` (la versión actual detecta DDL por la primera palabra y lo ejecuta directo, sin envolver en subquery). Después corre las 3 verificaciones del paso 4 y luego `DROP TABLE IF EXISTS` sobre cualquier tabla que se haya creado a medias (lo más probable: ninguna).
+
+### "Error en verificación de esquema: ...cannot wrap with subquery..."
+- La función `exec_query` está mal escrita. Reemplázala corriendo de nuevo el script del paso 4.
+
+### "Error en verificación de esquema: permission denied for table X"
+- La función no es `SECURITY DEFINER` o no le diste `GRANT EXECUTE` a `service_role`. Reemplázala con el script del paso 4 que ya tiene ambos.
 
 ### "fetch failed" o "ECONNREFUSED"
 - Tu `SUPABASE_URL` o `SUPABASE_SERVICE_ROLE_KEY` están mal. Verifica en el panel de Supabase que el proyecto esté activo y las llaves copiadas no tengan espacios al inicio/final.
