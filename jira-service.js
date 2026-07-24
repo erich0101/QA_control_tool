@@ -44,6 +44,13 @@ ${bug.actual_result || '—'}
 - **Fecha de reporte:** ${new Date(bug.created_at).toLocaleString()}
 - **ID Interno:** ${bug.id}
 
+${bug.observations ? `
+---
+
+## 📝 Observaciones
+${bug.observations}
+` : ''}
+
 ${bug.evidences && bug.evidences.length > 0 ? `
 ## 📎 Evidencias Adjuntas
 ${bug.evidences.map(f => `- ${f}`).join('\n')}

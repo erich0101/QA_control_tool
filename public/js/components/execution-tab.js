@@ -366,7 +366,8 @@ export const ExecutionTab = {
             actual_result: '',
             frequency: 'Siempre',
             severity: 'Alta',
-            business_impact: ''
+            business_impact: '',
+            observations: ''
         };
     },
 
@@ -441,6 +442,10 @@ export const ExecutionTab = {
                             <option value="Baja" ${draft.severity === 'Baja' ? 'selected' : ''}>Baja</option>
                         </select>
                     </div>
+                </div>
+                <div class="field-group">
+                    <label class="field-label">Observaciones</label>
+                    <textarea class="bug-input" data-field="observations" data-tc-id="${tc.id}" data-bug-index="${index}" placeholder="Notas adicionales, contexto, workarounds, links relacionados...">${UI.escapeHTML(draft.observations || '')}</textarea>
                 </div>
             </div>
         `;
@@ -674,7 +679,8 @@ export const ExecutionTab = {
                                 expected_result: d.expected_result,
                                 actual_result: d.actual_result,
                                 frequency: d.frequency,
-                                business_impact: d.business_impact
+                                business_impact: d.business_impact,
+                                observations: d.observations
                             }));
                     }
                 }

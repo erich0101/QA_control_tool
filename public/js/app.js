@@ -11,6 +11,7 @@ import { HistoryTab } from './components/history-tab.js';
 import { JiraTrackingTab } from './components/jira-tracking-tab.js';
 import { MiJiraTab } from './components/mi-jira-tab.js';
 import { HallazgosTab } from './components/hallazgos-tab.js';
+import { ToolsTab } from './components/tools-tab.js';
 import { UI } from './utils/ui-utils.js';
 import { RealtimeService } from './services/realtime.js';
 import { Modals } from './components/modals.js';
@@ -149,6 +150,9 @@ function renderActiveTab(container, state) {
             break;
         case 'mi-jira':
             MiJiraTab.render(container);
+            break;
+        case 'tools':
+            ToolsTab.render(container);
             break;
         default:
             UserStories.render(container);

@@ -45,7 +45,9 @@ const noIdTables = [
     'qa_suite_users',
     'qa_project_sequences',
     'qa_tc_preconditions',
-    'qa_jira_configs'
+    'qa_jira_configs',
+    'qa_hallazgo_tc',
+    'qa_hallazgo_bug'
 ];
 
 function buildSql(sql, params) {

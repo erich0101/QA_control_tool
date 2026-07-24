@@ -169,3 +169,41 @@ daily_2026-06-26_home.png
 daily_2026-06-26_main.png
 daily_bugs_proyecto5_2026-06-26.html
 daily_bugs_proyecto5_2026-06-27.html
+
+# ============================================================
+# REPORTES Y AUDITORÍAS GENERADAS (HTML / PDF / DOCX / JSON)
+# ============================================================
+auditorias/
+bugs-AGIP-117-*.html
+bugs-AGIP-117-*.pdf
+daily-bugs-AGIP-117-*.html
+daily-bugs-AGIP-117-*.pdf
+informe_HML_*.docx
+informe_HML_*.pdf
+
+# ============================================================
+# SCRIPTS DE AUDITORÍA Y MIGRACIONES ONE-SHOT (raíz del repo)
+# ============================================================
+align_b_with_a.sql
+compare_db.js
+create_6_bugs.js
+init_new_supabase.js
+generate_hml_pdf.py
+generate_hml_report.py
+hml_delivery_data.py
+
+# ============================================================
+# TESTS / SCRIPTS DE REGRESIÓN DESARROLLADOS POR AGENTES IA
+# (útiles durante el dev, no corren en CI)
+# ============================================================
+curl-parser-test.mjs
+
+# ============================================================
+# ENTORNO DE AGENTES Y DEBUG TEMPORAL
+# ============================================================
+.dream_temp/
+
+# ============================================================
+# PLANES DE TRABAJO DE AGENTES (artefactos, no referencia)
+# ============================================================
+docs/plans/

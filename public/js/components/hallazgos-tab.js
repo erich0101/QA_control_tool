@@ -189,7 +189,52 @@ export const HallazgosTab = {
             const emptyMsg = isBugs ? 'Sin bugs' : 'Sin sugerencias';
             return `<div style="padding: 20px; text-align: center; opacity: 0.5; font-size: 0.8rem;">${emptyMsg}</div>`;
         }
+        if (isBugs) {
+            return filtered.map(h => this.renderBugReportRow(h)).join('');
+        }
         return filtered.map(h => this.renderSidebarCard(h)).join('');
+    },
+
+    renderBugReportRow(h) {
+        const active = this.selectedId === h.id && !this.isCreating;
+        const isDismissed = h.status === 'DISMISSED';
+        const sevBg = (h.severity === 'Crítica' || h.severity === 'Alta') ? 'rgba(255,59,48,0.1)' : 'rgba(255,149,0,0.1)';
+        const sevColor = (h.severity === 'Crítica' || h.severity === 'Alta') ? 'var(--apple-red)' : 'var(--apple-orange)';
+        const dateStr = h.created_at ? new Date(h.created_at).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' }) : '';
+        const rowOpacity = isDismissed ? 'opacity: 0.5;' : '';
+        const selectedBg = active ? 'var(--apple-blue-soft)' : 'transparent';
+
+        const tcCell = h.origin_tc_key
+            ? `<span style="display: inline-flex; align-items: center; gap: 3px; padding: 2px 8px; border-radius: 20px; background: var(--apple-fill); color: var(--apple-blue); font-size: 0.62rem; font-weight: 600;" title="${UI.escapeHTML(h.origin_tc_title || '')}">🏷 ${UI.escapeHTML(h.origin_tc_key)}</span>`
+            : `<span style="font-size: 0.65rem; color: var(--apple-label-tertiary);">—</span>`;
+
+        const jiraOrStatus = h.jira_key
+            ? `<a href="${UI.escapeHTML(h.jira_url || '#')}" target="_blank" rel="noopener" style="font-size: 0.7rem; font-weight: 600; color: var(--apple-blue); text-decoration: none;" title="Abrir en JIRA">${UI.escapeHTML(h.jira_key)} ↗</a>`
+            : `<span style="display: inline-flex; align-items: center; gap: 3px; padding: 2px 8px; border-radius: 20px; font-size: 0.62rem; font-weight: 600; background: ${h.status === 'FIXED' ? 'rgba(52,199,89,0.1)' : 'rgba(255,149,0,0.1)'}; color: ${h.status === 'FIXED' ? 'var(--apple-green)' : 'var(--apple-orange)'};">${UI.escapeHTML(h.status || 'OPEN')}</span>`;
+
+        return `
+            <div class="h-card h-card-bug ${active ? 'active' : ''}" data-id="${h.id}" style="display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--apple-separator); cursor: pointer; transition: background 0.15s ease; background: ${selectedBg}; ${rowOpacity}"
+                onmouseover="if(!this.classList.contains('active')) this.style.background='var(--apple-fill)'"
+                onmouseout="if(!this.classList.contains('active')) this.style.background='${active ? 'var(--apple-blue-soft)' : 'transparent'}'">
+                <span style="font-size: 0.7rem; color: var(--apple-label-tertiary); min-width: 36px;">#${h.id}</span>
+                <div style="min-width: 80px; max-width: 100px;">${tcCell}</div>
+                <div style="flex: 1; min-width: 0;">
+                    <div style="font-size: 0.8rem; font-weight: 600; color: var(--apple-label); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${UI.escapeHTML(h.title || 'Sin título')}</div>
+                    <div style="font-size: 0.65rem; color: var(--apple-label-tertiary); margin-top: 2px;">
+                        👤 ${UI.escapeHTML(h.assignee_name || 'Sin asignar')}${isDismissed ? ' · <span style="color: var(--apple-label-tertiary); font-weight: 700;">DESCARTADO</span>' : ''}
+                    </div>
+                </div>
+                <span style="display: inline-flex; align-items: center; gap: 3px; padding: 2px 8px; border-radius: 20px; font-size: 0.65rem; font-weight: 600; background: ${sevBg}; color: ${sevColor};">
+                    ${UI.escapeHTML(h.severity || 'Media')}
+                </span>
+                <div style="display: flex; align-items: center; gap: 6px; min-width: 80px;">
+                    ${jiraOrStatus}
+                </div>
+                <span style="font-size: 0.65rem; color: var(--apple-label-tertiary); min-width: 50px; text-align: right;">${dateStr}</span>
+                <button class="btn btn-sm h-btn-dismiss" data-id="${h.id}" data-dismissed="${isDismissed ? '1' : '0'}" title="${isDismissed ? 'Reabrir bug' : 'Descartar bug'}" style="padding: 3px 10px; border-radius: var(--apple-radius-sm); font-size: 0.7rem; font-weight: 600; flex-shrink: 0; background: ${isDismissed ? 'var(--apple-green)' : 'var(--apple-red)'}; color: white; border: none; cursor: pointer;">${isDismissed ? 'Reabrir' : 'Descartar'}</button>
+                <button class="btn btn-sm h-btn-view" data-id="${h.id}" title="Ver Detalle" style="padding: 3px 10px; border-radius: var(--apple-radius-sm); font-size: 0.7rem; font-weight: 600; flex-shrink: 0; background: var(--apple-blue); color: white; border: none; cursor: pointer;">Ver</button>
+            </div>
+        `;
     },
 
     renderSidebarCard(h) {
@@ -294,15 +339,13 @@ export const HallazgosTab = {
                     <label style="display: block; font-size: 0.72rem; font-weight: 600; color: var(--apple-label-secondary); margin-bottom: 6px;">Resultado Esperado</label>
                     <textarea id="hf-expected" placeholder="Lo que debería ocurrir..." style="${inputStyle} min-height:80px; font-family:inherit; resize:vertical;" ${focusAttr}>${UI.escapeHTML(d.expected_result || '')}</textarea>
                 </div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-                    <div class="field-group">
-                        <label style="display: block; font-size: 0.72rem; font-weight: 600; color: var(--apple-label-secondary); margin-bottom: 6px;">Precondiciones</label>
-                        <textarea id="hf-preconditions" placeholder="Estado inicial necesario..." style="${inputStyle} min-height:80px; font-family:inherit; resize:vertical;" ${focusAttr}>${UI.escapeHTML(d.preconditions || '')}</textarea>
-                    </div>
-                    <div class="field-group">
-                        <label style="display: block; font-size: 0.72rem; font-weight: 600; color: var(--apple-label-secondary); margin-bottom: 6px;">Observaciones</label>
-                        <textarea id="hf-observations" placeholder="Notas adicionales..." style="${inputStyle} min-height:80px; font-family:inherit; resize:vertical;" ${focusAttr}>${UI.escapeHTML(d.observations || '')}</textarea>
-                    </div>
+                <div class="field-group full-width">
+                    <label style="display: block; font-size: 0.72rem; font-weight: 600; color: var(--apple-label-secondary); margin-bottom: 6px;">Precondiciones</label>
+                    <textarea id="hf-preconditions" placeholder="Estado inicial necesario..." style="${inputStyle} min-height:80px; font-family:inherit; resize:vertical;" ${focusAttr}>${UI.escapeHTML(d.preconditions || '')}</textarea>
+                </div>
+                <div class="field-group full-width">
+                    <label style="display: block; font-size: 0.72rem; font-weight: 600; color: var(--apple-label-secondary); margin-bottom: 6px;">Observaciones</label>
+                    <textarea id="hf-observations" placeholder="Notas adicionales, contexto, workarounds, links relacionados..." style="${inputStyle} min-height:100px; font-family:inherit; resize:vertical;" ${focusAttr}>${UI.escapeHTML(d.observations || '')}</textarea>
                 </div>
                 <div class="field-group full-width">
                     <label style="display: block; font-size: 0.72rem; font-weight: 600; color: var(--apple-label-secondary); margin-bottom: 6px;">Resultado Obtenido</label>
@@ -335,6 +378,21 @@ export const HallazgosTab = {
                         ${team.map(u => `<option value="${u.id}" ${u.id === d.assigned_to ? 'selected' : ''}>${UI.escapeHTML(u.name)}</option>`).join('')}
                     </select>
                 </div>
+            </div>
+            <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:12px; margin-top: 12px;">
+                <div class="field-group">
+                    <label style="display: block; font-size: 0.72rem; font-weight: 600; color: var(--apple-label-secondary); margin-bottom: 6px;">Componente</label>
+                    <input type="text" id="hf-component" value="${UI.escapeHTML(d.component || '')}" placeholder="ej. Login, Checkout, API..." style="${inputStyle}" ${focusAttr}>
+                </div>
+                <div class="field-group">
+                    <label style="display: block; font-size: 0.72rem; font-weight: 600; color: var(--apple-label-secondary); margin-bottom: 6px;">Jira Epic Key</label>
+                    <input type="text" id="hf-jira-epic" value="${UI.escapeHTML(d.jira_epic_key || '')}" placeholder="ej. AGIP-117" style="${inputStyle}" ${focusAttr}>
+                </div>
+                <div class="field-group">
+                    <label style="display: block; font-size: 0.72rem; font-weight: 600; color: var(--apple-label-secondary); margin-bottom: 6px;">Proyecto</label>
+                    <input type="text" value="${UI.escapeHTML(Store.state.activeProjectName || '(activo)')}" disabled style="${inputStyle} opacity:0.6; cursor:not-allowed;" title="Se asigna automáticamente del proyecto activo">
+                </div>
+                <div></div>
             </div>
         `;
     },
@@ -386,17 +444,19 @@ export const HallazgosTab = {
         const statusBg = STATUS_BG[h.status] || 'var(--apple-fill)';
         const inputStyle = "padding:6px 10px; border-radius:var(--apple-radius-md); background:var(--apple-bg-tertiary); border:1px solid var(--apple-separator); color:var(--apple-label); font-size:0.78rem; outline:none;";
         const btnStyle = "padding:6px 12px; border-radius:var(--apple-radius-sm); font-size:0.72rem; font-weight:600; cursor:pointer;";
+        const reporterName = h.reporter_name || 'Desconocido';
 
         return `
             <div style="padding: 16px 24px; border-bottom: 1px solid var(--apple-separator); background: var(--apple-bg-elevated); display: flex; align-items: center; justify-content: space-between;">
-                <div style="display:flex; align-items:center; gap:12px;">
-                    <h2 style="margin:0; font-size:1rem; font-weight:700; color:var(--apple-label);">🔍 Hallazgo #${h.id}</h2>
-                    <span style="display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 20px; background: ${statusBg}; color: ${statusColor}; font-size: 0.62rem; font-weight: 600;">${h.status || 'OPEN'}</span>
+                <div>
+                    <h4 style="margin: 0; color: var(--apple-red); font-size: 0.92rem; font-weight: 700;">ID: #${h.id}</h4>
+                    <p style="color: var(--apple-label-tertiary); margin-top: 4px; font-size: 0.72rem;">Reportado en: ${new Date(h.created_at).toLocaleString()}</p>
+                </div>
+                <div style="display:flex; align-items:center; gap: 10px;">
+                    <span style="display: inline-flex; align-items: center; gap: 3px; padding: 4px 12px; border-radius: 20px; font-size: 0.68rem; font-weight: 600; background: ${statusBg}; color: ${statusColor};">${h.status || 'OPEN'}</span>
                     ${h.jira_key ? `<a href="${UI.escapeHTML(h.jira_url || '#')}" target="_blank" style="color:var(--apple-blue); font-size:0.75rem; text-decoration:none; font-weight:500;">${h.jira_key} ↗</a>` : ''}
                     ${h.converted_to_tc ? `<span style="color:var(--apple-green); font-size:0.72rem; font-weight:500;">✅ TC#${h.converted_tc_id}</span>` : ''}
-                </div>
-                <div style="display:flex; gap:8px; align-items:center;">
-                    <span style="font-size:0.7rem; color:var(--apple-label-tertiary);">${new Date(h.created_at).toLocaleString()}</span>
+                    ${h.converted_to_bug ? `<span style="color:var(--apple-orange); font-size:0.72rem; font-weight:500;">🐛 BUG#${h.converted_bug_id}</span>` : ''}
                     <button class="btn btn-ghost btn-sm" id="hf-cancel" style="${btnStyle}">Cancelar</button>
                     <button class="btn btn-primary btn-sm" id="hf-save" style="${btnStyle} background:var(--apple-blue); color:white; border:none;">Guardar Cambios</button>
                 </div>
@@ -406,8 +466,90 @@ export const HallazgosTab = {
                     <div style="padding: 12px 16px; border-bottom: 1px solid var(--apple-separator); background: var(--apple-fill);">
                         <span style="font-size: 0.75rem; font-weight: 700; color: var(--apple-label);">📋 Datos del Hallazgo</span>
                     </div>
-                    <div style="padding: 20px;">
-                        ${this.renderFormFields(h)}
+                    <div style="padding: 20px; display: flex; flex-direction: column; gap: 16px;">
+                        <div class="field-group">
+                            <label class="field-label" style="font-size: 0.68rem;">TÍTULO DEL BUG</label>
+                            <input type="text" id="hf-title" value="${UI.escapeHTML(h.title || '')}" placeholder="Resumen del bug..." style="${inputStyle} width: 100%; padding: 10px 12px; font-weight: 600; font-size: 0.88rem;">
+                        </div>
+                        <div class="field-group">
+                            <label class="field-label" style="font-size: 0.68rem;">TEST CASE ORIGEN</label>
+                            <div id="hf-tc-origin-container" style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                                <span id="hf-tc-origin-display" style="padding: 10px 12px; background: var(--apple-fill); border-radius: var(--apple-radius-md); color: ${h.origin_tc_key ? 'var(--apple-blue)' : 'var(--apple-label-tertiary)'}; font-weight: 600; font-size: 0.82rem; flex: 1; min-width: 200px;">
+                                    ${h.origin_tc_key ? `${UI.escapeHTML(h.origin_tc_key)} - ${UI.escapeHTML(h.origin_tc_title || '')}` : '— Sin TC origen —'}
+                                </span>
+                                <select id="hf-tc" style="${inputStyle} min-width: 200px;">
+                                    <option value="">Cargando TCs...</option>
+                                </select>
+                                <button class="btn btn-sm" id="hf-btn-assign-tc" style="${btnStyle} background:var(--apple-blue); color:white; border:none;">Asignar TC</button>
+                                ${h.origin_tc_id ? `<button class="btn btn-sm" id="hf-btn-remove-tc" style="${btnStyle} background:var(--apple-fill); color:var(--apple-red); border:1px solid var(--apple-separator);">Quitar TC</button>` : ''}
+                            </div>
+                        </div>
+                        <div class="field-group">
+                            <label class="field-label" style="font-size: 0.68rem;">DESCRIPCIÓN GENERAL</label>
+                            <textarea id="hf-observations" placeholder="Contexto del bug..." style="${inputStyle} width: 100%; min-height: 80px; font-family: inherit; resize: vertical; padding: 12px; background: var(--apple-bg-tertiary); border: 1px solid var(--apple-separator); border-radius: var(--apple-radius-md); white-space: pre-wrap; line-height: 1.6; font-size: 0.85rem;">${UI.escapeHTML(h.observations || '')}</textarea>
+                        </div>
+                        <div class="field-group">
+                            <label class="field-label" style="font-size: 0.68rem;">PASOS PARA REPRODUCIR</label>
+                            <textarea id="hf-steps" placeholder="1. ..." style="${inputStyle} width: 100%; min-height: 100px; padding: 12px; background: var(--apple-bg-tertiary); border: 1px solid var(--apple-separator); border-radius: var(--apple-radius-md); white-space: pre-wrap; font-family: 'JetBrains Mono', monospace; font-size: 0.82rem; line-height: 1.6;">${UI.escapeHTML(h.steps_to_reproduce || '')}</textarea>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                            <div class="field-group">
+                                <div style="font-size: 0.68rem; font-weight: 700; color: var(--apple-green); text-transform: uppercase; margin-bottom: 6px;">✔️ Resultado Esperado</div>
+                                <textarea id="hf-expected" placeholder="Lo que debería ocurrir..." style="${inputStyle} width: 100%; min-height: 70px; padding: 10px 12px; background: rgba(52,199,89,0.06); border: 1px solid rgba(52,199,89,0.12); border-radius: var(--apple-radius-md); font-size: 0.85rem;">${UI.escapeHTML(h.expected_result || '')}</textarea>
+                            </div>
+                            <div class="field-group">
+                                <div style="font-size: 0.68rem; font-weight: 700; color: var(--apple-red); text-transform: uppercase; margin-bottom: 6px;">❌ Resultado Actual</div>
+                                <textarea id="hf-obtained" placeholder="Lo que realmente ocurrió..." style="${inputStyle} width: 100%; min-height: 70px; padding: 10px 12px; background: rgba(255,59,48,0.06); border: 1px solid rgba(255,59,48,0.12); border-radius: var(--apple-radius-md); font-size: 0.85rem;">${UI.escapeHTML(h.actual_result || '')}</textarea>
+                            </div>
+                        </div>
+                        <div class="field-group">
+                            <label class="field-label" style="font-size: 0.68rem;">PRECONDICIONES</label>
+                            <textarea id="hf-preconditions" placeholder="Estado inicial necesario..." style="${inputStyle} width: 100%; min-height: 60px; padding: 10px 12px; font-family: inherit; resize: vertical; font-size: 0.85rem;">${UI.escapeHTML(h.preconditions || '')}</textarea>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; background: var(--apple-bg-elevated); padding: 14px; border-radius: var(--apple-radius-md); border: 1px solid var(--apple-separator);">
+                            <div class="field-group">
+                                <label class="field-label" style="font-size: 0.65rem;">SEVERIDAD</label>
+                                <select id="hf-severity" style="${inputStyle} width: 100%;">
+                                    ${['Baja', 'Media', 'Alta', 'Crítica'].map(s => `<option value="${s}" ${s === (h.severity || 'Media') ? 'selected' : ''}>${s}</option>`).join('')}
+                                </select>
+                            </div>
+                            <div class="field-group">
+                                <label class="field-label" style="font-size: 0.65rem;">FRECUENCIA</label>
+                                <select id="hf-frequency" style="${inputStyle} width: 100%;">
+                                    ${['Siempre', 'Casi Siempre', 'A veces', 'Rara vez'].map(s => `<option value="${s}" ${s === (h.frequency || 'Siempre') ? 'selected' : ''}>${s}</option>`).join('')}
+                                </select>
+                            </div>
+                            <div class="field-group">
+                                <label class="field-label" style="font-size: 0.65rem;">IMPACTO EN EL NEGOCIO</label>
+                                <input type="text" id="hf-impact" value="${UI.escapeHTML(h.business_impact || '')}" placeholder="Ej: Bloquea edición..." style="${inputStyle} width: 100%;">
+                            </div>
+                            <div class="field-group">
+                                <label class="field-label" style="font-size: 0.65rem;">ASIGNADO A</label>
+                                <select id="hf-assigned" style="${inputStyle} width: 100%;">
+                                    <option value="">— Sin asignar —</option>
+                                    ${(Store.state.team || []).map(u => `<option value="${u.id}" ${u.id === h.assigned_to ? 'selected' : ''}>${UI.escapeHTML(u.name)}</option>`).join('')}
+                                </select>
+                            </div>
+                            <div class="field-group">
+                                <label class="field-label" style="font-size: 0.65rem;">COMPONENTE</label>
+                                <input type="text" id="hf-component" value="${UI.escapeHTML(h.component || '')}" placeholder="ej. Login, Checkout, API..." style="${inputStyle} width: 100%;">
+                            </div>
+                            <div class="field-group">
+                                <label class="field-label" style="font-size: 0.65rem;">JIRA EPIC KEY</label>
+                                <input type="text" id="hf-jira-epic" value="${UI.escapeHTML(h.jira_epic_key || '')}" placeholder="ej. AGIP-117" style="${inputStyle} width: 100%;">
+                            </div>
+                        </div>
+                        <div style="margin-top: 4px; padding-top: 16px; border-top: 1px solid var(--apple-separator); display: flex; flex-direction: column; gap: 10px;">
+                            <div style="font-size: 0.68rem; font-weight: 700; color: var(--apple-label-tertiary); text-transform: uppercase;">Metadatos de Reporte</div>
+                            <div style="display: flex; justify-content: space-between; font-size: 0.78rem;">
+                                <span style="color: var(--apple-label-secondary);">Reportado por:</span>
+                                <span style="font-weight: 600; color: var(--apple-label);">${UI.escapeHTML(reporterName)}</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; font-size: 0.78rem;">
+                                <span style="color: var(--apple-label-secondary);">Proyecto:</span>
+                                <span style="font-weight: 600; color: var(--apple-label);">${UI.escapeHTML(Store.state.activeProjectName || '—')}</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -467,6 +609,13 @@ export const HallazgosTab = {
                             <button class="btn btn-sm" id="h-btn-convert-tc" style="${btnStyle} background:var(--apple-green); color:white; border:none;">Crear TC</button>
                             ` : ''}
 
+                            <div style="width:1px; height:20px; background:var(--apple-separator);"></div>
+                            <button class="btn btn-sm" id="h-btn-promote-bug" disabled
+                                title="Próximamente: convertir este hallazgo en un Bug vinculado a una ejecución"
+                                style="${btnStyle} background:var(--apple-fill); color:var(--apple-label-tertiary); border:1px solid var(--apple-separator); cursor:not-allowed; opacity:0.6;">
+                                🐛 Promover a Bug
+                            </button>
+
                             ${isAdmin ? `
                             <div style="width:1px; height:20px; background:var(--apple-separator);"></div>
                             <button class="btn btn-sm" id="h-btn-delete" style="${btnStyle} background:var(--apple-red); color:white; border:none;">🗑️ Eliminar</button>
@@ -475,12 +624,12 @@ export const HallazgosTab = {
                     </div>
                 </div>
 
-                <div style="background: var(--apple-bg-elevated); border-radius: var(--apple-radius-lg); border: 1px solid var(--apple-separator);">
+                <div id="hf-evidence-section" style="background: var(--apple-bg-elevated); border-radius: var(--apple-radius-lg); border: 1px solid var(--apple-separator);">
                     <div style="padding: 12px 16px; border-bottom: 1px solid var(--apple-separator); background: var(--apple-fill);">
                         <span style="font-size: 0.75rem; font-weight: 700; color: var(--apple-label);">📎 Evidencias</span>
                     </div>
                     <div style="padding: 20px;">
-                        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:12px;">
+                        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:8px;">
                             <input type="file" id="hf-evidence-input" accept="image/*" multiple style="display:none;">
                             <button class="btn btn-ghost btn-sm" id="hf-add-evidence" style="${btnStyle}">📷 Agregar captura</button>
                             <select id="hf-evidence-category" style="${inputStyle}">
@@ -488,6 +637,7 @@ export const HallazgosTab = {
                             </select>
                             <span style="font-size:0.72rem; color:var(--apple-label-tertiary);" id="hf-evidence-count">0 archivos</span>
                         </div>
+                        <div style="font-size:0.7rem; color:var(--apple-label-tertiary); margin-bottom:12px;">Tip: podés pegar una captura con <kbd style="background:var(--apple-bg-tertiary); padding:1px 6px; border-radius:4px; border:1px solid var(--apple-separator); font-family:inherit; font-size:0.68rem;">Ctrl</kbd>+<kbd style="background:var(--apple-bg-tertiary); padding:1px 6px; border-radius:4px; border:1px solid var(--apple-separator); font-family:inherit; font-size:0.68rem;">V</kbd> o arrastrar imágenes sobre la grilla.</div>
                         <div id="hf-evidence-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 8px;">
                             <div style="grid-column:1/-1; text-align:center; padding:20px; color:var(--apple-label-tertiary); font-size:0.8rem;">Cargando evidencias...</div>
                         </div>
@@ -559,6 +709,7 @@ export const HallazgosTab = {
                     this.bindDetailActions(h, container);
                     if (!h.jira_key) this.initJiraIntegration(h, container);
                     if (!h.converted_to_tc) this.loadSuites(h, container);
+                    this.loadTestCasesForOrigin(h, container);
                 } else {
                     this.bindSuggestionFormEvents(container, true, h);
                     this.bindSuggestionDetailActions(h, container);
@@ -586,6 +737,7 @@ export const HallazgosTab = {
                         this.bindDetailActions(h, container);
                         if (!h.jira_key) this.initJiraIntegration(h, container);
                         if (!h.converted_to_tc) this.loadSuites(h, container);
+                        this.loadTestCasesForOrigin(h, container);
                     } else {
                         mainContent.innerHTML = this.renderSuggestionDetailForm(h);
                         this.bindSuggestionFormEvents(container, true, h);
@@ -613,7 +765,12 @@ export const HallazgosTab = {
             severity: container.querySelector('#hf-severity')?.value || 'Media',
             frequency: container.querySelector('#hf-frequency')?.value || 'Siempre',
             business_impact: container.querySelector('#hf-impact')?.value || '',
-            assigned_to: container.querySelector('#hf-assigned')?.value || null
+            assigned_to: container.querySelector('#hf-assigned')?.value || null,
+            // ── nuevos campos transversales ──
+            jira_epic_key: container.querySelector('#hf-jira-epic')?.value?.trim() || '',
+            component: container.querySelector('#hf-component')?.value?.trim() || ''
+            // project_id no se envía desde el form: el backend ya lo recibe del query store
+            // tc_id se asigna por separado con setHallazgoTcOrigin (botones Asignar/Quitar TC)
         };
     },
 
@@ -632,6 +789,7 @@ export const HallazgosTab = {
                     this.bindDetailActions(h, container);
                     if (!h.jira_key) this.initJiraIntegration(h, container);
                     if (!h.converted_to_tc) this.loadSuites(h, container);
+                    this.loadTestCasesForOrigin(h, container);
                     this.loadEvidence(h, container);
                 }
                 const list = container.querySelector('#h-sidebar-list');
@@ -707,43 +865,81 @@ export const HallazgosTab = {
         const categorySelect = container.querySelector('#hf-evidence-category');
         const countSpan = container.querySelector('#hf-evidence-count');
         const grid = container.querySelector('#hf-evidence-grid');
+        const section = container.querySelector('#hf-evidence-section');
 
         if (!input || !addBtn) return;
+
+        const stageFile = (file) => {
+            if (!file || !file.type || !file.type.startsWith('image/')) return;
+            if (!this._pendingFiles) this._pendingFiles = [];
+            const category = categorySelect?.value || 'GENERAL';
+            this._pendingFiles.push({ file, category });
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const div = document.createElement('div');
+                div.className = 'h-evidence-item';
+                div.dataset.pending = 'true';
+                div.innerHTML = `
+                    <img src="${e.target.result}" alt="${file.name}">
+                    <span class="h-evidence-category-badge">${category}</span>
+                    <button class="h-evidence-remove" data-pending="true" data-filename="${file.name}">✕</button>
+                `;
+                grid?.prepend(div);
+                div.querySelector('.h-evidence-remove')?.addEventListener('click', () => {
+                    div.remove();
+                    this._pendingFiles = this._pendingFiles.filter(f => f.file !== file);
+                    this.updateEvidenceCount(container);
+                });
+            };
+            reader.readAsDataURL(file);
+            this.updateEvidenceCount(container);
+        };
 
         addBtn.addEventListener('click', () => input.click());
 
         input.addEventListener('change', () => {
             const files = Array.from(input.files);
             if (files.length === 0) return;
-            const category = categorySelect?.value || 'GENERAL';
-
-            if (!this._pendingFiles) this._pendingFiles = [];
-
-            files.forEach(file => {
-                this._pendingFiles.push({ file, category });
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    const div = document.createElement('div');
-                    div.className = 'h-evidence-item';
-                    div.dataset.pending = 'true';
-                    div.innerHTML = `
-                        <img src="${e.target.result}" alt="${file.name}">
-                        <span class="h-evidence-category-badge">${category}</span>
-                        <button class="h-evidence-remove" data-pending="true" data-filename="${file.name}">✕</button>
-                    `;
-                    grid?.prepend(div);
-                    div.querySelector('.h-evidence-remove')?.addEventListener('click', () => {
-                        div.remove();
-                        this._pendingFiles = this._pendingFiles.filter(f => f.file !== file);
-                        this.updateEvidenceCount(container);
-                    });
-                };
-                reader.readAsDataURL(file);
-            });
-
-            this.updateEvidenceCount(container);
+            files.forEach(stageFile);
             input.value = '';
         });
+
+        // ── Paste: Ctrl+V con una imagen en el clipboard → agregar como evidencia.
+        // Se ata al contenedor de la sección (no a document) para no interceptar
+        // Ctrl+V en textareas de otros tabs. Solo actúa si el clipboard trae imágenes;
+        // el paste de texto sigue funcionando normal.
+        section?.addEventListener('paste', (e) => {
+            const items = e.clipboardData?.items;
+            if (!items) return;
+            let handled = false;
+            for (const item of items) {
+                if (item.kind === 'file' && item.type && item.type.startsWith('image/')) {
+                    const blob = item.getAsFile();
+                    if (!blob) continue;
+                    const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+                    const ext = (blob.type.split('/')[1] || 'png').replace('jpeg', 'jpg');
+                    const file = new File([blob], `paste-${ts}.${ext}`, { type: blob.type });
+                    stageFile(file);
+                    handled = true;
+                }
+            }
+            if (handled) e.preventDefault();
+        });
+
+        // ── Drag & drop: arrastrar imágenes sobre la grilla también las agrega.
+        // Acepta múltiples archivos; valida que sean imágenes; usa la categoría actual.
+        if (grid) {
+            const dragHighlight = () => { grid.style.outline = '2px dashed var(--apple-blue)'; grid.style.outlineOffset = '4px'; };
+            const dragUnhighlight = () => { grid.style.outline = ''; grid.style.outlineOffset = ''; };
+            grid.addEventListener('dragover', (e) => { e.preventDefault(); dragHighlight(); });
+            grid.addEventListener('dragleave', (e) => { if (e.target === grid) dragUnhighlight(); });
+            grid.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dragUnhighlight();
+                const files = Array.from(e.dataTransfer?.files || []);
+                files.forEach(stageFile);
+            });
+        }
     },
 
     updateEvidenceCount(container) {
@@ -788,6 +984,12 @@ export const HallazgosTab = {
             } catch (err) {
                 UI.toast(err.message, 'error');
             }
+        });
+
+        // Promover a Bug — stub: el endpoint existe pero devuelve 501. Mostramos un toast
+        // onClick para que el usuario tenga feedback claro (algunos browsers no emiten click en disabled).
+        container.querySelector('#h-btn-promote-bug')?.addEventListener('click', () => {
+            UI.toast('⚠️ Próximamente: la promoción a Bug estará disponible en la próxima iteración.', 'warn');
         });
 
         container.querySelector('#h-btn-delete')?.addEventListener('click', async () => {
@@ -914,6 +1116,45 @@ export const HallazgosTab = {
         }
     },
 
+    async loadTestCasesForOrigin(h, container) {
+        const select = container.querySelector('#hf-tc');
+        if (!select) return;
+        try {
+            const res = await ApiService.getTestCases(Store.state.activeProjectId);
+            const tcs = res.test_cases || [];
+            select.innerHTML = '<option value="">— Seleccionar TC —</option>' +
+                tcs.map(tc => `<option value="${tc.id}" ${h.origin_tc_id === tc.id ? 'selected' : ''}>${UI.escapeHTML(tc.key_id)} - ${UI.escapeHTML(tc.title)}</option>`).join('');
+        } catch (err) {
+            select.innerHTML = '<option value="">Error cargando TCs</option>';
+        }
+        this.bindOriginTcEvents(h, container);
+    },
+
+    async bindOriginTcEvents(h, container) {
+        container.querySelector('#hf-btn-assign-tc')?.addEventListener('click', async () => {
+            const tcIdRaw = container.querySelector('#hf-tc')?.value;
+            if (!tcIdRaw) return UI.toast('⚠️ Seleccioná un TC', 'error');
+            const tcId = parseInt(tcIdRaw);
+            try {
+                await ApiService.setHallazgoTcOrigin(h.id, tcId);
+                UI.toast('✅ TC origen asignado');
+                await this.refreshAndSelect(container, h.id);
+            } catch (err) {
+                UI.toast(err.message, 'error');
+            }
+        });
+
+        container.querySelector('#hf-btn-remove-tc')?.addEventListener('click', async () => {
+            try {
+                await ApiService.setHallazgoTcOrigin(h.id, null);
+                UI.toast('✅ TC origen quitado');
+                await this.refreshAndSelect(container, h.id);
+            } catch (err) {
+                UI.toast(err.message, 'error');
+            }
+        });
+    },
+
     async loadEvidence(h, container) {
         if (this.subTab === 'suggestions') {
             return this.loadSuggestionEvidence(h, container);
@@ -984,6 +1225,7 @@ export const HallazgosTab = {
                         this.bindDetailActions(h, container);
                         if (!h.jira_key) this.initJiraIntegration(h, container);
                         if (!h.converted_to_tc) this.loadSuites(h, container);
+                        this.loadTestCasesForOrigin(h, container);
                     } else {
                         mc.innerHTML = this.renderSuggestionDetailForm(h);
                         this.bindSuggestionFormEvents(container, true, h);

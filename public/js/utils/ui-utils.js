@@ -92,6 +92,23 @@ export const UI = {
             .replace(/'/g, '&#039;');
     },
 
+    formatJSON(str) {
+        if (str == null) return '';
+        try {
+            return JSON.stringify(JSON.parse(String(str)), null, 2);
+        } catch (e) {
+            return String(str);
+        }
+    },
+
+    formatBytes(n) {
+        if (n == null || isNaN(n)) return '0 B';
+        if (n < 1024) return `${n} B`;
+        if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+        if (n < 1024 * 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(2)} MB`;
+        return `${(n / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+    },
+
     highlightSteps(text) {
         if (!text) return '';
         // Escapar HTML primero

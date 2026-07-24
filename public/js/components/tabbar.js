@@ -13,7 +13,8 @@ const TABS = [
     { id: 'dashboard', icon: '📊', label: 'Dashboard' },
     { id: 'hallazgos', icon: '🔍', label: 'Hallazgos' },
     { id: 'mi-jira', icon: '👤', label: 'Mi JIRA' },
-    { id: 'team', icon: '👥', label: 'Gestión de Equipo', requiresAdmin: true }
+    { id: 'team', icon: '👥', label: 'Gestión de Equipo', requiresAdmin: true },
+    { id: 'tools', icon: '🛠️', label: 'Tools' }
 ];
 
 export const TabBar = {

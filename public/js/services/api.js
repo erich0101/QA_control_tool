@@ -118,6 +118,10 @@ export const ApiService = {
         const query = useCaseId ? `use_case_id=${useCaseId}` : `project_id=${projectId}`;
         return fetch(`/api/test-suites?${query}`).then(json);
     },
+    async getTestCases(projectId, suiteId = null) {
+        const qs = suiteId ? `?project_id=${projectId}&suite_id=${suiteId}` : `?project_id=${projectId}`;
+        return fetch(`/api/test-cases${qs}`).then(json);
+    },
     async createTestSuite(data) {
         return fetch('/api/test-suites', { method: 'POST', body: JSON.stringify(data), headers }).then(json);
     },
@@ -260,8 +264,18 @@ export const ApiService = {
     async assignHallazgo(id, userId) {
         return fetch(`/api/hallazgos/${id}/assign`, { method: 'PUT', body: JSON.stringify({ assigned_to: userId }), headers }).then(json);
     },
+    async setHallazgoTcOrigin(id, tcId) {
+        return fetch(`/api/hallazgos/${id}/tc`, { method: 'PUT', body: JSON.stringify({ tc_id: tcId }), headers }).then(json);
+    },
     async convertHallazgoToTC(id, suiteId) {
         return fetch(`/api/hallazgos/${id}/convert-to-tc`, { method: 'POST', body: JSON.stringify({ suite_id: suiteId }), headers }).then(json);
+    },
+    async promoteHallazgoToBug(id, executionId) {
+        return fetch(`/api/hallazgos/${id}/promote-to-bug`, {
+            method: 'POST',
+            body: JSON.stringify({ execution_id: executionId }),
+            headers
+        }).then(json);
     },
     async createJiraFromHallazgo(id, epicId, assigneeId, priorityId, customFields) {
         return fetch(`/api/jira/hallazgos/${id}/create-ticket`, {
@@ -316,6 +330,16 @@ export const ApiService = {
     async saveIssue(formData) {
         return fetch('/api/issue', { method: 'POST', body: formData }).then(json);
     },
+
+    // ── Tools ──
+    async execRequest(payload) {
+        return fetch('/api/tools/request-builder/exec', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+            headers
+        }).then(json);
+    },
+
     async generateReport() {
         return fetch('/api/report', { method: 'POST' }).then(json);
     },
