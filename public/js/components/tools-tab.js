@@ -861,14 +861,15 @@ export const ToolsTab = {
             .join('\n');
         const ct = (r.headers && (r.headers['content-type'] || r.headers['Content-Type'])) || '';
         const isBinary = /^image\//.test(ct) || ct.includes('pdf') || ct.includes('octet-stream');
+        const isJson = !isBinary && (/json/i.test(ct) || (() => { try { JSON.parse(r.body); return true; } catch (e) { return false; } })());
         let bodyHtml;
         if (isBinary) {
             const blob = new Blob([r.body], { type: ct });
             const blobUrl = URL.createObjectURL(blob);
             bodyHtml = `<a class="rb-response-download" href="${blobUrl}" download="response">⬇ Descargar respuesta</a>`;
             setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
-        } else if (/json/i.test(ct) || (() => { try { JSON.parse(r.body); return true; } catch (e) { return false; } })()) {
-            bodyHtml = `<pre class="rb-response-body">${UI.escapeHTML(UI.formatJSON(r.body))}</pre>`;
+        } else if (isJson) {
+            bodyHtml = `<pre class="rb-response-body">${UI.formatJSONColored(r.body)}</pre>`;
         } else {
             bodyHtml = `<pre class="rb-response-body">${UI.escapeHTML(r.body)}</pre>`;
         }
@@ -877,6 +878,13 @@ export const ToolsTab = {
                 <span class="rb-status-pill ${statusClass}">${r.status} ${UI.escapeHTML(r.statusText || '')}</span>
                 <span class="rb-time-pill">${UI.escapeHTML(meta)}</span>
             </div>
+            <div class="rb-response-toolbar">
+                <button class="rb-copy-btn" data-rb-copy="body" ${isBinary ? 'disabled title="Body binario: usá Descargar"' : ''}>📋 Copiar body</button>
+                <button class="rb-copy-btn" data-rb-copy="url">🔗 Copiar URL</button>
+                <button class="rb-copy-btn" data-rb-copy="meta">📊 Copiar tiempo y tamaño</button>
+                <button class="rb-copy-btn" data-rb-copy="curl">📜 Copiar como cURL</button>
+                <button class="rb-copy-btn" data-rb-copy="all">🧾 Copiar todo (request + response)</button>
+            </div>
             <details class="rb-response-headers">
                 <summary>Headers (${Object.keys(r.headers || {}).length})</summary>
                 <pre>${UI.escapeHTML(headersList)}</pre>
@@ -884,6 +892,47 @@ export const ToolsTab = {
             ${bodyHtml}
             ${r.truncated ? `<div class="rb-info-pill rb-mt-8">⚠️ Respuesta truncada a 5 MB — el JSON puede estar incompleto.</div>` : ''}
         `;
+    },
+
+    // ── cURL synthesizer (file-private) ──
+    // Reverse of parseCurl: take the current state and emit a curl command string
+    // that reproduces the request. Used for the "Copy as cURL" button.
+    _buildCurlFromState(rb) {
+        if (!rb || !rb.url) return '';
+        const lines = [];
+        const m = (rb.method || 'GET').toLowerCase();
+        lines.push(`curl -X ${m.toUpperCase()} '${rb.url}'`);
+        const headers = this._kvToObject(rb.headers);
+        for (const [k, v] of Object.entries(headers)) {
+            lines.push(`  -H '${k}: ${v.replace(/'/g, "'\\''")}'`);
+        }
+        const bt = rb.bodyType;
+        if (bt === 'json' && rb.body) {
+            lines.push(`  -H 'Content-Type: application/json'`);
+            const safe = rb.body.replace(/'/g, "'\\''");
+            lines.push(`  --data-raw '${safe}'`);
+        } else if (bt === 'x-www-form-urlencoded') {
+            const params = this._kvToObject(rb.formFields);
+            const pairs = Object.entries(params).map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`);
+            if (pairs.length > 0) {
+                lines.push(`  --data '${pairs.join('&')}'`);
+            }
+        } else if (bt === 'form-data') {
+            const params = this._kvToObject(rb.formFields);
+            for (const [k, v] of Object.entries(params)) {
+                lines.push(`  -F '${k}=${String(v).replace(/'/g, "'\\''")}'`);
+            }
+            for (const f of rb.files) {
+                lines.push(`  -F '${f.fieldName}=@${f.filename}'`);
+            }
+        } else if (bt === 'raw' && rb.body) {
+            if (rb.rawContentType) {
+                lines.push(`  -H 'Content-Type: ${rb.rawContentType}'`);
+            }
+            const safe = rb.body.replace(/'/g, "'\\''");
+            lines.push(`  --data-raw '${safe}'`);
+        }
+        return lines.join(' \\\n');
     },
 
     // ── Bind: Request Builder ──
@@ -1114,6 +1163,7 @@ export const ToolsTab = {
         const responseSection = pane.querySelector('.rb-section:last-of-type .rb-section-body');
         if (responseSection) {
             responseSection.innerHTML = this._renderResponseSection();
+            this._bindResponseCopyButtons(container);
         }
         // Update the send button label/state
         const sendBtn = pane.querySelector('#rb-send');
@@ -1122,5 +1172,76 @@ export const ToolsTab = {
             sendBtn.disabled = rb.loading;
             sendBtn.textContent = rb.loading ? '⏳ Enviando…' : '▶ Send';
         }
+    },
+
+    _bindResponseCopyButtons(container) {
+        const pane = container.querySelector('#tools-main-pane');
+        if (!pane) return;
+        const rb = this.state.requestBuilder;
+        pane.querySelectorAll('[data-rb-copy]').forEach(btn => {
+            // Guard against re-binding on the same DOM node (innerHTML replacement
+            // creates new elements, so this is mostly a safety net).
+            if (btn.dataset.copyBound) return;
+            btn.dataset.copyBound = '1';
+            btn.addEventListener('click', async () => {
+                const kind = btn.dataset.rbCopy;
+                const text = this._buildCopyText(kind, rb);
+                if (text == null) {
+                    UI.toast('Nada para copiar', 'warn');
+                    return;
+                }
+                const ok = await copyToClipboard(text);
+                if (ok) {
+                    UI.toast('Copiado al portapapeles', 'ok');
+                    btn.classList.add('copied');
+                    setTimeout(() => btn.classList.remove('copied'), 1200);
+                } else {
+                    UI.toast('No se pudo copiar', 'error');
+                }
+            });
+        });
+    },
+
+    _buildCopyText(kind, rb) {
+        if (kind === 'body') {
+            if (!rb.response || rb.response.body == null) return null;
+            return rb.response.body;
+        }
+        if (kind === 'url') {
+            return rb.url || null;
+        }
+        if (kind === 'meta') {
+            if (!rb.response) return null;
+            const r = rb.response;
+            return `URL: ${rb.url}\nStatus: ${r.status} ${r.statusText || ''}\nTime: ${r.timeMs} ms\nSize: ${UI.formatBytes(r.sizeBytes)}${r.truncated ? '\n(truncado a 5 MB)' : ''}`;
+        }
+        if (kind === 'curl') {
+            return this._buildCurlFromState(rb) || null;
+        }
+        if (kind === 'all') {
+            const lines = [];
+            lines.push(`# Request`);
+            lines.push(this._buildCurlFromState(rb));
+            lines.push('');
+            if (rb.response) {
+                const r = rb.response;
+                lines.push(`# Response`);
+                lines.push(`Status: ${r.status} ${r.statusText || ''}`);
+                lines.push(`Time: ${r.timeMs} ms`);
+                lines.push(`Size: ${UI.formatBytes(r.sizeBytes)}${r.truncated ? ' (truncado)' : ''}`);
+                lines.push('');
+                lines.push('## Headers');
+                for (const [k, v] of Object.entries(r.headers || {})) {
+                    lines.push(`${k}: ${v}`);
+                }
+                lines.push('');
+                lines.push('## Body');
+                lines.push(r.body);
+            } else {
+                lines.push('# (sin response todavía)');
+            }
+            return lines.join('\n');
+        }
+        return null;
     }
 };

@@ -101,6 +101,47 @@ export const UI = {
         }
     },
 
+    // Pretty-print + HTML-escape a JSON value, with span classes for syntax coloring.
+    // Returns safe HTML — uses UI.escapeHTML internally; spans are fixed classes, not user input.
+    // Falls back to escaped raw text if input is not valid JSON.
+    formatJSONColored(str) {
+        if (str == null) return '';
+        const s = String(str);
+        let parsed;
+        try { parsed = JSON.parse(s); } catch (e) { return this.escapeHTML(s); }
+
+        const esc = (v) => this.escapeHTML(v);
+        const render = (val, indent) => {
+            if (val === null) return `<span class="rb-json-null">null</span>`;
+            const t = typeof val;
+            if (t === 'string') return `<span class="rb-json-string">"${esc(val)}"</span>`;
+            if (t === 'number') return `<span class="rb-json-number">${esc(String(val))}</span>`;
+            if (t === 'boolean') return `<span class="rb-json-boolean">${val}</span>`;
+            if (Array.isArray(val)) {
+                if (val.length === 0) return '[]';
+                const pad = '  '.repeat(indent + 1);
+                const close = '  '.repeat(indent);
+                const items = val.map(v => `${pad}${render(v, indent + 1)}`).join(',\n');
+                return `[\n${items}\n${close}]`;
+            }
+            if (t === 'object') {
+                const keys = Object.keys(val);
+                if (keys.length === 0) return '{}';
+                const pad = '  '.repeat(indent + 1);
+                const close = '  '.repeat(indent);
+                const items = keys.map(k => `${pad}<span class="rb-json-key">"${esc(k)}"</span>: ${render(val[k], indent + 1)}`).join(',\n');
+                return `{\n${items}\n${close}}`;
+            }
+            return esc(String(val));
+        };
+
+        try {
+            return render(parsed, 0);
+        } catch (e) {
+            return esc(s);
+        }
+    },
+
     formatBytes(n) {
         if (n == null || isNaN(n)) return '0 B';
         if (n < 1024) return `${n} B`;

@@ -1027,3 +1027,33 @@
     font-style: italic;
 }
 .rb-hidden { display: none !important; }
+
+/* ─── Request Builder: response toolbar + JSON syntax colors ─── */
+.rb-response-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+}
+.rb-copy-btn {
+    padding: 3px 10px;
+    background: var(--apple-fill);
+    border: 1px solid var(--apple-separator);
+    color: var(--apple-label);
+    border-radius: var(--apple-radius-sm);
+    cursor: pointer;
+    font-size: 0.7rem;
+    font-weight: 600;
+    transition: background 120ms;
+}
+.rb-copy-btn:hover { background: var(--apple-bg-tertiary); }
+.rb-copy-btn:active { background: var(--apple-blue-soft, rgba(0, 122, 255, 0.12)); }
+.rb-copy-btn.copied { background: var(--apple-green-soft); color: var(--apple-green); }
+
+/* JSON syntax colors (used by UI.formatJSONColored spans) */
+.rb-response-body .rb-json-key    { color: var(--apple-blue);    font-weight: 600; }
+.rb-response-body .rb-json-string { color: var(--apple-green); }
+.rb-response-body .rb-json-number { color: var(--apple-orange); }
+.rb-response-body .rb-json-boolean { color: var(--apple-purple); font-weight: 600; }
+.rb-response-body .rb-json-null   { color: var(--apple-label-tertiary); font-style: italic; }
