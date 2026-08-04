@@ -1454,10 +1454,11 @@ input:checked + .slider:before {
     box-shadow: 0 2px 8px rgba(0,0,0,0.3);
 }
 
-.btn-status.pass.active { background: var(--apple-green); border-color: var(--apple-green); }
+.btn-status.pass.active, .btn-status.ok.active { background: var(--apple-green); border-color: var(--apple-green); color: white; }
 .btn-status.fail.active { background: var(--apple-red); border-color: var(--apple-red); }
+.btn-status.warning.active, .btn-status.warn.active { background: var(--apple-orange); border-color: var(--apple-orange); color: #000; }
 .btn-status.block.active { background: var(--apple-orange); border-color: var(--apple-orange); color: #000; }
-.btn-status.skipped.active { background: var(--apple-label-secondary); border-color: var(--apple-label-secondary); }
+.btn-status.skipped.active, .btn-status.skip.active { background: var(--apple-label-secondary); border-color: var(--apple-label-secondary); }
 
 /* Side Panel System */
 .side-panel-overlay {
@@ -3300,5 +3301,307 @@ input:checked + .slider:before {
 @keyframes ui-skeleton-shimmer {
     0%   { background-position: 200% 0; }
     100% { background-position: -200% 0; }
+}
+
+/* ════════════════════════════════════════════════════════════════
+   Exploratoria — Testing Exploratorio
+   ════════════════════════════════════════════════════════════════ */
+
+/* Subtabs pill switcher (Activas / Finalizadas) — usado dentro del sidebar */
+.expl-subtabs {
+    display: inline-flex;
+    gap: 4px;
+    background: var(--apple-fill);
+    padding: 3px;
+    border-radius: var(--apple-radius-md);
+}
+
+.expl-subtab {
+    padding: 6px 14px;
+    border-radius: var(--apple-radius-sm);
+    cursor: pointer;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--apple-label-secondary);
+    -webkit-user-select: none;
+    user-select: none;
+    transition: all 0.15s;
+}
+
+.expl-subtab.active {
+    background: var(--apple-bg-elevated);
+    color: var(--apple-label);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+/* Status badge para RUNNING / FINISHED de la sesión */
+.expl-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 20px;
+    font-size: 0.62rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+.expl-status-badge.running {
+    background: linear-gradient(135deg, #4cd964, #2db84c);
+    color: white;
+}
+
+.expl-status-badge.finished {
+    background: var(--apple-fill);
+    color: var(--apple-label-secondary);
+}
+
+/* Pills para charter y timebox en la fila de la sesión */
+.expl-charter-pill {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: var(--apple-radius-sm);
+    background: var(--apple-fill);
+    color: var(--apple-label-secondary);
+    font-size: 0.7rem;
+    font-weight: 600;
+    max-width: 100%;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+.expl-timebox-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: var(--apple-radius-sm);
+    background: rgba(255, 159, 10, 0.12);
+    color: #ff9f0a;
+    font-size: 0.7rem;
+    font-weight: 700;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+/* Contenido del flujo cuando se renderiza como card (legacy renderFlowCard) */
+.expl-flow-card {
+    background: var(--apple-bg-elevated);
+    border: 1px solid var(--apple-separator);
+    border-radius: var(--apple-radius-md);
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* Bloque azul lateral con Pasos / Resultado esperado dentro de los tabs */
+.expl-flow-context {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px 12px;
+    margin: 8px 0 10px 0;
+    background: var(--apple-fill);
+    border-radius: var(--apple-radius-sm);
+    border-left: 3px solid var(--apple-blue);
+}
+
+.expl-flow-field {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.expl-flow-label {
+    font-size: 0.66rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--apple-label-secondary);
+    letter-spacing: 0.5px;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+.expl-flow-value {
+    font-size: 0.8rem;
+    line-height: 1.45;
+    color: var(--apple-label);
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+/* Secciones lineales del flow expandido (sin tabs): Pasos, Resultado esperado, etc. */
+.expl-flow-section {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.expl-flow-section-title {
+    font-size: 0.66rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--apple-label-tertiary);
+}
+
+/* Header y key del flujo (usado en legacy renderFlowCard) */
+.expl-flow-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.expl-flow-title {
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: var(--apple-label);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.expl-flow-key {
+    font-size: 0.7rem;
+    color: var(--apple-blue);
+    background: var(--apple-fill);
+    padding: 2px 6px;
+    border-radius: var(--apple-radius-sm);
+    font-weight: 700;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+/* Wrapper de los 5 status buttons (OK / FAIL / WARNING / BLOCK / SKIP) */
+.expl-status-group {
+    display: inline-flex;
+    gap: 4px;
+}
+
+/* Bug draft (título / severidad / pasos / esperado / actual) */
+.expl-bug-draft {
+    margin-top: 12px;
+    padding: 12px;
+    background: var(--apple-fill);
+    border-radius: var(--apple-radius-md);
+    border: 1px solid var(--apple-separator);
+}
+
+.expl-bug-draft-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 8px;
+}
+
+/* Evidencias */
+.expl-evidence-section {
+    margin-top: 12px;
+    padding: 12px;
+    background: var(--apple-fill);
+    border-radius: var(--apple-radius-md);
+    border: 1px solid var(--apple-separator);
+}
+
+.expl-evidence-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.expl-evidence-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 8px;
+    padding: 6px;
+    border-radius: var(--apple-radius-sm);
+    min-height: 60px;
+}
+
+.expl-evidence-item {
+    position: relative;
+    aspect-ratio: 1;
+    border-radius: var(--apple-radius-sm);
+    overflow: hidden;
+    background: var(--apple-bg-elevated);
+    border: 1px solid var(--apple-separator);
+}
+
+.expl-evidence-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    cursor: pointer;
+}
+
+.expl-evidence-item-remove {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    background: rgba(0, 0, 0, 0.6);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 22px;
+    height: 22px;
+    cursor: pointer;
+    font-size: 0.75rem;
+    line-height: 1;
+}
+
+.expl-evidence-item-remove:hover {
+    background: var(--apple-red);
+}
+
+.expl-evidence-empty {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 16px;
+    color: var(--apple-label-secondary);
+    font-size: 0.78rem;
+    border: 2px dashed var(--apple-separator);
+    border-radius: var(--apple-radius-sm);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.expl-evidence-empty:hover {
+    border-color: var(--brand);
+    background: rgba(59, 130, 246, 0.04);
+}
+
+/* Chip rojo de defectos reportados */
+.expl-defect-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 8px;
+    background: var(--apple-red);
+    color: white;
+    border-radius: var(--apple-radius-sm);
+    font-size: 0.7rem;
+    font-weight: 700;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+/* Empty state genérico (cuando la lista está vacía dentro de un card) */
+.expl-empty-state {
+    text-align: center;
+    padding: 40px 24px;
+    color: var(--apple-label-secondary);
+    font-size: 0.88rem;
+}
+
+.expl-empty-state-icon {
+    font-size: 2.4rem;
+    margin-bottom: 8px;
+    display: block;
 }
 

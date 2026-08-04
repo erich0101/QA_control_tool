@@ -388,5 +388,42 @@ export const ApiService = {
     },
     async getMyJiraTickets(projectId, filter, maxResults = 50) {
         return fetch(`/api/jira/projects/${projectId}/my-tickets?filter=${filter}&maxResults=${maxResults}`).then(json);
+    },
+
+    // ── Exploratoria (testing exploratorio) ──
+    async listExploratorySessions(projectId, status) {
+        let url = `/api/explorations/sessions?project_id=${projectId}`;
+        if (status) url += `&status=${status}`;
+        return fetch(url).then(json);
+    },
+    async startExploratorySession(data) {
+        return fetch('/api/explorations/sessions', {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers
+        }).then(json);
+    },
+    async getExploratorySession(runId) {
+        return fetch(`/api/explorations/sessions/${runId}`).then(json);
+    },
+    async addExploratoryFlow(runId, data) {
+        return fetch(`/api/explorations/sessions/${runId}/flows`, {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers
+        }).then(json);
+    },
+    async executeExploratoryFlow(tcId, payload) {
+        return fetch(`/api/explorations/flows/${tcId}/execute`, {
+            method: 'POST',
+            body: JSON.stringify(payload),
+            headers
+        }).then(json);
+    },
+    async finishExploratorySession(runId) {
+        return fetch(`/api/explorations/sessions/${runId}/finish`, { method: 'POST' }).then(json);
+    },
+    async deleteEvidence(attachmentId) {
+        return fetch(`/api/evidence/${attachmentId}`, { method: 'DELETE' }).then(json);
     }
 };

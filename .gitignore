@@ -207,3 +207,4 @@ curl-parser-test.mjs
 # PLANES DE TRABAJO DE AGENTES (artefactos, no referencia)
 # ============================================================
 docs/plans/
+mimo_dream_tables.py

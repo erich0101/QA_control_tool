@@ -61,6 +61,12 @@ export const Modals = {
                 padding: 0;
                 overflow: visible;
                 margin: auto;
+                position: fixed;
+                inset: 0;
+                width: fit-content;
+                height: fit-content;
+                max-width: calc(100vw - 32px);
+                max-height: calc(100vh - 32px);
             }
             .modal-native::backdrop {
                 background: rgba(0, 0, 0, 0.5);

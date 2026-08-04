@@ -61,6 +61,9 @@ await query(`ALTER TABLE qa_defects ADD COLUMN IF NOT EXISTS observations TEXT`)
         await query(`ALTER TABLE qa_test_runs ADD COLUMN IF NOT EXISTS accumulated_seconds INTEGER DEFAULT 0`);
         await query(`ALTER TABLE qa_test_runs ADD COLUMN IF NOT EXISTS last_resume_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP`);
         await query(`ALTER TABLE qa_test_runs ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'RUNNING'`);
+        // ── Exploratory Testing (módulo Exploratoria) ──
+        await query(`ALTER TABLE qa_test_runs ADD COLUMN IF NOT EXISTS charter TEXT`);
+        await query(`ALTER TABLE qa_test_runs ADD COLUMN IF NOT EXISTS timebox_minutes INTEGER`);
         
         // Migraciones para qa_use_cases
         await query(`ALTER TABLE qa_use_cases ADD COLUMN IF NOT EXISTS created_by INTEGER REFERENCES qa_users(id)`);
@@ -84,6 +87,9 @@ await query(`ALTER TABLE qa_defects ADD COLUMN IF NOT EXISTS observations TEXT`)
         await query(`ALTER TABLE qa_test_cases ADD COLUMN IF NOT EXISTS updated_by INTEGER REFERENCES qa_users(id)`);
         await query(`ALTER TABLE qa_test_cases ADD COLUMN IF NOT EXISTS jira_epic_key TEXT`);
         await query(`ALTER TABLE qa_test_cases ADD COLUMN IF NOT EXISTS observations TEXT`);
+        await query(`ALTER TABLE qa_test_cases ADD COLUMN IF NOT EXISTS is_exploratory BOOLEAN DEFAULT false`);
+        await query(`CREATE INDEX IF NOT EXISTS idx_tc_is_exploratory ON qa_test_cases (is_exploratory) WHERE is_exploratory = true`);
+        await query(`CREATE INDEX IF NOT EXISTS idx_runs_proj_type ON qa_test_runs (project_id, run_type)`);
 
         // qa_executions: run_id lo usa server.js:2463+ en cada INSERT de ejecucion
         await query(`ALTER TABLE qa_executions ADD COLUMN IF NOT EXISTS run_id INTEGER REFERENCES qa_test_runs(id) ON DELETE CASCADE`);
@@ -408,6 +414,14 @@ app.put('/api/users/:id', requireAuth, requireAdmin, async (req, res) => {
 // ══════════════════════════════════════════════════════════════
 // Middleware global para proteger todas las rutas siguientes
 app.use('/api', requireAuth);
+
+// ══════════════════════════════════════════════════════════════
+// ── MÓDULOS EXTERNOS (lógica de negocio encapsulada) ──
+// ══════════════════════════════════════════════════════════════
+
+// Testing Exploratorio (sesiones ad-hoc) — ver modules/qa-explorations/index.js
+const explorationsModule = require('./modules/qa-explorations');
+app.use('/api/explorations', explorationsModule);
 
 // ══════════════════════════════════════════════════════════════
 // ══════════════════════════════════════════════════════════════
@@ -3393,7 +3407,26 @@ app.put('/api/test-cases/:id', requireAuth, async (req, res) => {
             const tcInfo = await query(`SELECT suite_id FROM qa_test_cases WHERE id = ?`, [tcId]);
             const suiteId = tcInfo.rows[0]?.suite_id;
             const suiteInfo = await query(`SELECT active_run_id FROM qa_test_suites WHERE id = ?`, [suiteId]);
-            const runId = suiteInfo.rows[0]?.active_run_id;
+            let runId = suiteInfo.rows[0]?.active_run_id;
+
+            // Si no hay run activo pero el usuario solo quiere actualizar el
+            // obtained_result de un TC ya ejecutado, permitimos buscar la
+            // última ejecución del TC y actualizarla in-place.
+            if (!runId && obtained_result !== undefined && status === undefined) {
+                const lastExec = await query(
+                    `SELECT id FROM qa_executions WHERE tc_id = ? ORDER BY id DESC LIMIT 1`,
+                    [tcId]
+                );
+                if (lastExec.rows.length > 0) {
+                    await query(
+                        `UPDATE qa_executions SET obtained_result = ? WHERE id = ?`,
+                        [obtained_result, lastExec.rows[0].id]
+                    );
+                    return res.json({ ok: true, execution_id: lastExec.rows[0].id, mode: 'obtained_result_only' });
+                }
+                // Sin ejecuciones previas: no se puede guardar.
+                return res.status(400).json({ error: 'No hay ejecuciones previas para este TC y no hay un run activo. Iniciá una ejecución primero.' });
+            }
 
             if (!runId) {
                 return res.status(400).json({ error: 'No hay un ciclo de ejecución activo para esta suite. Inicia uno para registrar resultados.' });
@@ -3408,13 +3441,13 @@ app.put('/api/test-cases/:id', requireAuth, async (req, res) => {
                 if (status !== undefined) { execFields.push('status = ?'); execParams.push(status); }
                 if (observations !== undefined) { execFields.push('observations = ?'); execParams.push(observations); }
                 if (obtained_result !== undefined) { execFields.push('obtained_result = ?'); execParams.push(obtained_result); }
-                
+
                 if (execFields.length > 0) {
                     execParams.push(execId);
                     await query(`UPDATE qa_executions SET ${execFields.join(', ')} WHERE id = ?`, execParams);
                 }
             } else {
-                const insertRes = await query(`INSERT INTO qa_executions (tc_id, run_id, tester, status, observations, obtained_result) VALUES (?, ?, ?, ?, ?, ?)`, 
+                const insertRes = await query(`INSERT INTO qa_executions (tc_id, run_id, tester, status, observations, obtained_result) VALUES (?, ?, ?, ?, ?, ?)`,
                     [tcId, runId, req.user.name, status || 'PENDING', observations || '', obtained_result || '']);
                 execId = insertRes.lastID;
             }
@@ -4239,7 +4272,7 @@ app.get('/api/evidence/:id', requireAuth, async (req, res) => {
 
 app.post('/api/evidence', requireAuth, upload.single('evidence'), async (req, res) => {
     try {
-        const { tc_id, defect_id, suggestion_id, category } = req.body;
+        const { tc_id, defect_id, suggestion_id, execution_id, category } = req.body;
         const file = req.file;
         if (!file) return res.status(400).json({ error: 'Archivo no recibido' });
 
@@ -4253,6 +4286,13 @@ app.post('/api/evidence', requireAuth, upload.single('evidence'), async (req, re
                 INSERT INTO qa_attachments (suggestion_id, file_name, mime_type, file_data, evidence_category)
                 VALUES (?, ?, ?, ?, ?)
             `, [suggestion_id, file.originalname, file.mimetype, file.buffer, category || 'GENERAL']);
+        } else if (execution_id) {
+            // Adjuntar a una ejecución específica (usado por Exploratoria y otros
+            // flujos donde ya tenemos el execution_id resultante del guardado).
+            await query(`
+                INSERT INTO qa_attachments (execution_id, file_name, mime_type, file_data, evidence_category)
+                VALUES (?, ?, ?, ?, ?)
+            `, [parseInt(execution_id, 10), file.originalname, file.mimetype, file.buffer, category || 'GENERAL']);
         } else {
             const execRes = await query(`SELECT id FROM qa_executions WHERE tc_id = ? ORDER BY id DESC LIMIT 1`, [tc_id]);
             if (execRes.rows.length === 0) return res.status(400).json({ error: 'No hay una ejecución reciente para este Test Case' });

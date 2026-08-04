@@ -11,6 +11,7 @@ import { HistoryTab } from './components/history-tab.js';
 import { JiraTrackingTab } from './components/jira-tracking-tab.js';
 import { MiJiraTab } from './components/mi-jira-tab.js';
 import { HallazgosTab } from './components/hallazgos-tab.js';
+import { ExploratoriaTab } from './components/exploratoria-tab.js';
 import { ToolsTab } from './components/tools-tab.js';
 import { UI } from './utils/ui-utils.js';
 import { RealtimeService } from './services/realtime.js';
@@ -100,6 +101,7 @@ async function init() {
         ExecutionTab.setupRealtimeListener();
         HistoryTab.setupRealtimeListener();
         HallazgosTab.setupRealtimeListener();
+        ExploratoriaTab.bindRealtimeListener();
         JiraTrackingTab.setupRealtimeListener();
         MiJiraTab.setupRealtimeListener();
 
@@ -112,7 +114,7 @@ async function init() {
     }
 }
 
-function renderActiveTab(container, state) {
+async function renderActiveTab(container, state) {
     const containerScroll = container.scrollTop;
     const windowScrollY = window.scrollY;
 
@@ -147,6 +149,9 @@ function renderActiveTab(container, state) {
             break;
         case 'hallazgos':
             HallazgosTab.render(container);
+            break;
+        case 'exploratoria':
+            await ExploratoriaTab.render(container);
             break;
         case 'mi-jira':
             MiJiraTab.render(container);

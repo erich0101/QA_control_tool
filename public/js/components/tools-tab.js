@@ -3,7 +3,9 @@ import { ApiService } from '../services/api.js';
 
 const SUBTOOLS = [
     { id: 'base64', icon: '🔤', label: 'Base64', desc: 'Encode / Decode' },
-    { id: 'request-builder', icon: '🚀', label: 'Request Builder', desc: 'HTTP requests' }
+    { id: 'request-builder', icon: '🚀', label: 'Request Builder', desc: 'HTTP requests' },
+    { id: 'token-decoder', icon: '🔐', label: 'Token Decoder', desc: 'JWT y tokens opacos' },
+    { id: 'cuit-generator', icon: '🆔', label: 'CUIT Generator', desc: 'Generar CUITs válidos' }
 ];
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
@@ -152,6 +154,18 @@ export const ToolsTab = {
             response: null,
             error: null,
             loading: false
+        },
+        tokenDecoder: {
+            input: '',
+            secret: '',
+            showSecret: false,
+            b64urlEncoded: true
+        },
+        cuitGenerator: {
+            quantity: 1,
+            results: [],          // ['20123456780', ...]
+            lastQuantity: 0,      // última cantidad generada (para saber si mostrar CSV)
+            generating: false
         }
     },
 
@@ -214,6 +228,14 @@ export const ToolsTab = {
         if (this.state.activeTool === 'request-builder') {
             pane.innerHTML = this.renderRequestBuilder();
             this.bindRequestBuilder(container);
+        }
+        if (this.state.activeTool === 'token-decoder') {
+            pane.innerHTML = this.renderTokenDecoder();
+            this.bindTokenDecoder(container);
+        }
+        if (this.state.activeTool === 'cuit-generator') {
+            pane.innerHTML = this.renderCuitGenerator();
+            this.bindCuitGenerator(container);
         }
     },
 
@@ -544,8 +566,961 @@ export const ToolsTab = {
     },
 
     // ══════════════════════════════════════════════════════════════
-    // ── REQUEST BUILDER ──
+    // ── CUIT GENERATOR ──
     // ══════════════════════════════════════════════════════════════
+
+    // Genera un CUIT válido con dígito verificador módulo 11.
+    // Prefijos típicos: 20, 24, 27, 30, 34. Si el verificador da 10, regenera.
+    _genCuit() {
+        const prefix = [20, 24, 27, 30, 34][Math.random() * 4.9 | 0];
+        const body = (Math.random() * 89999999 + 10000000) | 0;
+        const digits = `${prefix}${body}`;
+        let suma = 0;
+        for (let i = 0; i < digits.length; i++) {
+            suma += parseInt(digits[digits.length - i - 1], 10) * (2 + (i % 6));
+        }
+        // El algoritmo del usuario es: verificador = 11 - (suma % 11), con la
+        // corrección de que si el resultado es 11, se reemplaza por 0. Si da 10,
+        // se regenera.
+        const raw = 11 - (suma % 11);
+        const verificador = raw === 11 ? 0 : raw;
+        if (verificador === 10) return this._genCuit();
+        return `${digits}${verificador}`;
+    },
+
+    // Genera N CUITs únicos. Devuelve array de strings (solo dígitos, sin formato).
+    _genCuits(n) {
+        const set = new Set();
+        const out = [];
+        let attempts = 0;
+        const maxAttempts = n * 10;
+        while (out.length < n && attempts < maxAttempts) {
+            const c = this._genCuit();
+            if (!set.has(c)) {
+                set.add(c);
+                out.push(c);
+            }
+            attempts++;
+        }
+        return out;
+    },
+
+    // ── Render: CUIT Generator ──
+
+    renderCuitGenerator() {
+        const cg = this.state.cuitGenerator;
+        const qty = cg.quantity || 0;
+        const results = cg.results || [];
+        const hasResults = results.length > 0;
+        const showCsv = cg.lastQuantity > 10;
+        const isGenerating = !!cg.generating;
+
+        // Lista visible solo si hay <= 50 (UX: no inundar la pantalla).
+        const visibleResults = results.slice(0, 50);
+        const moreCount = results.length - visibleResults.length;
+
+        const listHtml = !hasResults ? `
+            <div class="cg-empty">
+                <div class="cg-empty-icon">🆔</div>
+                <div>Ingresá una cantidad y tocá <strong>Generar</strong> para crear CUITs válidos.</div>
+            </div>
+        ` : `
+            <div class="cg-result-meta">
+                <span class="cg-pill cg-pill-info">${results.length} CUIT${results.length === 1 ? '' : 's'} generado${results.length === 1 ? '' : 's'}</span>
+                ${cg.lastQuantity > 10 ? '<span class="cg-pill cg-pill-warn">Más de 10 — usá Descargar CSV para exportarlos</span>' : ''}
+            </div>
+            <div class="cg-result-list">
+                ${visibleResults.map((cuit, i) => {
+                    const formatted = this._formatCuit(cuit);
+                    return `
+                        <div class="cg-result-row">
+                            <span class="cg-result-index">#${String(i + 1).padStart(4, '0')}</span>
+                            <span class="cg-result-value" data-cg-cuit="${cuit}">${UI.escapeHTML(formatted)}</span>
+                            <button class="cg-copy-one" data-cg-cuit="${cuit}" title="Copiar este CUIT">
+                                <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M5 4H4C2.9 4 2 4.9 2 6V13C2 14.1 2.9 15 4 15H11C12.1 15 13 14.1 13 13V12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M11 2H6C4.9 2 4 2.9 4 4V11C4 12.1 4.9 13 6 13H13C14.1 13 15 12.1 15 11V6L11 2Z" fill="currentColor" opacity="0.3"/><path d="M11 2V6H15" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+                            </button>
+                        </div>
+                    `;
+                }).join('')}
+                ${moreCount > 0 ? `<div class="cg-result-more">…y ${moreCount.toLocaleString()} más (no se muestran en pantalla)</div>` : ''}
+            </div>
+        `;
+
+        return `
+            <div class="ts-tool-header">
+                <div>
+                    <h2>🆔 CUIT Generator</h2>
+                    <div class="ts-tool-sub">Genera CUITs válidos con dígito verificador módulo 11. Prefijos: 20 / 24 / 27 / 30 / 34. Procesamiento 100% local.</div>
+                </div>
+            </div>
+
+            <div class="glass-card cg-controls">
+                <div class="cg-controls-row">
+                    <div class="cg-input-group">
+                        <label class="cg-label" for="cg-quantity">Cantidad</label>
+                        <input type="number" id="cg-quantity" min="1" max="50000" value="${qty}" class="cg-input" />
+                        <span class="cg-input-hint">1 – 50.000</span>
+                    </div>
+                    <div class="cg-presets">
+                        <button class="btn btn-ghost btn-sm cg-preset" data-cg-preset="1">1</button>
+                        <button class="btn btn-ghost btn-sm cg-preset" data-cg-preset="5">5</button>
+                        <button class="btn btn-ghost btn-sm cg-preset" data-cg-preset="10">10</button>
+                        <button class="btn btn-ghost btn-sm cg-preset" data-cg-preset="100">100</button>
+                        <button class="btn btn-ghost btn-sm cg-preset" data-cg-preset="1000">1.000</button>
+                        <button class="btn btn-ghost btn-sm cg-preset" data-cg-preset="50000">50.000</button>
+                    </div>
+                    <button class="btn btn-primary cg-btn-generate" id="cg-btn-generate" ${isGenerating ? 'disabled' : ''}>
+                        ${isGenerating ? '⏳ Generando…' : '🎲 Generar'}
+                    </button>
+                </div>
+            </div>
+
+            <div class="cg-output">
+                <div class="cg-output-header">
+                    <h3 style="margin:0; font-size:0.95rem; font-weight:700; color:var(--apple-label);">Resultados</h3>
+                    ${hasResults ? `
+                        <div class="cg-output-actions">
+                            <button class="btn btn-ghost btn-sm" id="cg-copy-all" title="Copiar todos los CUITs (uno por línea)">
+                                📋 Copiar todos
+                            </button>
+                            ${showCsv ? `
+                                <button class="btn btn-primary btn-sm" id="cg-download-csv" title="Descargar como archivo CSV">
+                                    ⬇️ Descargar CSV
+                                </button>
+                            ` : ''}
+                            <button class="btn btn-ghost btn-sm" id="cg-clear" title="Limpiar resultados">
+                                🗑️ Limpiar
+                            </button>
+                        </div>
+                    ` : ''}
+                </div>
+                ${listHtml}
+            </div>
+        `;
+    },
+
+    // Formatea un CUIT como XX-XXXXXXXX-X (estándar AFIP)
+    _formatCuit(cuit) {
+        const s = String(cuit);
+        if (s.length !== 11) return s;
+        return `${s.slice(0, 2)}-${s.slice(2, 10)}-${s.slice(10)}`;
+    },
+
+    // ── Bind: CUIT Generator ──
+
+    bindCuitGenerator(container) {
+        const pane = container.querySelector('#tools-main-pane');
+        if (!pane) return;
+        const cg = this.state.cuitGenerator;
+
+        // Input de cantidad
+        const qtyInput = pane.querySelector('#cg-quantity');
+        if (qtyInput) {
+            qtyInput.addEventListener('input', () => {
+                let v = parseInt(qtyInput.value, 10);
+                if (isNaN(v) || v < 1) v = 1;
+                if (v > 50000) v = 50000;
+                cg.quantity = v;
+            });
+            qtyInput.addEventListener('blur', () => {
+                // Forzar render para que el botón se habilite/deshabilite
+                if (parseInt(qtyInput.value, 10) !== cg.quantity) {
+                    pane.innerHTML = this.renderCuitGenerator();
+                    this.bindCuitGenerator(container);
+                }
+            });
+            qtyInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    pane.querySelector('#cg-btn-generate')?.click();
+                }
+            });
+        }
+
+        // Presets
+        pane.querySelectorAll('.cg-preset').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const n = parseInt(btn.dataset.cgPreset, 10);
+                cg.quantity = n;
+                pane.innerHTML = this.renderCuitGenerator();
+                this.bindCuitGenerator(container);
+                const inp = pane.querySelector('#cg-quantity');
+                if (inp) inp.focus();
+            });
+        });
+
+        // Generar
+        pane.querySelector('#cg-btn-generate')?.addEventListener('click', () => {
+            this._cgGenerate(container);
+        });
+
+        // Copiar uno
+        pane.querySelectorAll('.cg-copy-one').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const cuit = btn.dataset.cgCuit;
+                const ok = await copyToClipboard(cuit);
+                UI.toast(ok ? `Copiado: ${this._formatCuit(cuit)}` : 'Error al copiar', ok ? 'ok' : 'error');
+            });
+        });
+
+        // Click en el valor → copiar
+        pane.querySelectorAll('.cg-result-value').forEach(el => {
+            el.addEventListener('click', async () => {
+                const cuit = el.dataset.cgCuit;
+                const ok = await copyToClipboard(cuit);
+                UI.toast(ok ? `Copiado: ${this._formatCuit(cuit)}` : 'Error al copiar', ok ? 'ok' : 'error');
+            });
+        });
+
+        // Copiar todos
+        pane.querySelector('#cg-copy-all')?.addEventListener('click', async () => {
+            if (!cg.results.length) return;
+            const text = cg.results.join('\n');
+            const ok = await copyToClipboard(text);
+            UI.toast(ok ? `${cg.results.length} CUITs copiados al portapapeles` : 'Error al copiar', ok ? 'ok' : 'error');
+        });
+
+        // Descargar CSV (solo se muestra si > 10)
+        pane.querySelector('#cg-download-csv')?.addEventListener('click', () => {
+            this._cgDownloadCsv();
+        });
+
+        // Limpiar
+        pane.querySelector('#cg-clear')?.addEventListener('click', () => {
+            cg.results = [];
+            cg.lastQuantity = 0;
+            pane.innerHTML = this.renderCuitGenerator();
+            this.bindCuitGenerator(container);
+        });
+    },
+
+    _cgGenerate(container) {
+        const cg = this.state.cuitGenerator;
+        const n = cg.quantity;
+        if (!n || n < 1 || n > 50000) {
+            UI.toast('Cantidad inválida (1-50.000)', 'error');
+            return;
+        }
+        // Para > 1000, usar requestIdleCallback si está disponible para no bloquear
+        const useAsync = n > 2000;
+        if (useAsync) {
+            cg.generating = true;
+            const pane = container.querySelector('#tools-main-pane');
+            if (pane) {
+                pane.innerHTML = this.renderCuitGenerator();
+                this.bindCuitGenerator(container);
+            }
+            UI.showLoading();
+            // Chunks via setTimeout
+            setTimeout(() => {
+                const results = this._genCuits(n);
+                cg.results = results;
+                cg.lastQuantity = n;
+                cg.generating = false;
+                UI.hideLoading();
+                const p2 = container.querySelector('#tools-main-pane');
+                if (p2) {
+                    p2.innerHTML = this.renderCuitGenerator();
+                    this.bindCuitGenerator(container);
+                }
+                UI.toast(`✅ ${results.length.toLocaleString()} CUITs generados`);
+            }, 30);
+        } else {
+            const results = this._genCuits(n);
+            cg.results = results;
+            cg.lastQuantity = n;
+            const pane = container.querySelector('#tools-main-pane');
+            if (pane) {
+                pane.innerHTML = this.renderCuitGenerator();
+                this.bindCuitGenerator(container);
+            }
+            UI.toast(`✅ ${results.length.toLocaleString()} CUITs generados`);
+        }
+    },
+
+    _cgDownloadCsv() {
+        const cg = this.state.cuitGenerator;
+        if (!cg.results.length) {
+            UI.toast('No hay CUITs para descargar', 'warn');
+            return;
+        }
+        // CSV plano: header + cada CUIT en la primera columna
+        const lines = ['cuit'];
+        for (const c of cg.results) lines.push(c);
+        const csv = lines.join('\n') + '\n';
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+        a.download = `cuits-${cg.results.length}-${stamp}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        UI.toast(`⬇️ Descargado ${cg.results.length.toLocaleString()} CUITs (CSV)`);
+    },
+
+    // ══════════════════════════════════════════════════════════════
+    // ── TOKEN DECODER ──
+    // ══════════════════════════════════════════════════════════════
+
+    // base64url → string (acepta string sin padding, ya que JWT lo omite)
+    _b64urlDecode(str) {
+        if (!str) return '';
+        const normalized = str.replace(/-/g, '+').replace(/_/g, '/');
+        const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);
+        try {
+            const bin = atob(padded);
+            // Si los bytes son UTF-8 válido los devolvemos como string; si no, los
+            // devolvemos como string latin1 (útil para mostrar binarios).
+            try {
+                return new TextDecoder('utf-8', { fatal: true }).decode(
+                    Uint8Array.from(bin, c => c.charCodeAt(0))
+                );
+            } catch (_e) {
+                return bin;
+            }
+        } catch (err) {
+            throw new Error('Base64 inválido');
+        }
+    },
+
+    // Devuelve bytes crudos a partir de base64url
+    _b64urlToBytes(str) {
+        const normalized = str.replace(/-/g, '+').replace(/_/g, '/');
+        const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);
+        const bin = atob(padded);
+        return Uint8Array.from(bin, c => c.charCodeAt(0));
+    },
+
+    // Intenta parsear un JWT. Devuelve { ok, value: {header, payload, signature, headerB64, payloadB64, signatureB64} }
+    // o { ok: false, error }.
+    _parseJwt(token) {
+        const parts = token.split('.');
+        if (parts.length !== 3) {
+            return { ok: false, error: `Se esperaban 3 segmentos separados por '.', hay ${parts.length}` };
+        }
+        const [headerB64, payloadB64, signatureB64] = parts;
+        if (!headerB64 || !payloadB64) {
+            return { ok: false, error: 'Segmentos vacíos' };
+        }
+        let header, payload;
+        try {
+            header = JSON.parse(this._b64urlDecode(headerB64));
+        } catch (err) {
+            return { ok: false, error: `Header no es JSON válido: ${err.message}` };
+        }
+        try {
+            payload = JSON.parse(this._b64urlDecode(payloadB64));
+        } catch (err) {
+            return { ok: false, error: `Payload no es JSON válido: ${err.message}` };
+        }
+        return {
+            ok: true,
+            value: { header, payload, signature: signatureB64, headerB64, payloadB64, signatureB64 }
+        };
+    },
+
+    // Detección heurística del tipo de token
+    _detectTokenType(input) {
+        const trimmed = input.trim();
+        if (!trimmed) return { type: 'empty' };
+        if (trimmed.split('.').length === 3 && /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*$/.test(trimmed)) {
+            return { type: 'jwt' };
+        }
+        if (/^[0-9a-fA-F]+$/.test(trimmed)) {
+            const len = trimmed.length;
+            if (len === 32) return { type: 'hash', hashKind: 'MD5' };
+            if (len === 40) return { type: 'hash', hashKind: 'SHA-1' };
+            if (len === 64) return { type: 'hash', hashKind: 'SHA-256' };
+            if (len === 128) return { type: 'hash', hashKind: 'SHA-512' };
+            return { type: 'hex' };
+        }
+        if (/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(trimmed)) {
+            return { type: 'uuid' };
+        }
+        if (/^[A-Za-z0-9+/_-]+=*$/.test(trimmed) && trimmed.length >= 8 && trimmed.length % 4 === 0) {
+            // Posible base64 — verificar que decodifica a algo legible
+            try {
+                const decoded = atob(trimmed.replace(/-/g, '+').replace(/_/g, '/'));
+                const printable = decoded.replace(/[^\x20-\x7E]/g, '');
+                if (printable.length / decoded.length > 0.85) {
+                    return { type: 'base64', decodedPreview: decoded.slice(0, 200) };
+                }
+            } catch (_e) { /* no es base64 */ }
+        }
+        return { type: 'opaque' };
+    },
+
+    // Entropía de Shannon (bits por carácter)
+    _shannonEntropy(str) {
+        if (!str) return 0;
+        const counts = {};
+        for (const c of str) counts[c] = (counts[c] || 0) + 1;
+        const len = str.length;
+        let h = 0;
+        for (const c in counts) {
+            const p = counts[c] / len;
+            h -= p * Math.log2(p);
+        }
+        return h;
+    },
+
+    // Análisis de caracteres (mayúsc/minúsc/dígitos/símbolos)
+    _charBreakdown(str) {
+        let upper = 0, lower = 0, digit = 0, symbol = 0, other = 0;
+        for (const c of str) {
+            if (c >= 'A' && c <= 'Z') upper++;
+            else if (c >= 'a' && c <= 'z') lower++;
+            else if (c >= '0' && c <= '9') digit++;
+            else if (/[\s\-_./+=:@]/.test(c)) symbol++;
+            else other++;
+        }
+        return { upper, lower, digit, symbol, other, total: str.length };
+    },
+
+    // HS256 verification. Devuelve { ok: true } si la firma coincide.
+    // Usa Web Crypto API (async), pero esta función helper es síncrona y devuelve un Promise.
+    async _verifyHs256(headerB64, payloadB64, signatureB64, secret) {
+        if (!secret) return { ok: false, error: 'Sin secret' };
+        if ((headerB64.match(/\./g) || []).length !== 1) {
+            return { ok: false, error: 'Header no tiene el formato esperado' };
+        }
+        try {
+            const enc = new TextEncoder();
+            const key = await crypto.subtle.importKey(
+                'raw',
+                enc.encode(secret),
+                { name: 'HMAC', hash: 'SHA-256' },
+                false,
+                ['sign']
+            );
+            const data = enc.encode(`${headerB64}.${payloadB64}`);
+            const sig = await crypto.subtle.sign('HMAC', key, data);
+            const expectedB64 = btoa(String.fromCharCode(...new Uint8Array(sig)))
+                .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+            const provided = signatureB64.replace(/=+$/, '');
+            return { ok: expectedB64 === provided };
+        } catch (err) {
+            return { ok: false, error: err.message };
+        }
+    },
+
+    // Devuelve info sobre claims JWT estándar
+    _describeClaims(payload) {
+        if (!payload || typeof payload !== 'object') return [];
+        const CLAIM_LABELS = {
+            iss: 'Issuer',
+            sub: 'Subject',
+            aud: 'Audience',
+            exp: 'Expires',
+            nbf: 'Not before',
+            iat: 'Issued at',
+            jti: 'JWT ID',
+            name: 'Name',
+            email: 'Email',
+            role: 'Role',
+            roles: 'Roles',
+            scope: 'Scope',
+            scopes: 'Scopes',
+            permissions: 'Permissions'
+        };
+        const out = [];
+        const nowSec = Math.floor(Date.now() / 1000);
+        for (const k of Object.keys(payload)) {
+            const v = payload[k];
+            const isTimestamp = ['exp', 'nbf', 'iat', 'auth_time'].includes(k) && typeof v === 'number';
+            let display = v;
+            let status = null;
+            if (isTimestamp) {
+                const iso = new Date(v * 1000).toISOString();
+                const date = new Date(v * 1000).toLocaleString();
+                if (k === 'exp') {
+                    status = v * 1000 < Date.now() ? 'expired' : 'valid';
+                } else if (k === 'nbf') {
+                    status = v * 1000 > Date.now() ? 'pending' : 'valid';
+                }
+                display = `${date} (${iso})`;
+            }
+            out.push({ key: k, label: CLAIM_LABELS[k] || k, value: display, rawValue: v, isTimestamp, status });
+        }
+        // Ordenar: timestamps primero, luego alfabético
+        out.sort((a, b) => {
+            if (a.isTimestamp && !b.isTimestamp) return -1;
+            if (!a.isTimestamp && b.isTimestamp) return 1;
+            return a.key.localeCompare(b.key);
+        });
+        return out;
+    },
+
+    // ── Render: Token Decoder (jwt.io-style) ──
+
+    // Coloriza JSON con tokens estilo jwt.io (sintaxis coloreada). Devuelve HTML seguro.
+    _tdJsonColorize(value, indent = 0) {
+        const pad = (n) => '  '.repeat(n);
+        const esc = (s) => UI.escapeHTML(s);
+        if (value === null) return `<span class="td-tok-null">null</span>`;
+        if (typeof value === 'boolean') return `<span class="td-tok-boolean">${value}</span>`;
+        if (typeof value === 'number') return `<span class="td-tok-number">${value}</span>`;
+        if (typeof value === 'string') {
+            // Si parece un timestamp Unix (10 dígitos) y la key es iat/exp/nbf/auth_time, lo marcamos
+            return `<span class="td-tok-string">"${esc(value)}"</span>`;
+        }
+        if (Array.isArray(value)) {
+            if (value.length === 0) return `<span class="td-tok-punct">[</span><span class="td-tok-punct">]</span>`;
+            const items = value.map((v, i) => {
+                const isLast = i === value.length - 1;
+                return `${pad(indent + 1)}${this._tdJsonColorize(v, indent + 1)}${isLast ? '' : '<span class="td-tok-punct">,</span>'}`;
+            }).join('\n');
+            return `<span class="td-tok-punct">[</span>\n${items}\n${pad(indent)}<span class="td-tok-punct">]</span>`;
+        }
+        if (typeof value === 'object') {
+            const keys = Object.keys(value);
+            if (keys.length === 0) return `<span class="td-tok-punct">{</span><span class="td-tok-punct">}</span>`;
+            const items = keys.map((k, i) => {
+                const isLast = i === keys.length - 1;
+                return `${pad(indent + 1)}<button type="button" class="td-tok-key-btn" data-td-key="${esc(k)}" data-td-claim-key="${esc(k)}" title="Ver descripción"><span class="td-tok-key">"${esc(k)}"</span></button><span class="td-tok-punct">:</span> ${this._tdJsonColorize(value[k], indent + 1)}${isLast ? '' : '<span class="td-tok-punct">,</span>'}`;
+            }).join('\n');
+            return `<span class="td-tok-punct">{</span>\n${items}\n${pad(indent)}<span class="td-tok-punct">}</span>`;
+        }
+        return esc(String(value));
+    },
+
+    // Devuelve el HTML del JSON formateado con tokens coloreados
+    _tdJsonHtml(value) {
+        try {
+            return this._tdJsonColorize(value, 0);
+        } catch (_e) {
+            return UI.escapeHTML(JSON.stringify(value, null, 2));
+        }
+    },
+
+    // Descripciones estilo jwt.io para claims estándar
+    _tdClaimDescription(key) {
+        const DESCRIPTIONS = {
+            iss: 'Issuer — Identifies the principal that issued the JWT.',
+            sub: 'Subject — Identifies the principal that is the subject of the JWT.',
+            aud: 'Audience — Identifies the recipients that the JWT is intended for.',
+            exp: 'Expiration Time — Identifies the expiration time on or after which the JWT MUST NOT be accepted.',
+            nbf: 'Not Before — Identifies the time before which the JWT MUST NOT be accepted.',
+            iat: 'Issued At — Identifies the time at which the JWT was issued.',
+            jti: 'JWT ID — Provides a unique identifier for the JWT.',
+            typ: 'Type — Used to declare the type of the token.',
+            alg: 'Algorithm — Identifies the algorithm used to sign the token.',
+            name: 'Name — User\'s full name.',
+            email: 'Email — User\'s email address.',
+            role: 'Role — User\'s role.',
+            roles: 'Roles — User\'s roles.',
+            scope: 'Scope — OAuth2 scopes granted.',
+            scopes: 'Scopes — OAuth2 scopes granted.',
+            permissions: 'Permissions — User\'s permissions.'
+        };
+        return DESCRIPTIONS[key] || null;
+    },
+
+    // Formatea un Unix timestamp a texto legible + ISO
+    _tdFormatTimestamp(v) {
+        if (typeof v !== 'number') return null;
+        const date = new Date(v * 1000);
+        if (isNaN(date.getTime())) return null;
+        const localStr = date.toLocaleString();
+        const isoStr = date.toISOString();
+        // Para timestamps razonables (después de 1970 y antes de 2100), mostrar formato relativo
+        const now = Date.now();
+        const ts = v * 1000;
+        let rel = '';
+        const diffSec = Math.floor((ts - now) / 1000);
+        const absDiff = Math.abs(diffSec);
+        if (absDiff < 60) rel = `(en ${absDiff}s)`;
+        else if (absDiff < 3600) rel = `(en ${Math.round(absDiff / 60)} min)`;
+        else if (absDiff < 86400) rel = `(en ${Math.round(absDiff / 3600)} h)`;
+        else if (absDiff < 86400 * 30) rel = `(en ${Math.round(absDiff / 86400)} d)`;
+        else if (absDiff < 86400 * 365) rel = `(en ${Math.round(absDiff / 86400 / 30)} mo)`;
+        else rel = `(en ${Math.round(absDiff / 86400 / 365)} y)`;
+        return { local: localStr, iso: isoStr, rel: diffSec < 0 ? `(hace ${rel.replace('en ', '')})` : rel };
+    },
+
+    // Determina el status de un timestamp
+    _tdTimestampStatus(key, v) {
+        if (typeof v !== 'number') return null;
+        const ts = v * 1000;
+        const now = Date.now();
+        if (key === 'exp') return ts < now ? 'expired' : 'valid';
+        if (key === 'nbf') return ts > now ? 'pending' : 'valid';
+        if (key === 'iat') return null; // iat siempre es histórico
+        return null;
+    },
+
+    // Renderiza un card jwt.io-style con header de color
+    _tdRenderCard({ color, icon, title, compactTitle, body, status, toolbar, expanded = false }) {
+        return `
+            <div class="td-card td-card-${color} ${expanded ? 'td-card-expanded' : ''}">
+                <div class="td-card-headline">
+                    <div class="td-card-title-row">
+                        <span class="td-card-icon">${icon}</span>
+                        <h3 class="td-card-title-full">${UI.escapeHTML(title)}</h3>
+                        <h3 class="td-card-title-compact">${UI.escapeHTML(compactTitle || title)}</h3>
+                    </div>
+                    <div class="td-card-toolbar">
+                        ${toolbar || ''}
+                    </div>
+                </div>
+                <div class="td-card-body">${body}</div>
+                ${status ? `<div class="td-card-status td-card-status-${status.kind}">${status.html}</div>` : ''}
+            </div>
+        `;
+    },
+
+    // Toolbar estilo jwt.io: Copy + Clear/Expand buttons
+    _tdCardToolbar(opts) {
+        // opts: { onCopy, onClear, onExpand, canExpand }
+        const buttons = [];
+        if (opts.onCopy) {
+            buttons.push(`<button class="td-card-toolbar-btn" data-td-action="copy" title="Copy">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M5 4H4C2.9 4 2 4.9 2 6V13C2 14.1 2.9 15 4 15H11C12.1 15 13 14.1 13 13V12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M11 2H6C4.9 2 4 2.9 4 4V11C4 12.1 4.9 13 6 13H13C14.1 13 15 12.1 15 11V6L11 2Z" fill="currentColor" opacity="0.3"/><path d="M11 2V6H15" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+            </button>`);
+        }
+        if (opts.onClear) {
+            buttons.push(`<button class="td-card-toolbar-btn" data-td-action="clear" title="Clear">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 4H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M4 4V13C4 13.5 4.5 14 5 14H11C11.5 14 12 13.5 12 13V4" stroke="currentColor" stroke-width="1.5"/><path d="M6 4V2.5C6 2.2 6.2 2 6.5 2H9.5C9.8 2 10 2.2 10 2.5V4" stroke="currentColor" stroke-width="1.5"/></svg>
+            </button>`);
+        }
+        if (opts.canExpand) {
+            buttons.push(`<button class="td-card-toolbar-btn" data-td-action="expand" title="Expand">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M10 2H14V6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M14 2L8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M6 14H2V10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 14L8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            </button>`);
+        }
+        return buttons.join('');
+    },
+
+    renderTokenDecoder() {
+        const td = this.state.tokenDecoder;
+        const input = (td.input || '').trim();
+
+        // Determinar status del JWT
+        let status = null;
+        let jwtOk = false;
+        let parsed = null;
+        if (input) {
+            const parts = input.split('.');
+            if (parts.length === 3 && parts[0] && parts[1]) {
+                const tryParse = this._parseJwt(input);
+                if (tryParse.ok) {
+                    parsed = tryParse.value;
+                    jwtOk = true;
+                    status = { kind: 'success', html: '✅ Valid JWT' };
+                } else {
+                    status = { kind: 'error', html: `❌ ${UI.escapeHTML(tryParse.error)}` };
+                }
+            } else if (input.length > 0) {
+                status = { kind: 'error', html: '❌ Not a valid JWT (expected 3 segments separated by dots)' };
+            }
+        }
+
+        // Header card (red)
+        const headerCard = (() => {
+            if (!jwtOk) {
+                return this._tdRenderCard({
+                    color: 'red',
+                    icon: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 4L7 8L3 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M9 12H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>',
+                    title: 'Decoded Header',
+                    compactTitle: 'Header',
+                    body: `<pre class="td-json-empty">${input ? '// Invalid JWT — fix the encoded token to see the header' : '// Paste a JWT above to see the decoded header'}</pre>`,
+                    status: null,
+                    toolbar: ''
+                });
+            }
+            const json = this._tdJsonHtml(parsed.header);
+            return this._tdRenderCard({
+                color: 'red',
+                icon: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 4L7 8L3 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M9 12H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>',
+                title: 'Decoded Header',
+                compactTitle: 'Header',
+                body: `<pre class="td-json">${json}</pre>`,
+                status: null,
+                toolbar: this._tdCardToolbar({ onCopy: 'header' })
+            });
+        })();
+
+        // Payload card (purple)
+        const payloadCard = (() => {
+            if (!jwtOk) {
+                return this._tdRenderCard({
+                    color: 'purple',
+                    icon: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 4L7 8L3 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M9 12H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>',
+                    title: 'Decoded Payload',
+                    compactTitle: 'Payload',
+                    body: `<pre class="td-json-empty">${input ? '// Invalid JWT — fix the encoded token to see the payload' : '// Paste a JWT above to see the decoded payload'}</pre>`,
+                    status: null,
+                    toolbar: ''
+                });
+            }
+            const json = this._tdJsonHtml(parsed.payload);
+            return this._tdRenderCard({
+                color: 'purple',
+                icon: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 4L7 8L3 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M9 12H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>',
+                title: 'Decoded Payload',
+                compactTitle: 'Payload',
+                body: `<pre class="td-json">${json}</pre>`,
+                status: null,
+                toolbar: this._tdCardToolbar({ onCopy: 'payload' })
+            });
+        })();
+
+        // Signature Verification card (cyan)
+        const sigAlg = (parsed && parsed.header && parsed.header.alg) || null;
+        const isHmac = sigAlg && /^HS\d+$/i.test(sigAlg);
+        const sigCard = this._tdRenderCard({
+            color: 'cyan',
+            icon: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 4L7 8L3 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M9 12H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>',
+            title: 'JWT Signature Verification',
+            compactTitle: 'Verify',
+            body: `
+                <p class="td-card-desc">${isHmac ? `Enter the secret used to sign the JWT below. The algorithm is <strong>${UI.escapeHTML(sigAlg)}</strong>.` : (sigAlg ? `Algorithm <strong>${UI.escapeHTML(sigAlg)}</strong> requires a public key (asymmetric). HS* secret verification is supported here. RS*/ES*/PS* keys are not handled in-browser.` : 'Enter the secret used to sign the JWT below:')}</p>
+                <div class="td-secret-toolbar">
+                    <label class="td-toggle">
+                        <input type="checkbox" id="td-b64url-toggle" ${td.b64urlEncoded ? 'checked' : ''}>
+                        <span class="td-toggle-switch"></span>
+                        <span class="td-toggle-label">Base64URL Encoded</span>
+                    </label>
+                </div>
+                <textarea id="td-secret" class="td-secret-input" placeholder="${isHmac ? 'a-string-secret-at-least-256-bits-long' : 'Enter the secret (or leave empty for asymmetric algorithms)'}" ${!isHmac && sigAlg ? 'disabled' : ''}>${UI.escapeHTML(td.secret || '')}</textarea>
+                <div id="td-verify-status"></div>
+            `,
+            status: null,
+            toolbar: ''
+        });
+
+        return `
+            <div class="ts-tool-header">
+                <div>
+                    <h2>🔐 Token Decoder</h2>
+                    <div class="ts-tool-sub">Decodifica, valida y verifica la firma de JSON Web Tokens. Todo se procesa localmente en el navegador.</div>
+                </div>
+            </div>
+
+            <div class="td-input-section">
+                <div class="td-input-headline">
+                    <span class="td-input-label">Encoded Token</span>
+                    <label class="td-toggle">
+                        <input type="checkbox" id="td-autofocus" checked>
+                        <span class="td-toggle-switch"></span>
+                        <span class="td-toggle-label">Enable auto-focus</span>
+                    </label>
+                </div>
+                <div class="td-card td-card-input">
+                    <div class="td-card-headline">
+                        <div class="td-card-title-row">
+                            <span class="td-card-icon">${'<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 4L7 8L3 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M9 12H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>'}</span>
+                            <h3 class="td-card-title-full">JSON Web Token (JWT)</h3>
+                            <h3 class="td-card-title-compact">JWT</h3>
+                        </div>
+                        <div class="td-card-toolbar">
+                            <button class="td-card-toolbar-btn" data-td-action="sample" title="Generate example">
+                                <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M13 4H7C5.9 4 5 4.9 5 6V10C5 11.1 5.9 12 7 12H13C14.1 12 15 11.1 15 10V6C15 4.9 14.1 4 13 4Z" stroke="currentColor" stroke-width="1.5"/><path d="M3 8H5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M7 7H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                            </button>
+                            <button class="td-card-toolbar-btn" data-td-action="copy-input" title="Copy">
+                                <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M5 4H4C2.9 4 2 4.9 2 6V13C2 14.1 2.9 15 4 15H11C12.1 15 13 14.1 13 13V12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M11 2H6C4.9 2 4 2.9 4 4V11C4 12.1 4.9 13 6 13H13C14.1 13 15 12.1 15 11V6L11 2Z" fill="currentColor" opacity="0.3"/><path d="M11 2V6H15" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+                            </button>
+                            <button class="td-card-toolbar-btn" data-td-action="clear" title="Clear">
+                                <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M4 4H12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M5 4V13C5 13.5 5.5 14 6 14H10C10.5 14 11 13.5 11 13V4" stroke="currentColor" stroke-width="1.5"/><path d="M7 4V2.5C7 2.2 7.2 2 7.5 2H8.5C8.8 2 9 2.2 9 2.5V4" stroke="currentColor" stroke-width="1.5"/></svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="td-card-body td-card-body-input">
+                        <textarea id="td-input" class="td-input-textarea" placeholder="Paste a JWT here (e.g. eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...)" spellcheck="false" autocomplete="off">${UI.escapeHTML(td.input)}</textarea>
+                    </div>
+                    ${status ? `<div class="td-card-status td-card-status-${status.kind}">${status.html}</div>` : ''}
+                </div>
+            </div>
+
+            <div class="td-output">
+                ${headerCard}
+                ${payloadCard}
+                ${sigCard}
+            </div>
+        `;
+    },
+
+    // ── Bind: Token Decoder (jwt.io-style) ──
+
+    bindTokenDecoder(container) {
+        const pane = container.querySelector('#tools-main-pane');
+        if (!pane) return;
+        const td = this.state.tokenDecoder;
+
+        const inputEl = pane.querySelector('#td-input');
+        if (inputEl) {
+            UI.autoResizeTextarea(inputEl);
+            let timer = null;
+            inputEl.addEventListener('input', () => {
+                td.input = inputEl.value;
+                clearTimeout(timer);
+                timer = setTimeout(() => {
+                    const newPane = container.querySelector('#tools-main-pane');
+                    if (!newPane) return;
+                    const newHtml = this.renderTokenDecoder();
+                    newPane.innerHTML = newHtml;
+                    this.bindTokenDecoder(container);
+                    const newInput = newPane.querySelector('#td-input');
+                    if (newInput) {
+                        newInput.focus();
+                        const pos = inputEl.value.length;
+                        newInput.setSelectionRange(pos, pos);
+                    }
+                }, 150);
+            });
+        }
+
+        // Sample JWT button
+        pane.querySelector('[data-td-action="sample"]')?.addEventListener('click', async () => {
+            td.input = await this._tdSampleJwt();
+            pane.innerHTML = this.renderTokenDecoder();
+            this.bindTokenDecoder(container);
+            const ni = pane.querySelector('#td-input');
+            if (ni) ni.focus();
+        });
+
+        // Copy input button
+        pane.querySelector('[data-td-action="copy-input"]')?.addEventListener('click', async () => {
+            if (!td.input) { UI.toast('Nada para copiar', 'warn'); return; }
+            const ok = await copyToClipboard(td.input);
+            UI.toast(ok ? 'Copiado' : 'Error al copiar', ok ? 'ok' : 'error');
+        });
+
+        // Clear (input + secret)
+        pane.querySelectorAll('[data-td-action="clear"]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                td.input = '';
+                td.secret = '';
+                pane.innerHTML = this.renderTokenDecoder();
+                this.bindTokenDecoder(container);
+                const ni = pane.querySelector('#td-input');
+                if (ni) ni.focus();
+            });
+        });
+
+        // Copy header / payload
+        pane.querySelectorAll('[data-td-action="copy"]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const card = btn.closest('.td-card');
+                const json = card?.querySelector('pre.td-json')?.textContent;
+                if (json) {
+                    copyToClipboard(json).then(ok => UI.toast(ok ? 'Copiado' : 'Error', ok ? 'ok' : 'error'));
+                }
+            });
+        });
+
+        // Click on JSON key → show description
+        pane.querySelectorAll('.td-tok-key-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                const key = btn.dataset.tdClaimKey;
+                const desc = this._tdClaimDescription(key);
+                if (desc) {
+                    UI.toast(`${key}: ${desc.split('—')[0].trim()}`, 'info', 4000);
+                }
+            });
+        });
+
+        // Base64URL toggle
+        const b64Toggle = pane.querySelector('#td-b64url-toggle');
+        b64Toggle?.addEventListener('change', () => {
+            td.b64urlEncoded = b64Toggle.checked;
+            this._tdUpdateVerifyStatus(container);
+        });
+
+        // Secret input
+        const secretEl = pane.querySelector('#td-secret');
+        if (secretEl) {
+            secretEl.addEventListener('input', () => {
+                td.secret = secretEl.value;
+                this._tdUpdateVerifyStatus(container);
+            });
+        }
+
+        // Initial verify status (in case there's a saved secret)
+        this._tdUpdateVerifyStatus(container);
+    },
+
+    // Actualiza el banner de "Valid secret" / "Signature Verified" estilo jwt.io
+    async _tdUpdateVerifyStatus(container) {
+        const pane = container.querySelector('#tools-main-pane');
+        if (!pane) return;
+        const statusEl = pane.querySelector('#td-verify-status');
+        if (!statusEl) return;
+        const td = this.state.tokenDecoder;
+        const input = (td.input || '').trim();
+        if (!input) { statusEl.innerHTML = ''; return; }
+
+        const parsed = this._parseJwt(input);
+        if (!parsed.ok) { statusEl.innerHTML = ''; return; }
+        const { header, headerB64, payloadB64, signatureB64 } = parsed.value;
+        const alg = header.alg;
+        const isHmac = alg && /^HS\d+$/i.test(alg);
+
+        // "Valid secret" status (jwt.io muestra esto apenas el secret es plausible)
+        if (isHmac) {
+            if (td.secret && td.secret.length >= 8) {
+                statusEl.innerHTML = `<div class="td-status-row td-status-success"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M13 4L6 12L3 9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Valid secret</div>`;
+            } else if (td.secret) {
+                statusEl.innerHTML = `<div class="td-status-row td-status-info"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5"/><path d="M8 5V8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>Secret muy corto (recomendado ≥ 256 bits para HS256)</div>`;
+            } else {
+                statusEl.innerHTML = '';
+            }
+        }
+
+        // Live verify: si hay secret, intentar verificar
+        if (isHmac && td.secret) {
+            const res = await this._verifyHs256(headerB64, payloadB64, signatureB64, td.secret);
+            if (res.ok) {
+                // Append "Signature Verified" badge
+                statusEl.insertAdjacentHTML('beforeend', `<div class="td-status-row td-status-success td-status-verified"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M13 4L6 12L3 9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Signature Verified</div>`);
+            } else {
+                statusEl.insertAdjacentHTML('beforeend', `<div class="td-status-row td-status-error"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M4 4L12 12M12 4L4 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>Signature Invalid</div>`);
+            }
+        }
+    },
+
+    // Genera un JWT de ejemplo firmado con Web Crypto API
+    async _tdSampleJwt() {
+        const now = Math.floor(Date.now() / 1000);
+        const header = { alg: 'HS256', typ: 'JWT' };
+        const payload = {
+            sub: 'auth0|123456789',
+            name: 'Ada Lovelace',
+            email: 'ada@example.com',
+            role: 'admin',
+            iss: 'https://auth.example.com/',
+            aud: 'https://api.example.com',
+            iat: now,
+            nbf: now,
+            exp: now + 3600,
+            jti: 'abc-' + Math.random().toString(36).slice(2, 10)
+        };
+        const enc = (obj) => {
+            const json = JSON.stringify(obj);
+            return btoa(json).replace(/=+$/, '').replace(/\+/g, '-').replace(/\//g, '_');
+        };
+        const h = enc(header);
+        const p = enc(payload);
+        // Firmar con el secret de ejemplo "your-256-bit-secret" (estándar de la doc de jwt.io)
+        const secret = 'your-256-bit-secret';
+        try {
+            const enc_ = new TextEncoder();
+            const key = await crypto.subtle.importKey(
+                'raw', enc_.encode(secret),
+                { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+            );
+            const sig = await crypto.subtle.sign('HMAC', key, enc_.encode(`${h}.${p}`));
+            const sigB64 = btoa(String.fromCharCode(...new Uint8Array(sig)))
+                .replace(/=+$/, '').replace(/\+/g, '-').replace(/\//g, '_');
+            return `${h}.${p}.${sigB64}`;
+        } catch (_e) {
+            return `${h}.${p}.<signing-failed>`;
+        }
+    },
 
     // ── Curl parser (file-private) ──
 

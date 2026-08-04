@@ -53,18 +53,25 @@ export const RealtimeService = {
             case 'qa_executions':
                 this.updateExecutions(data);
                 this.invalidateForTableSilent('history');
+                if (data && data.run_id) {
+                    this.invalidateForTableSilent('exploratoria');
+                }
                 break;
             case 'qa_defects':
                 this.updateDefects(data);
                 this.invalidateForTableSilent('history');
                 this.invalidateForTableSilent('hallazgos');
                 this.invalidateForTableSilent('mi-jira');
+                this.invalidateForTableSilent('exploratoria');
                 break;
             case 'qa_test_runs':
                 this.updateTestRuns(data);
                 this.invalidateForTableSilent('history');
                 this.invalidateForTableSilent('dashboard');
                 this.invalidateForTableSilent('jira-tracking');
+                if (data && data.run_type === 'EXPLORATORY') {
+                    this.invalidateForTableSilent('exploratoria');
+                }
                 break;
             case 'qa_test_suites':
                 this.updateSuites(data);
@@ -76,12 +83,16 @@ export const RealtimeService = {
                 // Cambio estructural: refrescar
                 this.invalidateForTable('test-suites');
                 this.invalidateForTable('execution');
+                if (data && data.is_exploratory) {
+                    this.invalidateForTableSilent('exploratoria');
+                }
                 break;
             case 'qa_attachments':
                 // Adjuntos: no refrescar la execution tab (interrumpe edición).
                 // Solo invalidar cache para el próximo render natural.
                 this.invalidateForTableSilent('execution');
                 this.invalidateForTableSilent('history');
+                this.invalidateForTableSilent('exploratoria');
                 break;
             case 'qa_use_cases':
             case 'qa_user_stories':

@@ -278,6 +278,13 @@ export const ExecutionTab = {
                     <textarea class="block-input" data-tc-id="${tc.id}" placeholder="${status === 'SKIP' || status === 'SKIPPED' ? 'Indica por qué se salta este test...' : 'Indica por qué no se pudo ejecutar este test...'}" ${isLocked ? 'disabled' : ''}>${UI.escapeHTML(tc.observations || '')}</textarea>
                 </div>
 
+                <div class="obtained-result-panel" id="obtained-panel-${tc.id}" style="margin-top: 10px; padding: 10px 12px; background: var(--apple-fill); border-radius: var(--apple-radius-md); border: 1px solid var(--apple-separator);">
+                    <label class="block-report-title" style="display:block; margin-bottom: 6px;">📝 RESULTADO REAL (opcional)</label>
+                    <textarea class="obtained-input" data-tc-id="${tc.id}" placeholder="Describí brevemente el resultado real observado durante la ejecución (aparecerá en el reporte HTML)."
+                              style="width: 100%; min-height: 50px; padding: 8px; border-radius: var(--apple-radius-sm); border: 1px solid var(--apple-separator); background: var(--apple-bg); color: var(--apple-label); font-family: inherit; font-size: 0.82rem; resize: vertical;"
+                              ${isLocked ? 'disabled' : ''}>${UI.escapeHTML(tc.obtained_result || '')}</textarea>
+                </div>
+
                 <div class="tc-detail-footer">
                     ${isLocked ? `
                         <div class="exec-locked-badge">
@@ -652,6 +659,16 @@ export const ExecutionTab = {
 
                 const status = statusBtn.dataset.status;
                 const payload = { status };
+
+                // Capturar resultado real (opcional) — se persiste en qa_executions.obtained_result
+                // y aparece en el reporte HTML generado.
+                const obtainedInput = container.querySelector(`.obtained-input[data-tc-id="${tcId}"]`);
+                if (obtainedInput) {
+                    const obtained = (obtainedInput.value || '').trim();
+                    if (obtained) payload.obtained_result = obtained;
+                    // DEBUG: confirmar en consola que el valor se captura correctamente
+                    console.log('[ExploratoriaTab] Guardando resultado real:', { tcId, obtained, payload });
+                }
 
                 if (status === 'BLOCK' || status === 'SKIP') {
                     const blockInput = container.querySelector(`.block-input[data-tc-id="${tcId}"]`);
