@@ -1,4 +1,31 @@
 const { query } = require('./db');
+const evidenceStore = require('./modules/evidence-store');
+
+// Si la evidencia pesa más de este umbral, en vez de inlinearla como data URI
+// emitimos un <img>/<video> con src=/api/evidence/:id para no inflar el HTML
+// (los reportes se imprimen como PDF y se sirven como adjuntos).
+const MAX_INLINE_BYTES = 25 * 1024 * 1024;
+
+evidenceStore.init({ baseDir: __dirname });
+
+// Resuelve el base64 de una evidencia, leyendo del store local o del fallback
+// legacy (BYTEA en PG). Mantiene la firma data:... que el renderer espera.
+async function attachmentToBase64(rec) {
+    if (rec.storage_kind === 'local' && rec.storage_path) {
+        try {
+            return evidenceStore.readAsBase64(rec.storage_path);
+        } catch (e) {
+            console.warn(`[report] evidence read failed for id=${rec.id}: ${e.message}`);
+            return '';
+        }
+    }
+    // Fallback transitorio: binario aún en BYTEA.
+    const r = await query(
+        `SELECT encode(file_data, 'base64') as b64 FROM qa_attachments WHERE id = ?`,
+        [rec.id]
+    );
+    return (r.rows[0] && r.rows[0].b64) || '';
+}
 
 const ICONS = {
     dashboard: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>',
@@ -69,8 +96,16 @@ async function fetchExecutionsWithMedia(runId) {
     const testsWithMedia = [];
     for (let tc of allTests.rows) {
         if (tc.exec_id) {
-            const atts = await query(`SELECT id, execution_id, defect_id, file_name, mime_type, evidence_category, encode(file_data, 'base64') as file_data, created_at FROM qa_attachments WHERE execution_id = ?`, [tc.exec_id]);
-            tc.attachments = atts.rows.map(a => ({ mime_type: a.mime_type, category: a.evidence_category, data: a.file_data }));
+            const atts = await query(`SELECT id, execution_id, defect_id, file_name, mime_type, evidence_category, storage_kind, storage_path, sha256, size_bytes, created_at FROM qa_attachments WHERE execution_id = ?`, [tc.exec_id]);
+            tc.attachments = [];
+            for (const a of atts.rows) {
+                if (a.storage_kind === 'local' && a.size_bytes > MAX_INLINE_BYTES) {
+                    // Demasiado grande: no inlinearlo, dejar que el renderer haga fallback al URL.
+                    tc.attachments.push({ mime_type: a.mime_type, category: a.evidence_category, attachment_id: a.id, oversized: true });
+                } else {
+                    tc.attachments.push({ mime_type: a.mime_type, category: a.evidence_category, data: await attachmentToBase64(a) });
+                }
+            }
             const defects = await query(`SELECT * FROM qa_defects WHERE execution_id = ?`, [tc.exec_id]);
             tc.defects = defects.rows;
         } else {
@@ -242,6 +277,24 @@ function renderEvidenceMedia(attachments) {
             <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;">
                 ${attachments.map(a => {
                     const isVideo = a.mime_type.startsWith('video/');
+                    // oversized: el caller decidió no inlinear (>{MAX_INLINE_BYTES});
+                    // dejamos el src como URL al endpoint, así el visor puede
+                    // abrirlo on-demand sin descargar el binario completo.
+                    if (a.oversized) {
+                        const url = `/api/evidence/${a.attachment_id}`;
+                        if (isVideo) {
+                            return `
+                                <div class="media-card" style="border-radius:8px;">
+                                    <video controls preload="metadata" style="cursor:zoom-in;max-height:180px;object-fit:cover;width:100%;">
+                                        <source src="${url}" type="${a.mime_type}">
+                                    </video>
+                                </div>`;
+                        }
+                        return `
+                            <div class="media-card" style="border-radius:8px;">
+                                <img src="${url}" style="cursor:zoom-in;max-height:180px;object-fit:cover;width:100%;">
+                            </div>`;
+                    }
                     if (isVideo) {
                         return `
                             <div class="media-card" style="border-radius:8px;">
@@ -483,12 +536,21 @@ async function fetchSuiteGroupedData(runIds) {
         const allTCs = await query(`SELECT * FROM qa_test_cases WHERE suite_id = ? ORDER BY id`, [suiteId]);
 
         const tcsWithExecutions = [];
+        const groupRunIds = group.runs.map(r => r.id);
         for (const tc of allTCs.rows) {
-            // Original execution
-            const origExec = await query(
+            // Original execution: prefer the resolved origRun, but fall back to any
+            // execution in the same suite group so exploratory flows whose session
+            // isn't the origRun still surface their real status/observations/evidence.
+            let origExec = await query(
                 `SELECT * FROM qa_executions WHERE tc_id = ? AND run_id = ? ORDER BY id DESC LIMIT 1`,
                 [tc.id, origRun.id]
             );
+            if (origExec.rows.length === 0 && groupRunIds.length > 1) {
+                origExec = await query(
+                    `SELECT * FROM qa_executions WHERE tc_id = ? AND run_id = ANY(?) ORDER BY id DESC LIMIT 1`,
+                    [tc.id, groupRunIds]
+                );
+            }
 
             // Retest execution (if exists)
             let retestExec = null;
@@ -517,8 +579,15 @@ async function fetchSuiteGroupedData(runIds) {
 
             // Load attachments & defects for both executions
             if (enriched.orig_exec_id) {
-                const origAtts = await query(`SELECT id, execution_id, defect_id, file_name, mime_type, evidence_category, encode(file_data, 'base64') as file_data, created_at FROM qa_attachments WHERE execution_id = ?`, [enriched.orig_exec_id]);
-                enriched.orig_attachments = origAtts.rows.map(a => ({ mime_type: a.mime_type, category: a.evidence_category, data: a.file_data }));
+                const origAtts = await query(`SELECT id, execution_id, defect_id, file_name, mime_type, evidence_category, storage_kind, storage_path, sha256, size_bytes, created_at FROM qa_attachments WHERE execution_id = ?`, [enriched.orig_exec_id]);
+                enriched.orig_attachments = [];
+                for (const a of origAtts.rows) {
+                    if (a.storage_kind === 'local' && a.size_bytes > MAX_INLINE_BYTES) {
+                        enriched.orig_attachments.push({ mime_type: a.mime_type, category: a.evidence_category, attachment_id: a.id, oversized: true });
+                    } else {
+                        enriched.orig_attachments.push({ mime_type: a.mime_type, category: a.evidence_category, data: await attachmentToBase64(a) });
+                    }
+                }
                 const origDefs = await query(`SELECT * FROM qa_defects WHERE execution_id = ?`, [enriched.orig_exec_id]);
                 enriched.orig_defects = origDefs.rows;
             } else {
@@ -527,8 +596,15 @@ async function fetchSuiteGroupedData(runIds) {
             }
 
             if (enriched.retest_exec_id) {
-                const retAtts = await query(`SELECT id, execution_id, defect_id, file_name, mime_type, evidence_category, encode(file_data, 'base64') as file_data, created_at FROM qa_attachments WHERE execution_id = ?`, [enriched.retest_exec_id]);
-                enriched.retest_attachments = retAtts.rows.map(a => ({ mime_type: a.mime_type, category: a.evidence_category, data: a.file_data }));
+                const retAtts = await query(`SELECT id, execution_id, defect_id, file_name, mime_type, evidence_category, storage_kind, storage_path, sha256, size_bytes, created_at FROM qa_attachments WHERE execution_id = ?`, [enriched.retest_exec_id]);
+                enriched.retest_attachments = [];
+                for (const a of retAtts.rows) {
+                    if (a.storage_kind === 'local' && a.size_bytes > MAX_INLINE_BYTES) {
+                        enriched.retest_attachments.push({ mime_type: a.mime_type, category: a.evidence_category, attachment_id: a.id, oversized: true });
+                    } else {
+                        enriched.retest_attachments.push({ mime_type: a.mime_type, category: a.evidence_category, data: await attachmentToBase64(a) });
+                    }
+                }
                 const retDefs = await query(`SELECT * FROM qa_defects WHERE execution_id = ?`, [enriched.retest_exec_id]);
                 enriched.retest_defects = retDefs.rows;
             } else {
@@ -600,8 +676,7 @@ function getJiraTicketsFromSuite(suite) {
 }
 
 function renderSuiteTCItem(tc) {
-    const hasOriginal = tc.orig_status;
-    const hasRetest = tc.retest_status;
+    const origLabel = tc.orig_status ? 'EJECUCIÓN ORIGINAL' : 'EJECUCIÓN PENDIENTE';
 
     return `
         <div class="tc-item">
@@ -609,28 +684,38 @@ function renderSuiteTCItem(tc) {
                 <div class="tc-id">TC - ${tc.key_id?.split('-')[1] || tc.id}</div>
                 <div class="tc-title">${tc.title}</div>
                 <div style="display: flex; gap: 8px; align-items: center;">
-                    ${hasOriginal ? `<span class="retest-label orig">ORIG</span>` : ''}
-                    ${hasRetest ? `<span class="retest-label retest">RETEST</span>` : ''}
+                    ${tc.orig_status ? `<span class="retest-label orig">ORIG</span>` : `<span class="retest-label orig" style="opacity:.5;">ORIG</span>`}
+                    ${tc.retest_status ? `<span class="retest-label retest">RETEST</span>` : ''}
                 </div>
             </div>
 
-            ${hasOriginal ? renderSuiteExecDetail(tc, 'EJECUCIÓN ORIGINAL', 'orig', tc.orig_status, tc.orig_observations, tc.orig_obtained_result, tc.orig_executed_at, tc.orig_attachments, tc.orig_defects, tc.expected_result) : ''}
+            ${renderSuiteExecDetail(tc, origLabel, 'orig', tc.orig_status, tc.orig_observations, tc.orig_obtained_result, tc.orig_executed_at, tc.orig_attachments, tc.orig_defects, tc.expected_result)}
 
-            ${hasRetest ? renderSuiteExecDetail(tc, 'RETEST', 'retest', tc.retest_status, tc.retest_observations, tc.retest_obtained_result, tc.retest_executed_at, tc.retest_attachments, tc.retest_defects, tc.expected_result) : ''}
+            ${(tc.retest_exec_id || tc.retest_status) ? renderSuiteExecDetail(tc, tc.retest_status ? 'RETEST' : 'RETEST PENDIENTE', 'retest', tc.retest_status, tc.retest_observations, tc.retest_obtained_result, tc.retest_executed_at, tc.retest_attachments, tc.retest_defects, tc.expected_result) : ''}
         </div>`;
 }
 
 function renderSuiteExecDetail(tc, label, labelClass, status, observations, obtainedResult, executedAt, attachments, defects, expectedResult) {
-    const statusColor = status === 'OK' || status === 'PASS' ? 'var(--ok)' : status === 'FAIL' ? 'var(--fail)' : 'var(--warn)';
-    const statusBg = status === 'OK' || status === 'PASS' ? 'rgba(52, 199, 89, 0.1)' : status === 'FAIL' ? 'rgba(255, 59, 48, 0.1)' : 'rgba(255, 149, 0, 0.1)';
-    const statusIcon = status === 'OK' || status === 'PASS' ? ICONS.check : status === 'FAIL' ? ICONS.fail : ICONS.warn;
+    const hasStatus = status === 'OK' || status === 'PASS' || status === 'FAIL' || status === 'BLOCK' || status === 'SKIPPED' || status === 'SKIP';
+    const statusColor = !status
+        ? 'var(--text-muted)'
+        : status === 'OK' || status === 'PASS' ? 'var(--ok)' : status === 'FAIL' ? 'var(--fail)' : 'var(--warn)';
+    const statusBg = !status
+        ? 'rgba(0,0,0,0.06)'
+        : status === 'OK' || status === 'PASS' ? 'rgba(52, 199, 89, 0.1)' : status === 'FAIL' ? 'rgba(255, 59, 48, 0.1)' : 'rgba(255, 149, 0, 0.1)';
+    const statusIcon = !status ? '⏳' : status === 'OK' || status === 'PASS' ? ICONS.check : status === 'FAIL' ? ICONS.fail : ICONS.warn;
+    const statusText = status || 'Sin ejecución registrada';
+    const realResultBg = !hasStatus ? 'rgba(0,0,0,0.04)' : (status === 'FAIL' ? 'rgba(255,59,48,0.04)' : 'rgba(52,199,89,0.04)');
+    const realResultText = obtainedResult || (hasStatus
+        ? 'No se registró un resultado detallado.'
+        : 'PENDIENTE — Aún no se ha registrado una ejecución para este caso en el/los runs seleccionados.');
 
     return `
         <div class="exec-section">
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
                 <span style="display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:20px;font-size:0.68rem;font-weight:700;background:${statusBg};color:${statusColor};">
                     <span style="width:6px;height:6px;border-radius:50%;background:currentColor;"></span>
-                    ${status}
+                    ${statusIcon} ${statusText}
                 </span>
                 <span style="font-size:0.72rem;color:var(--text-muted);">${label}</span>
                 ${executedAt ? `<span style="font-size:0.7rem;color:var(--text-muted);">📅 ${new Date(executedAt).toLocaleString()}</span>` : ''}
@@ -640,9 +725,9 @@ function renderSuiteExecDetail(tc, label, labelClass, status, observations, obta
                     <div style="font-size: 0.68rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px;">Resultado Esperado</div>
                     <div style="font-size: 0.88rem; line-height: 1.5; color: var(--text-main);">${expectedResult || tc.tc_expected || '—'}</div>
                 </div>
-                <div style="background: ${status === 'OK' || status === 'PASS' ? 'rgba(52,199,89,0.04)' : 'rgba(255,59,48,0.04)'}; border-left: 3px solid ${statusColor}; padding: 12px 14px; border-radius: 6px;">
+                <div style="background: ${realResultBg}; border-left: 3px solid ${statusColor}; padding: 12px 14px; border-radius: 6px;">
                     <div style="font-size: 0.68rem; font-weight: 700; color: ${statusColor}; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px;">Resultado Real</div>
-                    <div style="font-size: 0.88rem; line-height: 1.5; color: var(--text-main);">${obtainedResult || 'No se registró un resultado detallado.'}</div>
+                    <div style="font-size: 0.88rem; line-height: 1.5; color: var(--text-main);">${realResultText}</div>
                 </div>
             </div>
             ${observations ? `<div style="margin-top: 14px; background: rgba(255,149,0,0.04); border: 1px solid rgba(255,149,0,0.12); border-left: 3px solid var(--warn); padding: 12px 14px; border-radius: 6px;"><div style="font-size: 0.68rem; font-weight: 700; color: var(--warn); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px;">Observaciones del Tester</div><div style="font-size: 0.88rem; line-height: 1.5; color: var(--text-main);">${observations}</div></div>` : ''}

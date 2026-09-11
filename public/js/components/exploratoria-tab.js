@@ -2,6 +2,7 @@ import { Store } from '../store/state.js';
 import { ApiService } from '../services/api.js';
 import { UI } from '../utils/ui-utils.js';
 import { getCachedTab, setCachedTab, invalidateTabCache } from '../store/state.js';
+import { EvidenceUploader } from './evidence-uploader.js';
 
 /**
  * EXPLORATORIA-TAB.JS — Testing Exploratorio.
@@ -37,7 +38,8 @@ export const ExploratoriaTab = {
     selectedRunId: null,             // sesión expandida
     sessionDetail: null,             // { run, flows, executions, defects, attachments }
     flowDrafts: new Map(),           // runId -> { [tcId]: {status, observations, bug:{...}, evidencePending: []} }
-    _pendingEvidence: new Map(),     // execId -> [files]
+    _pendingEvidence: new Map(),     // flow.id -> [files] (se suben al execution_id cuando se guarda)
+    _flowUploaders: new Map(),       // flow.id -> EvidenceUploader
     _isListening: false,
     selectedUseCaseId: null,         // UC filter (sidebar)
     sessionSearch: '',               // local search (sidebar)
@@ -732,6 +734,11 @@ export const ExploratoriaTab = {
                                style="width:100%; padding: 8px; border-radius: var(--apple-radius-sm); border:1px solid var(--apple-separator); background: var(--apple-bg); color: var(--apple-label); font-size: 0.82rem;"
                                ${isFinished ? 'disabled' : ''}/>
                     </div>
+                    <div style="grid-column: 1 / -1;">
+                        <textarea class="expl-bug-description" data-tc-id="${flow.id}" placeholder="Descripción del bug: qué se detectó, en qué flujo, con qué frecuencia..."
+                                  style="width:100%; min-height:60px; padding: 8px; border-radius: var(--apple-radius-sm); border:1px solid var(--apple-separator); background: var(--apple-bg); color: var(--apple-label); font-size: 0.82rem; font-family: inherit; resize: vertical;"
+                                  ${isFinished ? 'disabled' : ''}>${UI.escapeHTML(bug.description || '')}</textarea>
+                    </div>
                     <div>
                         <select class="expl-bug-severity" data-tc-id="${flow.id}" style="width:100%; padding: 8px; border-radius: var(--apple-radius-sm); border:1px solid var(--apple-separator); background: var(--apple-bg); color: var(--apple-label); font-size: 0.82rem;" ${isFinished ? 'disabled' : ''}>
                             ${SEVERITIES.map(s => `<option value="${s}" ${(bug.severity || 'Media') === s ? 'selected' : ''}>${s}</option>`).join('')}
@@ -766,52 +773,45 @@ export const ExploratoriaTab = {
         const execAtts = exec ? (attByExec.get(exec.id) || []) : [];
         const defAtts = execDefects.flatMap(d => attByDef.get(d.id) || []);
         const allAtts = [...execAtts, ...defAtts];
-        // Clave por flow.id → la evidencia queda atada al flujo (trazabilidad por TC),
-        // no a una ejecución concreta. Se sube al execution_id que se cree al guardar.
-        const pending = this._pendingEvidence.get(flow.id) || [];
         const controlsEnabled = !isFinished;
+        const totalCount = allAtts.length;
+
+        const persistedHtml = allAtts.map(a => `
+            <div class="h-evidence-item" data-attachment-id="${a.id}">
+                <img src="/api/evidence/${a.id}" alt="${UI.escapeHTML(a.file_name)}" loading="lazy"/>
+                <span class="h-evidence-category-badge">${UI.escapeHTML(a.evidence_category || 'GENERAL')}</span>
+                <button class="h-evidence-remove" data-attachment-id="${a.id}" data-tc-id="${flow.id}" title="Eliminar">✕</button>
+            </div>
+        `).join('');
+
+        const emptyHint = controlsEnabled
+            ? `<div class="h-evidence-empty-hint" style="grid-column:1/-1; text-align:center; padding:20px; color:var(--apple-label-tertiary); font-size:0.8rem;">📎 Solo para este flujo: pegá con <kbd>Ctrl</kbd>+<kbd>V</kbd>, arrastrá imágenes, o usá Adjuntar</div>`
+            : `<div class="h-evidence-empty-hint" style="grid-column:1/-1; text-align:center; padding:20px; color:var(--apple-label-tertiary); font-size:0.8rem;">Sin evidencias.</div>`;
 
         return `
-            <div class="expl-evidence-section">
-                <div class="expl-evidence-header">
-                    <div style="font-size:0.72rem; font-weight:700; color: var(--apple-label-secondary); text-transform: uppercase;">
-                        📎 Evidencias de este flujo (${allAtts.length + pending.length})
-                    </div>
+            <div class="h-evidence-section" style="background: var(--apple-bg-elevated); border-radius: var(--apple-radius-lg); border: 1px solid var(--apple-separator); margin-top: 4px;">
+                <div style="padding: 12px 16px; border-bottom: 1px solid var(--apple-separator); background: var(--apple-fill);">
+                    <span style="font-size: 0.75rem; font-weight: 700; color: var(--apple-label);">📎 Evidencias de este flujo <span class="h-evidence-section-header-count">(${totalCount})</span></span>
+                </div>
+                <div style="padding: 16px 20px;">
                     ${controlsEnabled ? `
-                        <div style="display:flex; gap:6px; align-items:center;">
-                            <input type="file" class="expl-evidence-input" data-tc-id="${flow.id}" accept="image/*" multiple style="display:none;"/>
-                            <button class="btn btn-secondary expl-btn-add-evidence" data-tc-id="${flow.id}" style="font-size:0.72rem; padding: 4px 10px;">+ Adjuntar</button>
-                            <select class="expl-evidence-category" data-tc-id="${flow.id}" style="padding: 4px 6px; font-size:0.72rem; border-radius: var(--apple-radius-sm); border:1px solid var(--apple-separator); background: var(--apple-bg); color: var(--apple-label);">
+                        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:8px;">
+                            <input type="file" class="h-evidence-input" data-tc-id="${flow.id}" accept="image/*" multiple style="position:absolute; left:-9999px; width:1px; height:1px; opacity:0;"/>
+                            <button class="btn btn-ghost btn-sm h-btn-add-evidence" data-tc-id="${flow.id}" style="font-size:0.72rem; padding:5px 10px; border-radius: var(--apple-radius-sm); font-weight:600;">📷 Agregar captura</button>
+                            <select class="h-evidence-category" data-tc-id="${flow.id}" style="padding: 5px 8px; font-size:0.72rem; border-radius: var(--apple-radius-sm); border:1px solid var(--apple-separator); background: var(--apple-bg); color: var(--apple-label);">
                                 <option value="GENERAL">GENERAL</option>
                                 <option value="BUG">BUG</option>
                                 <option value="DEV">DEV</option>
                                 <option value="FIGMA">FIGMA</option>
                             </select>
+                            <span style="font-size:0.72rem; color:var(--apple-label-tertiary);" data-evidence-count="${flow.id}">${totalCount} archivo(s)</span>
                         </div>
+                        <div style="font-size:0.7rem; color:var(--apple-label-tertiary); margin-bottom:12px;">Tip: podés pegar una captura con <kbd>Ctrl</kbd>+<kbd>V</kbd> o arrastrar imágenes sobre la grilla.</div>
                     ` : ''}
-                </div>
-                <div class="expl-evidence-grid" data-tc-id="${flow.id}">
-                    ${allAtts.map(a => `
-                        <div class="expl-evidence-item" data-attachment-id="${a.id}">
-                            <img src="/api/evidence/${a.id}" alt="${UI.escapeHTML(a.file_name)}" loading="lazy"/>
-                            <span style="position:absolute; bottom:2px; left:2px; background: rgba(0,0,0,0.6); color: white; padding: 1px 4px; border-radius: 3px; font-size: 0.6rem;">${UI.escapeHTML(a.evidence_category || 'GENERAL')}</span>
-                            <button class="expl-evidence-item-remove" data-attachment-id="${a.id}" data-tc-id="${flow.id}" title="Eliminar">✕</button>
-                        </div>
-                    `).join('')}
-                    ${pending.map((p, idx) => `
-                        <div class="expl-evidence-item" data-pending-idx="${idx}">
-                            <img src="${p.dataUrl}" alt="${UI.escapeHTML(p.file.name)}"/>
-                            <button class="expl-evidence-item-remove" data-pending-idx="${idx}" data-tc-id="${flow.id}">✕</button>
-                        </div>
-                    `).join('')}
-                    ${(controlsEnabled && allAtts.length + pending.length === 0) ? `
-                        <div class="expl-evidence-empty expl-evidence-drop-here" data-tc-id="${flow.id}">
-                            📎 Solo para este flujo: pegá con <kbd>Ctrl</kbd>+<kbd>V</kbd>, arrastrá imágenes, o usá Adjuntar
-                        </div>
-                    ` : ''}
-                    ${(!controlsEnabled && allAtts.length + pending.length === 0) ? `
-                        <div class="expl-evidence-empty" style="cursor:default;">Sin evidencias.</div>
-                    ` : ''}
+                    <div class="h-evidence-grid" data-tc-id="${flow.id}" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px;">
+                        ${persistedHtml}
+                        ${(totalCount === 0) ? emptyHint : ''}
+                    </div>
                 </div>
             </div>
         `;
@@ -824,6 +824,8 @@ export const ExploratoriaTab = {
             this.sessionDetail = null;
             this.flowDrafts.clear();
             this._pendingEvidence.clear();
+            this._flowUploaders.forEach(u => u.destroy());
+            this._flowUploaders.clear();
             invalidateTabCache('exploratoria::detail', Store.state.activeProjectId);
             this.render(container);
         });
@@ -849,13 +851,15 @@ export const ExploratoriaTab = {
                     await this.saveAllFlows(container, flows, execByTc);
                 }
                 // 2) Subir cualquier evidencia pendiente que haya quedado sin subir
-                for (const [flowId, files] of this._pendingEvidence.entries()) {
-                    // Buscar el exec_id del flow (puede existir o no)
+                for (const [flowId, uploader] of this._flowUploaders.entries()) {
+                    const files = uploader.getPending();
+                    if (files.length === 0) continue;
                     const exec = execByTc.get(flowId);
-                    if (exec && files.length > 0) {
+                    if (exec) {
                         await this.uploadPendingEvidence(exec.id, files);
                     }
                 }
+                this._flowUploaders.forEach(u => u.clearPending());
                 this._pendingEvidence.clear();
 
                 // 3) Ahora sí, finalizar la sesión
@@ -911,13 +915,14 @@ export const ExploratoriaTab = {
         });
 
         // Bug draft fields — bind change/blur
-        container.querySelectorAll('.expl-bug-title, .expl-bug-severity, .expl-bug-frequency, .expl-bug-steps, .expl-bug-expected, .expl-bug-actual').forEach(input => {
+        container.querySelectorAll('.expl-bug-title, .expl-bug-description, .expl-bug-severity, .expl-bug-frequency, .expl-bug-steps, .expl-bug-expected, .expl-bug-actual').forEach(input => {
             const handler = () => {
                 const tcId = parseInt(input.dataset.tcId, 10);
                 const drafts = this.flowDrafts.get(this.selectedRunId);
                 if (!drafts[tcId]) drafts[tcId] = { _loaded: true };
                 if (!drafts[tcId].bug) drafts[tcId].bug = {};
                 if (input.classList.contains('expl-bug-title'))       drafts[tcId].bug.title = input.value;
+                if (input.classList.contains('expl-bug-description')) drafts[tcId].bug.description = input.value;
                 if (input.classList.contains('expl-bug-severity'))    drafts[tcId].bug.severity = input.value;
                 if (input.classList.contains('expl-bug-frequency'))   drafts[tcId].bug.frequency = input.value;
                 if (input.classList.contains('expl-bug-steps'))       drafts[tcId].bug.steps_to_reproduce = input.value;
@@ -949,28 +954,61 @@ export const ExploratoriaTab = {
         });
 
         // Save buttons (one per flow card)
+        // Sincronizar pending de uploaders anteriores antes de destruirlos,
+        // así no se pierden archivos si el usuario colapsó el flow.
+        this._flowUploaders.forEach((uploader, flowId) => {
+            const pending = uploader.getPending();
+            if (pending.length > 0) {
+                this._pendingEvidence.set(flowId, pending);
+            } else {
+                this._pendingEvidence.delete(flowId);
+            }
+            uploader.destroy();
+        });
+        this._flowUploaders.clear();
+
         flows.forEach(flow => {
             const exec = execByTc.get(flow.id);
             // El contenido del flujo vive dentro de la fila expandida (.ts-expanded-row)
-            // o, si no está expandido, en la fila del table (.ts-grid-row). Usamos la
-            // primera coincidencia de cualquiera de los dos contenedores.
-            const card = container.querySelector(`.expl-flow-card[data-tc-id="${flow.id}"]`)
-                || container.querySelector(`.expl-flow-row[data-tc-id="${flow.id}"]`)
-                || container.querySelector(`.ts-expanded-row[data-tc-id="${flow.id}"]`);
+            // o, si no está expandido, en la fila del table (.ts-grid-row). Priorizamos
+            // la fila expandida porque es la que contiene los inputs de evidencia.
+            const card = container.querySelector(`.ts-expanded-row[data-tc-id="${flow.id}"]`)
+                || container.querySelector(`.expl-flow-card[data-tc-id="${flow.id}"]`);
             if (!card) return;
-            // Re-bind status buttons after the card is in the DOM (already done above).
-            // Add a save button dynamically? For now: auto-save on status change
-            // via a save indicator at the right of the card. For simplicity, save
-            // is triggered when the user clicks "Guardar" at the bottom of the bug draft,
-            // or we save on every status change. Here we go for the "save on status change" model.
 
             // Convert-to-TC button (per defect)
             card.querySelectorAll('.expl-btn-convert-tc').forEach(btn => {
                 btn.addEventListener('click', () => this.showConvertToTCModal(parseInt(btn.dataset.defectId, 10)));
             });
 
-            // Evidence events
-            this.bindEvidenceEvents(flow, exec, card);
+            // Evidence events — usando el componente reutilizable
+            const execAtts = exec ? (attByExec.get(exec.id) || []) : [];
+            const execDefects = (defectsByExec.get(exec?.id) || []);
+            const defAtts = execDefects.flatMap(d => attByDef.get(d.id) || []);
+            const allAtts = [...execAtts, ...defAtts];
+
+            const uploader = new EvidenceUploader({
+                container: card,
+                inputSelector: `.h-evidence-input[data-tc-id="${flow.id}"]`,
+                addBtnSelector: `.h-btn-add-evidence[data-tc-id="${flow.id}"]`,
+                categorySelector: `.h-evidence-category[data-tc-id="${flow.id}"]`,
+                countSelector: `[data-evidence-count="${flow.id}"]`,
+                gridSelector: `.h-evidence-grid[data-tc-id="${flow.id}"]`,
+                sectionSelector: `.h-evidence-section`,
+                pendingFiles: this._pendingEvidence.get(flow.id) || [],
+                persistedItems: allAtts,
+                emptyHintHtml: isFinished
+                    ? '<div style="grid-column:1/-1; text-align:center; padding:20px; color:var(--apple-label-tertiary); font-size:0.8rem;">Sin evidencias.</div>'
+                    : '<div class="h-evidence-empty-hint" style="grid-column:1/-1; text-align:center; padding:20px; color:var(--apple-label-tertiary); font-size:0.8rem;">📎 Solo para este flujo: pegá con <kbd>Ctrl</kbd>+<kbd>V</kbd>, arrastrá imágenes, o usá Adjuntar</div>',
+                onDeletePersisted: async (attId) => {
+                    await ApiService.deleteEvidence(attId);
+                    invalidateTabCache('exploratoria::detail', Store.state.activeProjectId);
+                    this.sessionDetail = null;
+                    this.render(document.getElementById('tab-content'));
+                },
+            });
+            uploader.init();
+            this._flowUploaders.set(flow.id, uploader);
         });
 
         // Save bar at bottom of detail (catches the OK/FAIL/WARN/BLOCK/SKIP save
@@ -1032,7 +1070,8 @@ export const ExploratoriaTab = {
                     if (res.execution_id) {
                         // Clave por flow.id → evidencia queda atada al flujo. Al guardar,
                         // movemos los pending al execution_id recién creado.
-                        const pending = this._pendingEvidence.get(flow.id) || [];
+                        const uploader = this._flowUploaders.get(flow.id);
+                        const pending = uploader ? uploader.getPending() : [];
                         if (pending.length > 0) allPendingEvidence.set(res.execution_id, pending);
                         if (res.defect_ids && res.defect_ids.length > 0) {
                             createdDefectIds.push(...res.defect_ids);
@@ -1049,6 +1088,7 @@ export const ExploratoriaTab = {
             for (const [execId, files] of allPendingEvidence.entries()) {
                 await this.uploadPendingEvidence(execId, files);
             }
+            this._flowUploaders.forEach(u => u.clearPending());
             this._pendingEvidence.clear();
 
             invalidateTabCache('exploratoria::detail', Store.state.activeProjectId);
@@ -1086,107 +1126,6 @@ export const ExploratoriaTab = {
         if (errors.length > 0) {
             UI.toast(`⚠️ ${errors.length} evidencia(s) con error: ${errors[0]}`, 'warn');
         }
-    },
-
-    // ─── Evidence binding (per flow card) ───
-    bindEvidenceEvents(flow, exec, card) {
-        // La sección de evidencia se muestra para CADA flow (trazabilidad por TC),
-        // incluso antes de tener una ejecución guardada. Las imágenes pendientes
-        // se acopian por flow.id; al guardar, se suben al execution_id resultante.
-        const input = card.querySelector('.expl-evidence-input');
-        const addBtn = card.querySelector('.expl-btn-add-evidence');
-        const catSel = card.querySelector('.expl-evidence-category');
-        const grid = card.querySelector('.expl-evidence-grid');
-        const section = card.querySelector('.expl-evidence-section');
-
-        if (!addBtn) return;
-
-        const stageFile = (file) => {
-            if (!file || !file.type || !file.type.startsWith('image/')) return;
-            if (!this._pendingEvidence.has(flow.id)) this._pendingEvidence.set(flow.id, []);
-            const category = catSel?.value || 'GENERAL';
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const pending = this._pendingEvidence.get(flow.id);
-                pending.push({ file, category, dataUrl: e.target.result });
-                this.render(document.getElementById('tab-content'));
-            };
-            reader.readAsDataURL(file);
-        };
-
-        if (addBtn && input) {
-            addBtn.addEventListener('click', () => input.click());
-            input.addEventListener('change', () => {
-                const files = Array.from(input.files);
-                files.forEach(stageFile);
-                input.value = '';
-            });
-        }
-
-        if (section) {
-            section.addEventListener('paste', (e) => {
-                const items = e.clipboardData?.items;
-                if (!items) return;
-                let handled = false;
-                for (const item of items) {
-                    if (item.kind === 'file' && item.type && item.type.startsWith('image/')) {
-                        const blob = item.getAsFile();
-                        if (!blob) continue;
-                        const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-                        const ext = (blob.type.split('/')[1] || 'png').replace('jpeg', 'jpg');
-                        const file = new File([blob], `paste-${ts}.${ext}`, { type: blob.type });
-                        stageFile(file);
-                        handled = true;
-                    }
-                }
-                if (handled) e.preventDefault();
-            });
-        }
-
-        if (grid) {
-            const dragHighlight = () => { grid.style.outline = '2px dashed var(--apple-blue)'; grid.style.outlineOffset = '4px'; };
-            const dragUnhighlight = () => { grid.style.outline = ''; grid.style.outlineOffset = ''; };
-            grid.addEventListener('dragover', (e) => { e.preventDefault(); dragHighlight(); });
-            grid.addEventListener('dragleave', (e) => { if (e.target === grid) dragUnhighlight(); });
-            grid.addEventListener('drop', (e) => {
-                e.preventDefault();
-                dragUnhighlight();
-                const files = Array.from(e.dataTransfer?.files || []);
-                files.forEach(stageFile);
-            });
-        }
-
-        // ── Eliminar evidencia pendiente (clic en ✕ dentro de la miniatura) ──
-        card.querySelectorAll('.expl-evidence-item-remove[data-pending-idx]').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const idx = parseInt(btn.dataset.pendingIdx, 10);
-                const list = this._pendingEvidence.get(flow.id) || [];
-                if (idx >= 0 && idx < list.length) {
-                    list.splice(idx, 1);
-                    if (list.length === 0) this._pendingEvidence.delete(flow.id);
-                }
-                this.render(document.getElementById('tab-content'));
-            });
-        });
-
-        // ── Eliminar evidencia persistida (clic en ✕ sobre adjuntos ya subidos) ──
-        card.querySelectorAll('.expl-evidence-item-remove[data-attachment-id]').forEach(btn => {
-            btn.addEventListener('click', async (e) => {
-                e.stopPropagation();
-                if (!confirm('¿Eliminar esta evidencia?')) return;
-                const attId = parseInt(btn.dataset.attachmentId, 10);
-                try {
-                    await ApiService.deleteEvidence(attId);
-                    UI.toast('✅ Evidencia eliminada');
-                    invalidateTabCache('exploratoria::detail', Store.state.activeProjectId);
-                    this.sessionDetail = null;
-                    this.render(document.getElementById('tab-content'));
-                } catch (err) {
-                    UI.toast(err.message || 'Error al eliminar', 'error');
-                }
-            });
-        });
     },
 
     // ─── Modals ───

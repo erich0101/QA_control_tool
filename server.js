@@ -9,16 +9,21 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const cookieParser = require('cookie-parser');
 const { query, getClient, setupRealtimeChannel } = require('./db');
+const evidenceStore = require('./modules/evidence-store');
 const { encrypt, decrypt } = require('./utils/crypto-utils');
 const http = require('http');
 const WebSocket = require('ws');
 const JiraService = require('./jira-service');
 const XLSX = require('xlsx');
 const ExcelJS = require('exceljs');
+const fs = require('fs');
 
 // Migración de columnas (Auto-ejecución al iniciar con IF NOT EXISTS)
 (async () => {
     try {
+        // Init local evidence store (SQLite + filesystem) BEFORE the schema
+        // migrations so the index is ready when the PG ALTERs land.
+        evidenceStore.init({ baseDir: __dirname });
         await query(`ALTER TABLE qa_defects ADD COLUMN IF NOT EXISTS jira_key VARCHAR(50)`);
         await query(`ALTER TABLE qa_defects ADD COLUMN IF NOT EXISTS jira_url TEXT`);
 
@@ -218,6 +223,20 @@ await query(`CREATE INDEX IF NOT EXISTS idx_defects_proj_exec ON qa_defects (pro
         await query(`ALTER TABLE qa_attachments ADD COLUMN IF NOT EXISTS suggestion_id INTEGER REFERENCES qa_suggestions(id) ON DELETE CASCADE`);
         await query(`CREATE INDEX IF NOT EXISTS idx_attachments_suggestion ON qa_attachments (suggestion_id)`);
         await query(`CREATE INDEX IF NOT EXISTS idx_attachments_execution_id ON qa_attachments (execution_id) WHERE execution_id IS NOT NULL`);
+
+        // ── Local evidence store (binarios fuera de PostgreSQL) ──
+        await query(`ALTER TABLE qa_attachments ADD COLUMN IF NOT EXISTS project_id    INTEGER REFERENCES qa_projects(id) ON DELETE SET NULL`);
+        await query(`ALTER TABLE qa_attachments ADD COLUMN IF NOT EXISTS storage_path  TEXT`);
+        await query(`ALTER TABLE qa_attachments ADD COLUMN IF NOT EXISTS sha256        VARCHAR(64)`);
+        await query(`ALTER TABLE qa_attachments ADD COLUMN IF NOT EXISTS size_bytes    BIGINT`);
+        await query(`ALTER TABLE qa_attachments ADD COLUMN IF NOT EXISTS storage_kind  VARCHAR(16) DEFAULT 'legacy_pg'`);
+        await query(`ALTER TABLE qa_attachments ADD COLUMN IF NOT EXISTS migrated_at   TIMESTAMP`);
+        // Hacer file_data nullable: los nuevos uploads suben a disco vía evidence-store.js
+        // y no escriben BYTEA. ALTER es idempotente en PG (DROP NOT NULL no falla si ya
+        // es nullable). Supabase exec_query no soporta PL/pgSQL, así que un ALTER directo.
+        await query(`ALTER TABLE qa_attachments ALTER COLUMN file_data DROP NOT NULL`);
+        await query(`CREATE INDEX IF NOT EXISTS idx_attachments_storage_kind ON qa_attachments (storage_kind)`);
+        await query(`CREATE INDEX IF NOT EXISTS idx_attachments_sha256       ON qa_attachments (sha256)`);
         await query(`CREATE INDEX IF NOT EXISTS idx_perms_user_id     ON qa_user_permissions (user_id)`);
         await query(`CREATE INDEX IF NOT EXISTS idx_proj_users_uid    ON qa_project_users (user_id)`);
         await query(`CREATE INDEX IF NOT EXISTS idx_proj_users_pid    ON qa_project_users (project_id)`);
@@ -1232,7 +1251,7 @@ app.post('/api/jira/defects/:id/create-ticket', requireAuth, async (req, res) =>
         const projectId = ucRes.rows[0].project_id;
 
         // 3. Obtener evidencias del defecto
-        const evidenceRes = await query(`SELECT file_name, mime_type, file_data FROM qa_attachments WHERE execution_id = ?`, [bug.execution_id]);
+        const evidenceRes = await query(`SELECT id, file_name, mime_type, storage_kind, storage_path, sha256 FROM qa_attachments WHERE execution_id = ?`, [bug.execution_id]);
         if (evidenceRes.rows.length > 0) {
             bug.evidences = evidenceRes.rows.map(r => r.file_name);
         }
@@ -1253,7 +1272,15 @@ app.post('/api/jira/defects/:id/create-ticket', requireAuth, async (req, res) =>
         if (evidenceRes.rows.length > 0) {
             for (const ev of evidenceRes.rows) {
                 try {
-                    const fileBuffer = Buffer.from(ev.file_data.replace(/^\\x/, ''), 'hex');
+                    let fileBuffer;
+                    if (ev.storage_kind === 'local' && ev.storage_path) {
+                        fileBuffer = evidenceStore.read(ev.storage_path);
+                    } else {
+                        // Fallback transitorio: binario sigue en BYTEA.
+                        const leg = await query(`SELECT encode(file_data, 'hex') as file_hex FROM qa_attachments WHERE id = ?`, [ev.id]);
+                        const hex = (leg.rows[0] && leg.rows[0].file_hex || '').replace(/^\\x/, '');
+                        fileBuffer = Buffer.from(hex, 'hex');
+                    }
                     await JiraService.attachFile(creds.userCredentials, creds.domain, jiraResult.key, ev.file_name, fileBuffer, ev.mime_type);
                     attachmentCount++;
                 } catch (attachErr) {
@@ -4195,7 +4222,7 @@ app.post('/api/jira/hallazgos/:id/create-ticket', requireAuth, async (req, res) 
 
         const projectId = bug.project_id;
 
-        const evidenceRes = await query(`SELECT file_name, mime_type, file_data FROM qa_attachments WHERE defect_id = ?`, [hallazgoId]);
+        const evidenceRes = await query(`SELECT id, file_name, mime_type, storage_kind, storage_path, sha256 FROM qa_attachments WHERE defect_id = ?`, [hallazgoId]);
         if (evidenceRes.rows.length > 0) {
             bug.evidences = evidenceRes.rows.map(r => r.file_name);
         }
@@ -4211,7 +4238,14 @@ app.post('/api/jira/hallazgos/:id/create-ticket', requireAuth, async (req, res) 
         if (evidenceRes.rows.length > 0) {
             for (const ev of evidenceRes.rows) {
                 try {
-                    const fileBuffer = Buffer.from(ev.file_data.replace(/^\\x/, ''), 'hex');
+                    let fileBuffer;
+                    if (ev.storage_kind === 'local' && ev.storage_path) {
+                        fileBuffer = evidenceStore.read(ev.storage_path);
+                    } else {
+                        const leg = await query(`SELECT encode(file_data, 'hex') as file_hex FROM qa_attachments WHERE id = ?`, [ev.id]);
+                        const hex = (leg.rows[0] && leg.rows[0].file_hex || '').replace(/^\\x/, '');
+                        fileBuffer = Buffer.from(hex, 'hex');
+                    }
                     await JiraService.attachFile(creds.userCredentials, creds.domain, jiraResult.key, ev.file_name, fileBuffer, ev.mime_type);
                     attachmentCount++;
                 } catch (attachErr) {
@@ -4259,12 +4293,41 @@ app.get('/api/reports/:runId', requireAuth, async (req, res) => {
 
 app.get('/api/evidence/:id', requireAuth, async (req, res) => {
     try {
-        const result = await query(`SELECT mime_type, encode(file_data, 'base64') as file_b64 FROM qa_attachments WHERE id = ?`, [req.params.id]);
+        const result = await query(
+            `SELECT id, mime_type, storage_kind, storage_path, sha256, size_bytes
+               FROM qa_attachments WHERE id = ?`,
+            [req.params.id]
+        );
         if (result.rows.length === 0) return res.status(404).json({ error: 'Evidencia no encontrada' });
-        
-        const row = result.rows[0];
-        res.setHeader('Content-Type', row.mime_type);
-        res.send(Buffer.from(row.file_b64, 'base64'));
+        const r = result.rows[0];
+
+        // Fallback legacy: el binario sigue en BYTEA (transición pre-migration).
+        if (r.storage_kind === 'legacy_pg' || !r.storage_kind || !r.storage_path) {
+            const legacy = await query(
+                `SELECT mime_type, encode(file_data, 'base64') as file_b64
+                   FROM qa_attachments WHERE id = ?`,
+                [req.params.id]
+            );
+            if (legacy.rows.length === 0) return res.status(404).json({ error: 'Evidencia no encontrada' });
+            const lr = legacy.rows[0];
+            res.setHeader('Content-Type', lr.mime_type);
+            res.setHeader('Cache-Control', 'no-store');
+            return res.send(Buffer.from(lr.file_b64, 'base64'));
+        }
+
+        // Local: stream desde disco con headers de caché inmutables.
+        const abs = evidenceStore.absolutePath(r.storage_path);
+        if (!fs.existsSync(abs)) {
+            return res.status(410).json({ error: 'Archivo no disponible localmente' });
+        }
+        const stat = fs.statSync(abs);
+        res.setHeader('Content-Type', r.mime_type);
+        res.setHeader('Content-Length', stat.size);
+        res.setHeader('ETag', `"${r.sha256}"`);
+        res.setHeader('Cache-Control', 'private, max-age=31536000, immutable');
+        res.setHeader('Last-Modified', stat.mtime.toUTCString());
+        if (req.method === 'HEAD') return res.end();
+        fs.createReadStream(abs).pipe(res);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -4276,34 +4339,103 @@ app.post('/api/evidence', requireAuth, upload.single('evidence'), async (req, re
         const file = req.file;
         if (!file) return res.status(400).json({ error: 'Archivo no recibido' });
 
+        // Resolver parentType / parentId / projectId antes de almacenar.
+        let projectId = null;
+        let parentType = 'unknown';
+        let parentId = null;
+        let resolvedExecutionId = null;
+
         if (defect_id) {
-            await query(`
-                INSERT INTO qa_attachments (defect_id, file_name, mime_type, file_data, evidence_category)
-                VALUES (?, ?, ?, ?, ?)
-            `, [defect_id, file.originalname, file.mimetype, file.buffer, category || 'GENERAL']);
+            const r = await query(`SELECT d.project_id, d.execution_id FROM qa_defects d WHERE d.id = ?`, [defect_id]);
+            if (r.rows.length > 0) {
+                projectId = r.rows[0].project_id;
+                parentType = 'defect';
+                parentId = parseInt(defect_id, 10);
+                resolvedExecutionId = r.rows[0].execution_id;
+            }
         } else if (suggestion_id) {
-            await query(`
-                INSERT INTO qa_attachments (suggestion_id, file_name, mime_type, file_data, evidence_category)
-                VALUES (?, ?, ?, ?, ?)
-            `, [suggestion_id, file.originalname, file.mimetype, file.buffer, category || 'GENERAL']);
+            const r = await query(`SELECT project_id FROM qa_suggestions WHERE id = ?`, [suggestion_id]);
+            if (r.rows.length > 0) {
+                projectId = r.rows[0].project_id;
+                parentType = 'suggestion';
+                parentId = parseInt(suggestion_id, 10);
+            }
         } else if (execution_id) {
-            // Adjuntar a una ejecución específica (usado por Exploratoria y otros
-            // flujos donde ya tenemos el execution_id resultante del guardado).
-            await query(`
-                INSERT INTO qa_attachments (execution_id, file_name, mime_type, file_data, evidence_category)
-                VALUES (?, ?, ?, ?, ?)
-            `, [parseInt(execution_id, 10), file.originalname, file.mimetype, file.buffer, category || 'GENERAL']);
+            const r = await query(`
+                SELECT uc.project_id
+                  FROM qa_executions e
+                  JOIN qa_test_cases tc ON e.tc_id = tc.id
+                  JOIN qa_test_suites s  ON tc.suite_id = s.id
+                  JOIN qa_use_cases uc    ON s.use_case_id = uc.id
+                 WHERE e.id = ?
+            `, [parseInt(execution_id, 10)]);
+            if (r.rows.length > 0) projectId = r.rows[0].project_id;
+            parentType = 'execution';
+            parentId = parseInt(execution_id, 10);
+            resolvedExecutionId = parentId;
         } else {
             const execRes = await query(`SELECT id FROM qa_executions WHERE tc_id = ? ORDER BY id DESC LIMIT 1`, [tc_id]);
             if (execRes.rows.length === 0) return res.status(400).json({ error: 'No hay una ejecución reciente para este Test Case' });
-            const executionId = execRes.rows[0].id;
-            await query(`
-                INSERT INTO qa_attachments (execution_id, file_name, mime_type, file_data, evidence_category)
-                VALUES (?, ?, ?, ?, ?)
-            `, [executionId, file.originalname, file.mimetype, file.buffer, category || 'GENERAL']);
+            resolvedExecutionId = execRes.rows[0].id;
+            const r = await query(`
+                SELECT uc.project_id
+                  FROM qa_executions e
+                  JOIN qa_test_cases tc ON e.tc_id = tc.id
+                  JOIN qa_test_suites s  ON tc.suite_id = s.id
+                  JOIN qa_use_cases uc    ON s.use_case_id = uc.id
+                 WHERE e.id = ?
+            `, [resolvedExecutionId]);
+            if (r.rows.length > 0) projectId = r.rows[0].project_id;
+            parentType = 'execution';
+            parentId = resolvedExecutionId;
         }
 
-        res.json({ ok: true });
+        // 1) Escribir binario al store local y obtener storagePath + sha256.
+        const stored = evidenceStore.store({
+            buffer: file.buffer,
+            mime: file.mimetype,
+            fileName: file.originalname,
+            projectId,
+            parentType,
+            parentId,
+            category: category || 'GENERAL',
+            pgAttachmentId: null
+        });
+
+        // 2) Insertar fila en PG SIN file_data. lastID viene del RETURNING id que
+        //    añade buildSql (db.js:67) automáticamente.
+        let insertSql, insertParams;
+        if (defect_id) {
+            insertSql = `INSERT INTO qa_attachments
+                (defect_id, file_name, mime_type, evidence_category, project_id,
+                 storage_path, sha256, size_bytes, storage_kind)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'local')`;
+            insertParams = [defect_id, file.originalname, file.mimetype, category || 'GENERAL',
+                            projectId, stored.storagePath, stored.sha256, stored.size];
+        } else if (suggestion_id) {
+            insertSql = `INSERT INTO qa_attachments
+                (suggestion_id, file_name, mime_type, evidence_category, project_id,
+                 storage_path, sha256, size_bytes, storage_kind)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'local')`;
+            insertParams = [suggestion_id, file.originalname, file.mimetype, category || 'GENERAL',
+                            projectId, stored.storagePath, stored.sha256, stored.size];
+        } else {
+            insertSql = `INSERT INTO qa_attachments
+                (execution_id, file_name, mime_type, evidence_category, project_id,
+                 storage_path, sha256, size_bytes, storage_kind)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'local')`;
+            insertParams = [resolvedExecutionId, file.originalname, file.mimetype, category || 'GENERAL',
+                            projectId, stored.storagePath, stored.sha256, stored.size];
+        }
+        const ins = await query(insertSql, insertParams);
+        const newId = ins.lastID;
+
+        // 3) Asociar el row SQLite con el id de PG.
+        if (newId && stored.indexId) {
+            evidenceStore.setPgAttachmentId(stored.indexId, newId);
+        }
+
+        res.json({ ok: true, id: newId, storage: { path: stored.storagePath, sha256: stored.sha256, size: stored.size } });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -4313,6 +4445,7 @@ app.delete('/api/evidence/:id', requireAuth, async (req, res) => {
     try {
         const result = await query(`DELETE FROM qa_attachments WHERE id = ?`, [req.params.id]);
         if (result.changes === 0) return res.status(404).json({ error: 'Evidencia no encontrada' });
+        try { evidenceStore.deleteIndex(parseInt(req.params.id, 10)); } catch (_) { /* best-effort */ }
         res.json({ ok: true });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -4402,7 +4535,7 @@ app.post('/api/issue', requireAuth, upload.any(), async (req, res) => {
     }
 });
 
-// Helper para compresión on-the-fly y guardado de adjunto
+// Helper para compresión on-the-fly y guardado de adjunto en el store local.
 async function saveAttachment(execId, defectId, fileObj, category) {
     let finalBuffer = fileObj.buffer;
     let mime = fileObj.mimetype;
@@ -4417,10 +4550,45 @@ async function saveAttachment(execId, defectId, fileObj, category) {
         filename = filename.replace(/\.[^/.]+$/, "") + ".webp";
     }
 
-    await query(
-        `INSERT INTO qa_attachments (execution_id, defect_id, file_name, mime_type, evidence_category, file_data) VALUES (?, ?, ?, ?, ?, ?)`,
-        [execId, defectId, filename, mime, category, finalBuffer]
+    // Resolver project_id para el path layout.
+    let projectId = null;
+    if (execId) {
+        const r = await query(`
+            SELECT uc.project_id
+              FROM qa_executions e
+              JOIN qa_test_cases tc ON e.tc_id = tc.id
+              JOIN qa_test_suites s  ON tc.suite_id = s.id
+              JOIN qa_use_cases uc    ON s.use_case_id = uc.id
+             WHERE e.id = ?
+        `, [execId]);
+        if (r.rows.length > 0) projectId = r.rows[0].project_id;
+    } else if (defectId) {
+        const r = await query(`SELECT project_id FROM qa_defects WHERE id = ?`, [defectId]);
+        if (r.rows.length > 0) projectId = r.rows[0].project_id;
+    }
+
+    const stored = evidenceStore.store({
+        buffer: finalBuffer,
+        mime,
+        fileName: filename,
+        projectId,
+        parentType: defectId ? 'defect' : 'execution',
+        parentId: defectId || execId,
+        category: category || 'GENERAL',
+        pgAttachmentId: null
+    });
+
+    const ins = await query(
+        `INSERT INTO qa_attachments
+            (execution_id, defect_id, file_name, mime_type, evidence_category, project_id,
+             storage_path, sha256, size_bytes, storage_kind)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'local')`,
+        [execId, defectId, filename, mime, category || 'GENERAL', projectId,
+         stored.storagePath, stored.sha256, stored.size]
     );
+    if (ins.lastID && stored.indexId) {
+        evidenceStore.setPgAttachmentId(stored.indexId, ins.lastID);
+    }
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -4537,4 +4705,14 @@ function setupRealtime() {
     console.log('📡 Realtime: Listening for database changes via Supabase Realtime...');
 }
 
+// Cierre ordenado: cerrar el índice SQLite de evidencias antes de salir.
+function gracefulShutdown(signal) {
+    console.log(`\n[shutdown] received ${signal}, closing evidence store...`);
+    try { evidenceStore.close(); } catch (e) { console.error('[shutdown] evidenceStore.close error:', e.message); }
+    try { server.close(() => process.exit(0)); } catch (_) { process.exit(0); }
+    // Hard timeout fallback
+    setTimeout(() => process.exit(0), 5000).unref();
+}
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 

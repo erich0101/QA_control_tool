@@ -133,6 +133,17 @@ tmp/
 temp/
 
 # ============================================================
+# EVIDENCIAS LOCALES (binarios + índice SQLite)
+# Binarios en data/evidences/<project>/YYYY-MM/<sha>.<ext>
+# Índice SQLite en data/evidences.sqlite
+# ============================================================
+data/evidences/
+data/evidences.sqlite
+data/evidences.sqlite-journal
+data/evidences.sqlite-wal
+data/evidences.sqlite-shm
+
+# ============================================================
 # COVERAGE Y TESTING
 # ============================================================
 coverage/
@@ -208,3 +219,13 @@ curl-parser-test.mjs
 # ============================================================
 docs/plans/
 mimo_dream_tables.py
+output/
+output/playwright/expl-evidence-debug/01-after-login.png
+output/playwright/expl-evidence-debug/01-dashboard.png
+output/playwright/expl-evidence-debug/02-exploratoria.png
+output/playwright/expl-evidence-debug/no-session.png
+output/playwright/expl-evidence-debug/session-error.png
+output/playwright/expl-evidence-debug/02-exploratoria-list.png
+docs/antecedente-ia-testing.md
+docs/antecedente-ia-testing.docx
+test-evidence.png

@@ -2,6 +2,7 @@ import { Store } from '../store/state.js';
 import { ApiService } from '../services/api.js';
 import { UI } from '../utils/ui-utils.js';
 import { getCachedTab, setCachedTab, invalidateTabCache } from '../store/state.js';
+import { EvidenceUploader } from './evidence-uploader.js';
 
 const STATUS_COLORS = {
     'OPEN': 'var(--apple-red)',
@@ -332,6 +333,10 @@ export const HallazgosTab = {
                     <input type="text" id="hf-title" value="${UI.escapeHTML(d.title || '')}" placeholder="Resumen del hallazgo..." style="${inputStyle}" ${focusAttr}>
                 </div>
                 <div class="field-group full-width">
+                    <label style="display: block; font-size: 0.72rem; font-weight: 600; color: var(--apple-label-secondary); margin-bottom: 6px;">Descripción</label>
+                    <textarea id="hf-description" placeholder="Contexto del bug: qué se detectó, en qué flujo, con qué frecuencia..." style="${inputStyle} min-height:100px; font-family:inherit; resize:vertical;" ${focusAttr}>${UI.escapeHTML(d.description || '')}</textarea>
+                </div>
+                <div class="field-group full-width">
                     <label style="display: block; font-size: 0.72rem; font-weight: 600; color: var(--apple-label-secondary); margin-bottom: 6px;">Pasos</label>
                     <textarea id="hf-steps" placeholder="1. Ir a...&#10;2. Hacer clic en...&#10;3. Observar..." style="${inputStyle} min-height:90px; font-family:inherit; resize:vertical;" ${focusAttr}>${UI.escapeHTML(d.steps_to_reproduce || '')}</textarea>
                 </div>
@@ -485,8 +490,12 @@ export const HallazgosTab = {
                             </div>
                         </div>
                         <div class="field-group">
-                            <label class="field-label" style="font-size: 0.68rem;">DESCRIPCIÓN GENERAL</label>
-                            <textarea id="hf-observations" placeholder="Contexto del bug..." style="${inputStyle} width: 100%; min-height: 80px; font-family: inherit; resize: vertical; padding: 12px; background: var(--apple-bg-tertiary); border: 1px solid var(--apple-separator); border-radius: var(--apple-radius-md); white-space: pre-wrap; line-height: 1.6; font-size: 0.85rem;">${UI.escapeHTML(h.observations || '')}</textarea>
+                            <label class="field-label" style="font-size: 0.68rem;">DESCRIPCIÓN</label>
+                            <textarea id="hf-description" placeholder="Contexto del bug: qué se detectó, en qué flujo, con qué frecuencia..." style="${inputStyle} width: 100%; min-height: 100px; font-family: inherit; resize: vertical; padding: 12px; background: var(--apple-bg-tertiary); border: 1px solid var(--apple-separator); border-radius: var(--apple-radius-md); white-space: pre-wrap; line-height: 1.6; font-size: 0.85rem;">${UI.escapeHTML(h.description || '')}</textarea>
+                        </div>
+                        <div class="field-group">
+                            <label class="field-label" style="font-size: 0.68rem;">OBSERVACIONES</label>
+                            <textarea id="hf-observations" placeholder="Notas adicionales, workarounds, links relacionados..." style="${inputStyle} width: 100%; min-height: 80px; font-family: inherit; resize: vertical; padding: 12px; background: var(--apple-bg-tertiary); border: 1px solid var(--apple-separator); border-radius: var(--apple-radius-md); white-space: pre-wrap; line-height: 1.6; font-size: 0.85rem;">${UI.escapeHTML(h.observations || '')}</textarea>
                         </div>
                         <div class="field-group">
                             <label class="field-label" style="font-size: 0.68rem;">PASOS PARA REPRODUCIR</label>
@@ -757,6 +766,7 @@ export const HallazgosTab = {
     getFormData(container) {
         return {
             title: container.querySelector('#hf-title')?.value?.trim() || '',
+            description: container.querySelector('#hf-description')?.value?.trim() || '',
             steps_to_reproduce: container.querySelector('#hf-steps')?.value?.trim() || '',
             expected_result: container.querySelector('#hf-expected')?.value?.trim() || '',
             preconditions: container.querySelector('#hf-preconditions')?.value?.trim() || '',
@@ -814,10 +824,10 @@ export const HallazgosTab = {
                     await ApiService.updateHallazgo(h.id, data);
                     UI.toast('✅ Hallazgo actualizado');
 
-                    const pendingFiles = this._pendingFiles || [];
+                    const pendingFiles = this._bugUploader ? this._bugUploader.getPending() : [];
                     if (pendingFiles.length > 0) {
                         await this.uploadPendingEvidence(h.id, pendingFiles);
-                        this._pendingFiles = [];
+                        this._bugUploader.clearPending();
                     }
 
                     await this.refreshAndSelect(container, h.id);
@@ -826,10 +836,10 @@ export const HallazgosTab = {
                     const res = await ApiService.createHallazgo(data);
                     UI.toast('✅ Hallazgo creado');
 
-                    const pendingFiles = this._pendingFiles || [];
+                    const pendingFiles = this._bugUploader ? this._bugUploader.getPending() : [];
                     if (pendingFiles.length > 0 && res.id) {
                         await this.uploadPendingEvidence(res.id, pendingFiles);
-                        this._pendingFiles = [];
+                        this._bugUploader.clearPending();
                     }
 
                     this.isCreating = false;
@@ -860,94 +870,25 @@ export const HallazgosTab = {
     },
 
     bindEvidenceEvents(container, h) {
-        const input = container.querySelector('#hf-evidence-input');
-        const addBtn = container.querySelector('#hf-add-evidence');
-        const categorySelect = container.querySelector('#hf-evidence-category');
-        const countSpan = container.querySelector('#hf-evidence-count');
-        const grid = container.querySelector('#hf-evidence-grid');
-        const section = container.querySelector('#hf-evidence-section');
-
-        if (!input || !addBtn) return;
-
-        const stageFile = (file) => {
-            if (!file || !file.type || !file.type.startsWith('image/')) return;
-            if (!this._pendingFiles) this._pendingFiles = [];
-            const category = categorySelect?.value || 'GENERAL';
-            this._pendingFiles.push({ file, category });
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const div = document.createElement('div');
-                div.className = 'h-evidence-item';
-                div.dataset.pending = 'true';
-                div.innerHTML = `
-                    <img src="${e.target.result}" alt="${file.name}">
-                    <span class="h-evidence-category-badge">${category}</span>
-                    <button class="h-evidence-remove" data-pending="true" data-filename="${file.name}">✕</button>
-                `;
-                grid?.prepend(div);
-                div.querySelector('.h-evidence-remove')?.addEventListener('click', () => {
-                    div.remove();
-                    this._pendingFiles = this._pendingFiles.filter(f => f.file !== file);
-                    this.updateEvidenceCount(container);
-                });
-            };
-            reader.readAsDataURL(file);
-            this.updateEvidenceCount(container);
-        };
-
-        addBtn.addEventListener('click', () => input.click());
-
-        input.addEventListener('change', () => {
-            const files = Array.from(input.files);
-            if (files.length === 0) return;
-            files.forEach(stageFile);
-            input.value = '';
+        if (this._bugUploader) this._bugUploader.destroy();
+        this._bugUploader = new EvidenceUploader({
+            container,
+            inputSelector: '#hf-evidence-input',
+            addBtnSelector: '#hf-add-evidence',
+            categorySelector: '#hf-evidence-category',
+            countSelector: '#hf-evidence-count',
+            gridSelector: '#hf-evidence-grid',
+            sectionSelector: '#hf-evidence-section',
+            emptyHintHtml: '<div style="grid-column:1/-1; text-align:center; padding:20px; color:var(--apple-label-tertiary); font-size:0.8rem;">Sin evidencias adjuntas.</div>',
+            onDeletePersisted: async (attId) => {
+                await fetch(`/api/evidence/${attId}`, { method: 'DELETE' });
+            },
+            onAfterDelete: () => {
+                if (this._bugUploader) this._bugUploader.updateCount();
+            },
         });
-
-        // ── Paste: Ctrl+V con una imagen en el clipboard → agregar como evidencia.
-        // Se ata al contenedor de la sección (no a document) para no interceptar
-        // Ctrl+V en textareas de otros tabs. Solo actúa si el clipboard trae imágenes;
-        // el paste de texto sigue funcionando normal.
-        section?.addEventListener('paste', (e) => {
-            const items = e.clipboardData?.items;
-            if (!items) return;
-            let handled = false;
-            for (const item of items) {
-                if (item.kind === 'file' && item.type && item.type.startsWith('image/')) {
-                    const blob = item.getAsFile();
-                    if (!blob) continue;
-                    const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-                    const ext = (blob.type.split('/')[1] || 'png').replace('jpeg', 'jpg');
-                    const file = new File([blob], `paste-${ts}.${ext}`, { type: blob.type });
-                    stageFile(file);
-                    handled = true;
-                }
-            }
-            if (handled) e.preventDefault();
-        });
-
-        // ── Drag & drop: arrastrar imágenes sobre la grilla también las agrega.
-        // Acepta múltiples archivos; valida que sean imágenes; usa la categoría actual.
-        if (grid) {
-            const dragHighlight = () => { grid.style.outline = '2px dashed var(--apple-blue)'; grid.style.outlineOffset = '4px'; };
-            const dragUnhighlight = () => { grid.style.outline = ''; grid.style.outlineOffset = ''; };
-            grid.addEventListener('dragover', (e) => { e.preventDefault(); dragHighlight(); });
-            grid.addEventListener('dragleave', (e) => { if (e.target === grid) dragUnhighlight(); });
-            grid.addEventListener('drop', (e) => {
-                e.preventDefault();
-                dragUnhighlight();
-                const files = Array.from(e.dataTransfer?.files || []);
-                files.forEach(stageFile);
-            });
-        }
-    },
-
-    updateEvidenceCount(container) {
-        const grid = container.querySelector('#hf-evidence-grid');
-        const countSpan = container.querySelector('#hf-evidence-count');
-        if (!grid || !countSpan) return;
-        const items = grid.querySelectorAll('.h-evidence-item');
-        countSpan.textContent = `${items.length} archivo(s)`;
+        this._bugUploader.init();
+        if (h && h.id) this.loadEvidence(h, container);
     },
 
     async bindDetailActions(h, container) {
@@ -1159,41 +1100,13 @@ export const HallazgosTab = {
         if (this.subTab === 'suggestions') {
             return this.loadSuggestionEvidence(h, container);
         }
-        const grid = container.querySelector('#hf-evidence-grid');
-        const countSpan = container.querySelector('#hf-evidence-count');
-        if (!grid) return;
+        if (!this._bugUploader) return;
         try {
             const res = await fetch(`/api/hallazgos/${h.id}/evidence`);
             const data = await res.json();
-            const items = data.evidence || [];
-            if (items.length === 0) {
-                grid.innerHTML = '<div style="grid-column:1/-1; text-align:center; padding:20px; color:var(--apple-label-tertiary); font-size:0.8rem;">Sin evidencias adjuntas.</div>';
-                if (countSpan) countSpan.textContent = '0 archivos';
-                return;
-            }
-            grid.innerHTML = items.map(ev => `
-                <div class="h-evidence-item" data-id="${ev.id}">
-                    <img src="/api/evidence/${ev.id}" alt="${UI.escapeHTML(ev.file_name)}" loading="lazy">
-                    <span class="h-evidence-category-badge">${ev.evidence_category || 'GENERAL'}</span>
-                    <button class="h-evidence-remove" data-id="${ev.id}">✕</button>
-                </div>
-            `).join('');
-            if (countSpan) countSpan.textContent = `${items.length} archivo(s)`;
-
-            grid.querySelectorAll('.h-evidence-remove').forEach(btn => {
-                btn.addEventListener('click', async () => {
-                    if (!confirm('¿Eliminar esta evidencia?')) return;
-                    try {
-                        await fetch(`/api/evidence/${btn.dataset.id}`, { method: 'DELETE' });
-                        btn.closest('.h-evidence-item')?.remove();
-                        this.updateEvidenceCount(container);
-                    } catch (err) {
-                        UI.toast('Error al eliminar evidencia', 'error');
-                    }
-                });
-            });
+            this._bugUploader.setPersisted(data.evidence || []);
         } catch (err) {
-            grid.innerHTML = '<div style="grid-column:1/-1; text-align:center; padding:20px; color:var(--apple-label-tertiary); font-size:0.8rem;">Error cargando evidencias.</div>';
+            console.error('Error cargando evidencias:', err);
         }
     },
 

@@ -3,6 +3,8 @@
  * Encapsula todas las llamadas fetch al backend.
  */
 
+import { invalidateTabCache } from '../store/state.js';
+
 const json = async (res) => {
     if (res.status === 401) {
         window.dispatchEvent(new Event('auth-error'));
@@ -397,11 +399,15 @@ export const ApiService = {
         return fetch(url).then(json);
     },
     async startExploratorySession(data) {
-        return fetch('/api/explorations/sessions', {
+        const res = await fetch('/api/explorations/sessions', {
             method: 'POST',
             body: JSON.stringify(data),
             headers
         }).then(json);
+        // Invalidar cache del sidebar para que la nueva sesión aparezca inmediatamente
+        // sin tener que recargar manualmente la pestaña Exploratoria.
+        invalidateTabCache('exploratoria::active', data.project_id);
+        return res;
     },
     async getExploratorySession(runId) {
         return fetch(`/api/explorations/sessions/${runId}`).then(json);

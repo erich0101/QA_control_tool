@@ -369,6 +369,29 @@ router.post('/sessions/:runId/finish', async (req, res) => {
     }
 });
 
+// ── DELETE /api/explorations/sessions/:runId ─────────────────────────────────
+// Borra una sesión de Exploratoria y todos sus datos asociados (cascade via
+// FK). Usado por scripts de limpieza; no expuesto en la UI normal.
+router.delete('/sessions/:runId', async (req, res) => {
+    try {
+        const runId = parseInt(req.params.runId, 10);
+        const runRes = await query(
+            `SELECT id FROM qa_test_runs WHERE id = ? AND run_type = 'EXPLORATORY'`,
+            [runId]
+        );
+        if (runRes.rows.length === 0) return res.status(404).json({ error: 'Sesión no encontrada' });
+        // Cascade via FK:
+        //   qa_executions (run_id ON DELETE CASCADE)
+        //   qa_attachments (execution_id ON DELETE CASCADE)
+        //   qa_defects (execution_id FK, queda huérfano pero permitido)
+        //   qa_hallazgo_bug, qa_hallazgo_tc (defect_id ON DELETE CASCADE si el defect se borra)
+        await query(`DELETE FROM qa_test_runs WHERE id = ?`, [runId]);
+        res.json({ ok: true, deleted_id: runId });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // ── POST /api/explorations/flows/:tcId/evidence ───────────────────────────────
 // Multipart: delega al endpoint /api/evidence existente. El frontend no usa este
 // endpoint directamente — prefiere POST /api/evidence con FormData (más simple).

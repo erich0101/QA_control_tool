@@ -70,7 +70,10 @@ export const RealtimeService = {
                 this.invalidateForTableSilent('dashboard');
                 this.invalidateForTableSilent('jira-tracking');
                 if (data && data.run_type === 'EXPLORATORY') {
-                    this.invalidateForTableSilent('exploratoria');
+                    // Cambio estructural: nueva sesión/flow visible en el sidebar.
+                    // Usar invalidateForTable (no Silent) para que el listener
+                    // exploratoria re-renderice y muestre el row nuevo.
+                    this.invalidateForTable('exploratoria');
                 }
                 break;
             case 'qa_test_suites':
