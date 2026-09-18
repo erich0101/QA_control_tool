@@ -391,6 +391,7 @@ export const ExploratoriaTab = {
                             ${isFinished ? `<span style="display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 20px; background: var(--apple-green-soft); color: var(--apple-green); font-size: 0.62rem; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase;">✅ Sesión finalizada</span>` : ''}
                             <button class="btn btn-ghost btn-sm" id="expl-btn-back" style="padding: 5px 12px; font-size: 0.72rem; font-weight: 500; border-radius: var(--apple-radius-sm);">← Sesiones</button>
                             ${!isFinished ? `<button class="btn btn-primary btn-sm" id="expl-btn-add-flow" style="padding: 5px 12px; font-size: 0.7rem; font-weight: 600; border-radius: var(--apple-radius-sm);">+ Agregar flujo</button>` : ''}
+                            ${!isFinished ? `<button class="btn btn-ghost btn-sm" id="expl-btn-import-flows" style="padding: 5px 12px; font-size: 0.7rem; font-weight: 600; border-radius: var(--apple-radius-sm);">📥 Importar flujos</button>` : ''}
                             ${!isFinished ? `<button class="btn btn-danger btn-sm" id="expl-btn-finish" style="padding: 5px 12px; font-size: 0.7rem; font-weight: 600; border-radius: var(--apple-radius-sm);">🏁 Finalizar sesión</button>` : ''}
                         </div>
                     </div>
@@ -834,6 +835,10 @@ export const ExploratoriaTab = {
             this.showAddFlowModal(container);
         });
 
+        container.querySelector('#expl-btn-import-flows')?.addEventListener('click', () => {
+            this.showImportFlowsModal(container);
+        });
+
         container.querySelector('#expl-btn-finish')?.addEventListener('click', async () => {
             const ok = await this.openLocalConfirm(
                 'Finalizar sesión',
@@ -1260,6 +1265,88 @@ export const ExploratoriaTab = {
             }
             return true;
         });
+    },
+
+    showImportFlowsModal(container) {
+        this.openLocalModal('Importar flujos desde Excel', `
+            <div style="margin-top: 14px;">
+                <div style="background: var(--apple-fill); border-radius: var(--apple-radius-md); padding: 14px; margin-bottom: 16px;">
+                    <div style="font-size: 0.78rem; font-weight: 600; color: var(--apple-label); margin-bottom: 8px;">Formato esperado</div>
+                    <div style="font-size: 0.72rem; color: var(--apple-label-secondary); line-height: 1.5;">
+                        El sistema extraerá automáticamente las columnas:<br>
+                        <b>Escenario</b> (título), <b>Pasos</b>, <b>Resultado Esperado</b><br>
+                        <span style="opacity: 0.7;">Las demás columnas del archivo serán ignoradas.</span>
+                    </div>
+                </div>
+                <div id="expl-import-drop" style="border: 2px dashed var(--apple-separator); border-radius: var(--apple-radius-md); padding: 30px; text-align: center; cursor: pointer; transition: all 0.2s;">
+                    <div style="font-size: 1.8rem; margin-bottom: 8px;">📄</div>
+                    <div style="font-size: 0.82rem; font-weight: 600; color: var(--apple-label);">Arrastrá el archivo aquí</div>
+                    <div style="font-size: 0.72rem; color: var(--apple-label-tertiary); margin-top: 6px;">o hacé clic para seleccionar (.xlsx, .csv)</div>
+                    <input type="file" id="expl-import-file" accept=".xlsx,.csv" style="display: none;" />
+                </div>
+                <div id="expl-import-selected" style="display: none; margin-top: 12px; padding: 10px; background: var(--apple-fill); border-radius: var(--apple-radius-sm); font-size: 0.78rem;">
+                    <span style="font-weight: 600;">📎</span> <span id="expl-import-filename"></span>
+                </div>
+            </div>
+        `, async (dialog) => {
+            const fileInput = dialog.querySelector('#expl-import-file');
+            const file = fileInput.files[0];
+            if (!file) { UI.toast('⚠️ Seleccioná un archivo', 'error'); return false; }
+            try {
+                UI.showLoading();
+                const formData = new FormData();
+                formData.append('xlsx', file);
+                const res = await fetch(`/api/explorations/sessions/${this.selectedRunId}/import-flows`, {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'Error al importar');
+                invalidateTabCache('exploratoria::detail', Store.state.activeProjectId);
+                UI.toast(`✅ ${data.imported} flujos importados`);
+                await this.render(container);
+            } catch (err) {
+                UI.toast(err.message, 'error');
+            } finally {
+                UI.hideLoading();
+            }
+            return true;
+        });
+
+        // Bind drop zone events
+        const dropZone = document.querySelector('#expl-import-drop');
+        const fileInput = document.querySelector('#expl-import-file');
+        const selectedDiv = document.querySelector('#expl-import-selected');
+        const filenameSpan = document.querySelector('#expl-import-filename');
+
+        if (dropZone && fileInput) {
+            dropZone.addEventListener('click', () => fileInput.click());
+            dropZone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                dropZone.style.borderColor = 'var(--apple-blue)';
+                dropZone.style.background = 'var(--apple-blue-soft)';
+            });
+            dropZone.addEventListener('dragleave', () => {
+                dropZone.style.borderColor = 'var(--apple-separator)';
+                dropZone.style.background = 'transparent';
+            });
+            dropZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dropZone.style.borderColor = 'var(--apple-separator)';
+                dropZone.style.background = 'transparent';
+                if (e.dataTransfer.files.length > 0) {
+                    fileInput.files = e.dataTransfer.files;
+                    filenameSpan.textContent = e.dataTransfer.files[0].name;
+                    selectedDiv.style.display = 'block';
+                }
+            });
+            fileInput.addEventListener('change', () => {
+                if (fileInput.files.length > 0) {
+                    filenameSpan.textContent = fileInput.files[0].name;
+                    selectedDiv.style.display = 'block';
+                }
+            });
+        }
     },
 
     async showConvertToTCModal(defectId) {

@@ -10,9 +10,12 @@
  */
 
 const express = require('express');
+const multer = require('multer');
+const XLSX = require('xlsx');
 const { query } = require('../../db');
 
 const router = express.Router();
+const upload = multer({ storage: multer.memoryStorage() });
 
 // ── Helpers locales ────────────────────────────────────────────────────────────
 
@@ -396,5 +399,145 @@ router.delete('/sessions/:runId', async (req, res) => {
 // Multipart: delega al endpoint /api/evidence existente. El frontend no usa este
 // endpoint directamente — prefiere POST /api/evidence con FormData (más simple).
 // Se deja documentado por simetría con la API de api.js pero no es necesario.
+
+// ── POST /api/explorations/sessions/:runId/import-flows ──────────────────────
+// Importa flujos exploratorios desde un archivo Excel (mismo formato que import-dual).
+// Extrae solo: Escenario (title), Pasos (steps), Resultado Esperado (expected_result).
+// Ignora el resto de columnas del archivo.
+router.post('/sessions/:runId/import-flows', upload.single('xlsx'), async (req, res) => {
+    try {
+        const runId = parseInt(req.params.runId, 10);
+
+        // Validar sesión
+        const runRes = await query(
+            `SELECT id, project_id, suite_id, status FROM qa_test_runs WHERE id = ? AND run_type = 'EXPLORATORY'`,
+            [runId]
+        );
+        if (runRes.rows.length === 0) return res.status(404).json({ error: 'Sesión no encontrada' });
+        const run = runRes.rows[0];
+        if (run.status !== 'RUNNING') return res.status(400).json({ error: 'La sesión ya fue finalizada' });
+
+        // Validar archivo
+        const file = req.file;
+        if (!file) return res.status(400).json({ error: 'Archivo no recibido' });
+
+        // Leer Excel
+        let workbook;
+        try {
+            workbook = XLSX.read(file.buffer, { type: 'buffer' });
+        } catch (e) {
+            const content = file.buffer.toString('utf-8');
+            workbook = XLSX.read(content, { type: 'string' });
+        }
+
+        // Obtener datos de la primera hoja
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const data = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+        if (data.length < 2) return res.status(400).json({ error: 'El archivo está vacío o no tiene datos' });
+
+        // Helpers de normalización (mismo patrón que import-dual)
+        const normalize = (str) => {
+            if (!str) return '';
+            return String(str).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+        };
+        const tryFindColIndex = (headers, keywords) => {
+            if (!headers || headers.length === 0) return -1;
+            for (let i = 0; i < headers.length; i++) {
+                const nh = normalize(headers[i]);
+                if (keywords.every(k => nh.includes(k))) return i;
+            }
+            return -1;
+        };
+        const sanitizeInput = (val) => {
+            if (val === null || val === undefined) return '';
+            let s = String(val).trim();
+            s = s.replace(/<[^>]*>/g, '');
+            if (/^[=+\-@]/.test(s)) s = "'" + s;
+            return s;
+        };
+
+        // Detectar columnas requeridas
+        const headers = data[0];
+        const colTitle = tryFindColIndex(headers, ['escenario']);
+        const colSteps = tryFindColIndex(headers, ['paso']);
+        const colExpected = tryFindColIndex(headers, ['resultado esperado']);
+
+        if (colTitle === -1) {
+            return res.status(400).json({
+                error: 'Columna "Escenario" no encontrada',
+                detalle: 'El archivo debe tener una columna que contenga "Escenario" para los títulos de los flujos'
+            });
+        }
+
+        // Obtener suite sintética Exploratoria
+        let suiteId = run.suite_id;
+        if (!suiteId) {
+            const suiteRes = await query(
+                `SELECT id FROM qa_test_suites WHERE project_id = ? AND title = '🧪 Exploratoria' LIMIT 1`,
+                [run.project_id]
+            );
+            suiteId = suiteRes.rows[0]?.id;
+            if (!suiteId) {
+                return res.status(400).json({ error: 'No se encontró la suite Exploratoria' });
+            }
+        }
+
+        // Procesar filas y crear flujos
+        let imported = 0;
+        const errors = [];
+
+        for (let i = 1; i < data.length; i++) {
+            const row = data[i];
+            const title = sanitizeInput(row[colTitle]);
+            if (!title) continue; // Saltar filas sin título
+
+            const steps = colSteps !== -1 ? sanitizeInput(row[colSteps]) : '';
+            const expected = colExpected !== -1 ? sanitizeInput(row[colExpected]) : '';
+
+            try {
+                // Generar key_id para el flujo
+                const seqRes = await query(
+                    `INSERT INTO qa_project_sequences (project_id, prefix, last_number) VALUES (?, 'TC', 1)
+                     ON CONFLICT (project_id, prefix) DO UPDATE SET last_number = qa_project_sequences.last_number + 1
+                     RETURNING last_number`,
+                    [run.project_id]
+                );
+                const lastNumber = seqRes.rows[0].last_number;
+                const keyId = `TC-${String(lastNumber).padStart(3, '0')}`;
+
+                // Crear test case exploratorio
+                const tcRes = await query(
+                    `INSERT INTO qa_test_cases
+                        (suite_id, title, steps, expected_result, is_exploratory, created_by, updated_by, key_id, project_id, priority, severity)
+                     VALUES (?, ?, ?, ?, true, ?, ?, ?, ?, 'Media', 'Media')
+                     RETURNING id`,
+                    [suiteId, title, steps, expected, req.user.id, req.user.id, keyId, run.project_id]
+                );
+                const tcId = tcRes.rows[0].id;
+
+                // Vincular al run con ejecución PENDING
+                await query(
+                    `INSERT INTO qa_executions (tc_id, run_id, tester, tester_id, status, project_id, suite_id, executed_at)
+                     VALUES (?, ?, ?, ?, 'PENDING', ?, ?, CURRENT_TIMESTAMP)`,
+                    [tcId, runId, req.user.name, req.user.id, run.project_id, suiteId]
+                );
+
+                imported++;
+            } catch (rowErr) {
+                errors.push(`Fila ${i + 1}: ${rowErr.message}`);
+            }
+        }
+
+        res.json({
+            ok: true,
+            imported,
+            total_rows: data.length - 1,
+            errors: errors.length > 0 ? errors : undefined
+        });
+    } catch (err) {
+        console.error('Error en import-flows:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
 
 module.exports = router;
