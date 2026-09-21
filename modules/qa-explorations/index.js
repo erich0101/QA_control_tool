@@ -150,7 +150,7 @@ router.get('/sessions/:runId', async (req, res) => {
         // cada sesión vea SOLO sus propios flujos, sin compartir con la suite
         // sintética "🧪 Exploratoria" que es global al proyecto.
         const flowsRes = await query(
-            `SELECT DISTINCT tc.id, tc.title, tc.steps, tc.expected_result, tc.key_id, tc.created_at
+            `SELECT DISTINCT tc.id, tc.title, tc.steps, tc.expected_result, tc.key_id, tc.created_at, tc.assigned_to
                FROM qa_test_cases tc
                JOIN qa_executions e ON e.tc_id = tc.id
               WHERE e.run_id = ?
@@ -505,13 +505,13 @@ router.post('/sessions/:runId/import-flows', upload.single('xlsx'), async (req, 
                 const lastNumber = seqRes.rows[0].last_number;
                 const keyId = `TC-${String(lastNumber).padStart(3, '0')}`;
 
-                // Crear test case exploratorio
+                // Crear test case exploratorio (assigned_to = usuario que importa)
                 const tcRes = await query(
                     `INSERT INTO qa_test_cases
-                        (suite_id, title, steps, expected_result, is_exploratory, created_by, updated_by, key_id, project_id, priority, severity)
-                     VALUES (?, ?, ?, ?, true, ?, ?, ?, ?, 'Media', 'Media')
+                        (suite_id, title, steps, expected_result, is_exploratory, created_by, updated_by, key_id, project_id, priority, severity, assigned_to)
+                     VALUES (?, ?, ?, ?, true, ?, ?, ?, ?, 'Media', 'Media', ?)
                      RETURNING id`,
-                    [suiteId, title, steps, expected, req.user.id, req.user.id, keyId, run.project_id]
+                    [suiteId, title, steps, expected, req.user.id, req.user.id, keyId, run.project_id, req.user.id]
                 );
                 const tcId = tcRes.rows[0].id;
 

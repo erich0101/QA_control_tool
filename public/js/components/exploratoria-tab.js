@@ -425,6 +425,7 @@ export const ExploratoriaTab = {
                             <th style="padding: 10px 16px; text-align: left; font-weight: 600; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--apple-label-tertiary); width: 90px;">Key</th>
                             <th style="padding: 10px 16px; text-align: left; font-weight: 600; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--apple-label-tertiary);">Flujo</th>
                             <th style="padding: 10px 16px; text-align: left; font-weight: 600; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--apple-label-tertiary); width: 280px;">Status</th>
+                            <th style="padding: 10px 16px; text-align: left; font-weight: 600; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--apple-label-tertiary); width: 130px;">Tester</th>
                             <th style="padding: 10px 16px; text-align: left; font-weight: 600; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--apple-label-tertiary); width: 130px;">Última Ejecución</th>
                             <th style="padding: 10px 16px; text-align: center; font-weight: 600; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--apple-label-tertiary); width: 80px;">Acciones</th>
                         </tr>
@@ -435,6 +436,35 @@ export const ExploratoriaTab = {
                 </table>
             </div>
         `;
+    },
+
+    _renderTesterCell(flow, exec) {
+        const team = Store.state.team || [];
+        const assignee = team.find(u => u.id === flow.assigned_to);
+        const isPending = !exec || exec.status === 'PENDING';
+
+        if (isPending) {
+            // Selector dropdown para flujos PENDING
+            return `
+                <select class="expl-tester-select" data-flow-id="${flow.id}" 
+                        style="max-width: 120px; font-size: 0.72rem; padding: 4px 6px; border-radius: var(--apple-radius-sm); border: 1px solid var(--apple-separator); background: var(--apple-bg-elevated); color: var(--apple-label); cursor: pointer;">
+                    <option value="">— Sin asignar —</option>
+                    ${team.map(u => `<option value="${u.id}" ${u.id === flow.assigned_to ? 'selected' : ''}>${UI.escapeHTML(u.name)}</option>`).join('')}
+                </select>
+            `;
+        }
+
+        // Avatar fijo para flujos ejecutados (no PENDING)
+        if (assignee) {
+            return `
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="width: 24px; height: 24px; border-radius: 50%; background: linear-gradient(135deg, var(--apple-blue), var(--apple-indigo)); display: inline-flex; align-items: center; justify-content: center; font-size: 0.65rem; font-weight: 700; color: white; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">${assignee.name.charAt(0)}</span>
+                    <span style="font-size: 0.78rem; color: var(--apple-label-secondary); font-weight: 500;">${UI.escapeHTML(assignee.name.split(' ')[0])}</span>
+                </div>
+            `;
+        }
+
+        return '<span style="color: var(--apple-label-tertiary); opacity: 0.5; font-size: 0.75rem;">—</span>';
     },
 
     _renderFlowRow(flow, execByTc, defectsByExec, attByExec, attByDef, drafts, isFinished) {
@@ -485,6 +515,9 @@ export const ExploratoriaTab = {
                         ${statusButtons}
                     </div>
                 </td>
+                <td style="padding: 12px 16px; width: 130px;">
+                    ${this._renderTesterCell(flow, exec)}
+                </td>
                 <td style="padding: 12px 16px; font-size: 0.75rem; color: var(--apple-label-tertiary); width: 130px; white-space: nowrap;">${UI.escapeHTML(lastExec)}</td>
                 <td style="padding: 12px 16px; text-align: center; width: 80px;">
                     <button class="btn btn-ghost btn-sm expl-btn-toggle-flow" data-tc-id="${flow.id}" title="${isOpen ? 'Cerrar' : 'Abrir'}" style="padding: 4px 10px; font-size: 0.7rem; font-weight: 600; border-radius: var(--apple-radius-sm);">${isOpen ? '▲' : '▼'}</button>
@@ -514,7 +547,7 @@ export const ExploratoriaTab = {
 
         const expanded = `
             <tr class="ts-expanded-row" data-tc-id="${flow.id}" style="border-bottom: 1px solid var(--apple-separator); background: var(--apple-bg-elevated);">
-                <td colspan="5" style="padding: 0;">
+                <td colspan="6" style="padding: 0;">
                     <div style="padding: 16px 20px; display: flex; flex-direction: column; gap: 14px;">
                         <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding-bottom: 10px; border-bottom: 1px solid var(--apple-separator);">
                             <span style="font-size: 0.72rem; font-weight: 800; color: var(--apple-blue); letter-spacing: 0.03em; font-family: var(--apple-font-mono, monospace);">${UI.escapeHTML(flow.key_id || `TC-${flow.id}`)}</span>
@@ -898,11 +931,27 @@ export const ExploratoriaTab = {
             });
         });
 
+        // Tester assignment (solo flujos PENDING)
+        container.querySelectorAll('.expl-tester-select').forEach(sel => {
+            sel.addEventListener('change', async (e) => {
+                e.stopPropagation();
+                const flowId = parseInt(e.target.dataset.flowId);
+                const userId = e.target.value ? parseInt(e.target.value) : null;
+                try {
+                    await ApiService.updateTestCase(flowId, { assigned_to: userId });
+                    invalidateTabCache('exploratoria::detail', Store.state.activeProjectId);
+                    UI.toast(userId ? '✅ Tester reasignado' : '✅ Tester desasignado');
+                } catch (err) {
+                    UI.toast(err.message, 'error');
+                }
+            });
+        });
+
         // Flow row click → toggle expanded row
         container.querySelectorAll('.expl-flow-row').forEach(row => {
             row.addEventListener('click', (e) => {
-                // No toggle si el click fue dentro de un status group
-                if (e.target.closest('.expl-status-group')) return;
+                // No toggle si el click fue dentro de un status group o selector de tester
+                if (e.target.closest('.expl-status-group') || e.target.closest('.expl-tester-select')) return;
                 const tcId = parseInt(row.dataset.tcId, 10);
                 this.openFlowId = this.openFlowId === tcId ? null : tcId;
                 this.render(container);
