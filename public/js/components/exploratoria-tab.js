@@ -467,9 +467,77 @@ export const ExploratoriaTab = {
         return '<span style="color: var(--apple-label-tertiary); opacity: 0.5; font-size: 0.75rem;">—</span>';
     },
 
+    _renderSaveButton(flow, exec, draft, isFinished) {
+        if (isFinished) return '';
+        
+        const currentStatus = draft.status || exec?.status || 'PENDING';
+        const hasChanges = currentStatus !== 'PENDING' && currentStatus !== exec?.status;
+        const hasContent = draft.obtained_result || draft.observations || (draft.bug && draft.bug.title);
+        const hasEvidence = this._hasPendingEvidence(flow.id);
+        
+        // Mostrar botón si hay cambios de status, contenido nuevo, o evidencia pendiente
+        if (!hasChanges && !hasContent && !hasEvidence) return '';
+        
+        return `<button class="btn btn-success btn-sm expl-btn-save-single" data-tc-id="${flow.id}" title="Guardar este flujo" style="padding: 4px 8px; font-size: 0.65rem; font-weight: 600; border-radius: var(--apple-radius-sm); background: var(--apple-green); color: white; border: none;">💾</button>`;
+    },
+
+    _hasPendingEvidence(flowId) {
+        const uploader = this._flowUploaders.get(flowId);
+        if (uploader && uploader.getPending().length > 0) return true;
+        const pending = this._pendingEvidence.get(flowId);
+        return pending && pending.length > 0;
+    },
+
+    _updateSaveButtonVisibility(container, tcId) {
+        const drafts = this.flowDrafts.get(this.selectedRunId);
+        const draft = drafts[tcId] || {};
+        const exec = this.sessionDetail?.executions?.find(e => e.tc_id === tcId);
+        const flow = this.sessionDetail?.flows?.find(f => f.id === tcId);
+        if (!flow) return;
+
+        const currentStatus = draft.status || exec?.status || 'PENDING';
+        const hasChanges = currentStatus !== 'PENDING' && currentStatus !== exec?.status;
+        const hasContent = draft.obtained_result || draft.observations || (draft.bug && draft.bug.title);
+        const hasEvidence = this._hasPendingEvidence(tcId);
+        
+        const shouldShow = hasChanges || hasContent || hasEvidence;
+        
+        // Buscar botón existente en la tabla
+        const existingBtn = container.querySelector(`.expl-btn-save-single[data-tc-id="${tcId}"]`);
+        
+        if (shouldShow && !existingBtn) {
+            // Crear y agregar botón
+            const row = container.querySelector(`tr.expl-flow-row[data-tc-id="${tcId}"]`);
+            if (row) {
+                const actionsCell = row.querySelector('td:last-child div');
+                if (actionsCell) {
+                    const toggleBtn = actionsCell.querySelector('.expl-btn-toggle-flow');
+                    if (toggleBtn) {
+                        const saveBtn = document.createElement('button');
+                        saveBtn.className = 'btn btn-success btn-sm expl-btn-save-single';
+                        saveBtn.dataset.tcId = tcId;
+                        saveBtn.title = 'Guardar este flujo';
+                        saveBtn.style.cssText = 'padding: 4px 8px; font-size: 0.65rem; font-weight: 600; border-radius: var(--apple-radius-sm); background: var(--apple-green); color: white; border: none;';
+                        saveBtn.textContent = '💾';
+                        saveBtn.addEventListener('click', async (e) => {
+                            e.stopPropagation();
+                            await this.saveSingleFlow(container, tcId);
+                        });
+                        actionsCell.insertBefore(saveBtn, toggleBtn);
+                    }
+                }
+            }
+        } else if (!shouldShow && existingBtn) {
+            // Remover botón
+            existingBtn.remove();
+        }
+    },
+
     _renderFlowRow(flow, execByTc, defectsByExec, attByExec, attByDef, drafts, isFinished) {
         const exec = execByTc.get(flow.id);
-        const draft = drafts[flow.id] || {};
+        // Asegurar que el draft existe en el mapa y no es solo una copia local
+        if (!drafts[flow.id]) drafts[flow.id] = {};
+        const draft = drafts[flow.id];
         if (exec && !draft.status) draft.status = exec.status || 'PENDING';
         if (exec && !draft._loaded) {
             draft.observations = exec.observations || '';
@@ -520,7 +588,10 @@ export const ExploratoriaTab = {
                 </td>
                 <td style="padding: 12px 16px; font-size: 0.75rem; color: var(--apple-label-tertiary); width: 130px; white-space: nowrap;">${UI.escapeHTML(lastExec)}</td>
                 <td style="padding: 12px 16px; text-align: center; width: 80px;">
-                    <button class="btn btn-ghost btn-sm expl-btn-toggle-flow" data-tc-id="${flow.id}" title="${isOpen ? 'Cerrar' : 'Abrir'}" style="padding: 4px 10px; font-size: 0.7rem; font-weight: 600; border-radius: var(--apple-radius-sm);">${isOpen ? '▲' : '▼'}</button>
+                    <div style="display: flex; gap: 4px; justify-content: center;">
+                        ${this._renderSaveButton(flow, exec, draft, isFinished)}
+                        <button class="btn btn-ghost btn-sm expl-btn-toggle-flow" data-tc-id="${flow.id}" title="${isOpen ? 'Cerrar' : 'Abrir'}" style="padding: 4px 10px; font-size: 0.7rem; font-weight: 600; border-radius: var(--apple-radius-sm);">${isOpen ? '▲' : '▼'}</button>
+                    </div>
                 </td>
             </tr>
         `;
@@ -618,7 +689,15 @@ export const ExploratoriaTab = {
         // 7) Evidencias
         const evidenceHtml = `<div class="expl-flow-section">${this.renderEvidenceSection(flow, exec, execDefects, attByExec, attByDef, isFinished)}</div>`;
 
-        return stepsHtml + expectedHtml + obtainedHtml + blockHtml + bugHtml + persistedDefectsHtml + evidenceHtml;
+        // 8) Botón guardar (solo si hay cambios y no está finalizada)
+        const hasEvidence = this._hasPendingEvidence(flow.id);
+        const saveButtonHtml = (!isFinished && (currentStatus !== 'PENDING' || draft.obtained_result || draft.observations || hasEvidence))
+            ? `<div class="expl-flow-section" style="border-top: 1px solid var(--apple-separator); padding-top: 14px; margin-top: 6px;">
+                    <button class="btn btn-primary expl-btn-save-single-expanded" data-tc-id="${flow.id}" style="font-weight: 700; width: 100%;">💾 Guardar este flujo</button>
+               </div>`
+            : '';
+
+        return stepsHtml + expectedHtml + obtainedHtml + blockHtml + bugHtml + persistedDefectsHtml + evidenceHtml + saveButtonHtml;
     },
 
     // Renderiza los defects ya persistidos como una lista colapsable (cuando no
@@ -927,6 +1006,9 @@ export const ExploratoriaTab = {
                 const drafts = this.flowDrafts.get(this.selectedRunId);
                 if (!drafts[tcId]) drafts[tcId] = { _loaded: true };
                 drafts[tcId].status = status;
+                // Actualizar visibilidad del botón guardar individual
+                this._updateSaveButtonVisibility(container, tcId);
+                // Re-render para actualizar el estado visual de los botones de status
                 this.render(container);
             });
         });
@@ -968,6 +1050,24 @@ export const ExploratoriaTab = {
             });
         });
 
+        // Botón guardar flujo individual
+        container.querySelectorAll('.expl-btn-save-single').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const tcId = parseInt(btn.dataset.tcId, 10);
+                await this.saveSingleFlow(container, tcId);
+            });
+        });
+
+        // Botón guardar flujo individual (vista expandida)
+        container.querySelectorAll('.expl-btn-save-single-expanded').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const tcId = parseInt(btn.dataset.tcId, 10);
+                await this.saveSingleFlow(container, tcId);
+            });
+        });
+
         // Bug draft fields — bind change/blur
         container.querySelectorAll('.expl-bug-title, .expl-bug-description, .expl-bug-severity, .expl-bug-frequency, .expl-bug-steps, .expl-bug-expected, .expl-bug-actual').forEach(input => {
             const handler = () => {
@@ -1004,6 +1104,8 @@ export const ExploratoriaTab = {
                 const drafts = this.flowDrafts.get(this.selectedRunId);
                 if (!drafts[tcId]) drafts[tcId] = { _loaded: true };
                 drafts[tcId].obtained_result = input.value;
+                // Actualizar visibilidad del botón guardar individual
+                this._updateSaveButtonVisibility(container, tcId);
             });
         });
 
@@ -1150,6 +1252,63 @@ export const ExploratoriaTab = {
             invalidateTabCache('exploratoria::history', Store.state.activeProjectId);
 
             UI.toast(`✅ ${saved} flujo(s) guardado(s)${failed > 0 ? `, ${failed} con error` : ''}`);
+            this.sessionDetail = null;
+            await this.render(container);
+        } catch (err) {
+            UI.toast(err.message, 'error');
+        } finally {
+            UI.hideLoading();
+        }
+    },
+
+    async saveSingleFlow(container, flowId) {
+        const drafts = this.flowDrafts.get(this.selectedRunId);
+        const draft = drafts[flowId] || {};
+        const exec = this.sessionDetail?.executions?.find(e => e.tc_id === flowId);
+        
+        // Verificar si hay cambios pendientes
+        const currentStatus = draft.status || exec?.status || 'PENDING';
+        const hasStatusChange = currentStatus !== 'PENDING' && currentStatus !== exec?.status;
+        const hasContent = draft.obtained_result || draft.observations || (draft.bug && draft.bug.title);
+        const hasEvidence = this._hasPendingEvidence(flowId);
+        
+        if (!hasStatusChange && !hasContent && !hasEvidence) {
+            UI.toast('⚠️ No hay cambios para guardar', 'error');
+            return;
+        }
+
+        const bugs = [];
+        if ((draft.status === 'FAIL' || draft.status === 'WARNING') && draft.bug && draft.bug.title) {
+            bugs.push(draft.bug);
+        }
+
+        const payload = {
+            run_id: this.selectedRunId,
+            status: currentStatus,
+            observations: draft.observations || '',
+            obtained_result: draft.obtained_result || '',
+            bugs
+        };
+
+        UI.showLoading();
+        try {
+            const res = await ApiService.executeExploratoryFlow(flowId, payload);
+            
+            // Subir evidencia pendiente
+            if (res.execution_id) {
+                const uploader = this._flowUploaders.get(flowId);
+                const pending = uploader ? uploader.getPending() : [];
+                if (pending.length > 0) {
+                    await this.uploadPendingEvidence(res.execution_id, pending);
+                    uploader.clearPending();
+                }
+            }
+
+            invalidateTabCache('exploratoria::detail', Store.state.activeProjectId);
+            invalidateTabCache('exploratoria::active', Store.state.activeProjectId);
+            invalidateTabCache('exploratoria::history', Store.state.activeProjectId);
+
+            UI.toast('✅ Flujo guardado');
             this.sessionDetail = null;
             await this.render(container);
         } catch (err) {
