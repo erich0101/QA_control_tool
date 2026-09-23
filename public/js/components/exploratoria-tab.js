@@ -1194,12 +1194,88 @@ export const ExploratoriaTab = {
         });
     },
 
+    /**
+     * Valida que un flujo cumpla con las reglas de negocio antes de guardar.
+     * Si el flujo tiene un estado final seleccionado (distinto de PENDING),
+     * obliga a que exista "Resultado Real" y al menos una evidencia.
+     */
+    _validateFlowSave(flowId, draft, exec, attByExec, attByDef, defectsByExec) {
+        const currentStatus = draft?.status || exec?.status || 'PENDING';
+        if (currentStatus === 'PENDING') return { valid: true };
+
+        // 1) Resultado Real obligatorio
+        const obtainedResult = (draft?.obtained_result || exec?.obtained_result || '').trim();
+        if (!obtainedResult) {
+            return { valid: false, message: `Debés ingresar el "Resultado Real" antes de guardar con estado ${currentStatus}.` };
+        }
+
+        // 2) Evidencias obligatorias (pendientes o ya persistidas)
+        const hasPendingEvidence = this._hasPendingEvidence(flowId);
+        let hasPersistedEvidence = false;
+
+        if (exec) {
+            let execDefects, execAtts, defAtts;
+            if (defectsByExec && attByExec && attByDef) {
+                // Usar maps precalculados (saveAllFlows)
+                execDefects = defectsByExec.get(exec.id) || [];
+                execAtts = attByExec.get(exec.id) || [];
+                defAtts = execDefects.flatMap(d => attByDef.get(d.id) || []);
+            } else {
+                // Fallback a sessionDetail (saveSingleFlow)
+                const defects = this.sessionDetail?.defects || [];
+                const attachments = this.sessionDetail?.attachments || [];
+                execDefects = defects.filter(d => d.execution_id === exec.id);
+                execAtts = attachments.filter(a => a.execution_id === exec.id);
+                defAtts = execDefects.flatMap(d => attachments.filter(a => a.defect_id === d.id));
+            }
+            hasPersistedEvidence = execAtts.length > 0 || defAtts.length > 0;
+        }
+
+        if (!hasPendingEvidence && !hasPersistedEvidence) {
+            return { valid: false, message: `Debés adjuntar al menos una evidencia antes de guardar con estado ${currentStatus}.` };
+        }
+
+        return { valid: true };
+    },
+
     async saveAllFlows(container, flows, execByTc) {
         const drafts = this.flowDrafts.get(this.selectedRunId);
         let saved = 0;
         let failed = 0;
         const allPendingEvidence = new Map(); // execId -> [files]
         const createdDefectIds = [];          // para subir evidencia luego
+
+        // Pre-construir maps de evidencia desde sessionDetail para validación
+        const { defects, attachments } = this.sessionDetail || {};
+        const attByExecInner = new Map();
+        const attByDefInner = new Map();
+        const defectsByExecInner = new Map();
+        for (const d of (defects || [])) {
+            if (!defectsByExecInner.has(d.execution_id)) defectsByExecInner.set(d.execution_id, []);
+            defectsByExecInner.get(d.execution_id).push(d);
+        }
+        for (const a of (attachments || [])) {
+            if (a.execution_id) {
+                if (!attByExecInner.has(a.execution_id)) attByExecInner.set(a.execution_id, []);
+                attByExecInner.get(a.execution_id).push(a);
+            }
+            if (a.defect_id) {
+                if (!attByDefInner.has(a.defect_id)) attByDefInner.set(a.defect_id, []);
+                attByDefInner.get(a.defect_id).push(a);
+            }
+        }
+
+        // Validar todos los flujos que se intentarán guardar
+        for (const flow of flows) {
+            const draft = drafts[flow.id];
+            if (!draft || !draft.status || draft.status === 'PENDING') continue;
+            const exec = execByTc.get(flow.id);
+            const validation = this._validateFlowSave(flow.id, draft, exec, attByExecInner, attByDefInner, defectsByExecInner);
+            if (!validation.valid) {
+                UI.toast(validation.message, 'error');
+                return;
+            }
+        }
 
         UI.showLoading();
         try {
@@ -1274,6 +1350,13 @@ export const ExploratoriaTab = {
         
         if (!hasStatusChange && !hasContent && !hasEvidence) {
             UI.toast('⚠️ No hay cambios para guardar', 'error');
+            return;
+        }
+
+        // Validar reglas de negocio cuando hay un estado final seleccionado
+        const validation = this._validateFlowSave(flowId, draft, exec);
+        if (!validation.valid) {
+            UI.toast(validation.message, 'error');
             return;
         }
 
