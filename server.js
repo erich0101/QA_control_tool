@@ -69,7 +69,46 @@ await query(`ALTER TABLE qa_defects ADD COLUMN IF NOT EXISTS observations TEXT`)
         // ── Exploratory Testing (módulo Exploratoria) ──
         await query(`ALTER TABLE qa_test_runs ADD COLUMN IF NOT EXISTS charter TEXT`);
         await query(`ALTER TABLE qa_test_runs ADD COLUMN IF NOT EXISTS timebox_minutes INTEGER`);
-        
+        // Métricas de sesiones exploratorias (persistidas en PG, no SQLite)
+        await query(`ALTER TABLE qa_test_runs ADD COLUMN IF NOT EXISTS total_flows INTEGER DEFAULT 0`);
+        await query(`ALTER TABLE qa_test_runs ADD COLUMN IF NOT EXISTS ok_count INTEGER DEFAULT 0`);
+        await query(`ALTER TABLE qa_test_runs ADD COLUMN IF NOT EXISTS fail_count INTEGER DEFAULT 0`);
+        await query(`ALTER TABLE qa_test_runs ADD COLUMN IF NOT EXISTS warning_count INTEGER DEFAULT 0`);
+        await query(`ALTER TABLE qa_test_runs ADD COLUMN IF NOT EXISTS block_count INTEGER DEFAULT 0`);
+        await query(`ALTER TABLE qa_test_runs ADD COLUMN IF NOT EXISTS skip_count INTEGER DEFAULT 0`);
+        await query(`ALTER TABLE qa_test_runs ADD COLUMN IF NOT EXISTS pending_count INTEGER DEFAULT 0`);
+        await query(`
+            CREATE OR REPLACE FUNCTION recalc_exploratory_metrics(p_run_id INTEGER)
+            RETURNS VOID AS $$
+            DECLARE
+                v_total INTEGER;
+                v_ok INTEGER;
+                v_fail INTEGER;
+                v_warning INTEGER;
+                v_block INTEGER;
+                v_skip INTEGER;
+                v_pending INTEGER;
+            BEGIN
+                SELECT COUNT(*) INTO v_total FROM qa_executions WHERE run_id = p_run_id;
+                SELECT COUNT(*) INTO v_ok FROM qa_executions WHERE run_id = p_run_id AND status = 'OK';
+                SELECT COUNT(*) INTO v_fail FROM qa_executions WHERE run_id = p_run_id AND status = 'FAIL';
+                SELECT COUNT(*) INTO v_warning FROM qa_executions WHERE run_id = p_run_id AND status = 'WARNING';
+                SELECT COUNT(*) INTO v_block FROM qa_executions WHERE run_id = p_run_id AND status = 'BLOCK';
+                SELECT COUNT(*) INTO v_skip FROM qa_executions WHERE run_id = p_run_id AND status = 'SKIP';
+                SELECT COUNT(*) INTO v_pending FROM qa_executions WHERE run_id = p_run_id AND status = 'PENDING';
+                UPDATE qa_test_runs
+                SET total_flows = v_total,
+                    ok_count = v_ok,
+                    fail_count = v_fail,
+                    warning_count = v_warning,
+                    block_count = v_block,
+                    skip_count = v_skip,
+                    pending_count = v_pending
+                WHERE id = p_run_id;
+            END;
+            $$ LANGUAGE plpgsql
+        `);
+
         // Migraciones para qa_use_cases
         await query(`ALTER TABLE qa_use_cases ADD COLUMN IF NOT EXISTS created_by INTEGER REFERENCES qa_users(id)`);
         await query(`ALTER TABLE qa_use_cases ADD COLUMN IF NOT EXISTS updated_by INTEGER REFERENCES qa_users(id)`);

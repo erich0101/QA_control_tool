@@ -75,6 +75,12 @@ export const ExploratoriaTab = {
             container.innerHTML = UI.skeletonHTML(4, 3);
         }
 
+        // Preservar scroll de la lista de flujos cuando ya estamos en vista detalle.
+        // Esto evita que al expandir/colapsar un test o cambiar un status el scroll
+        // salte automáticamente al tope de la lista.
+        const flowList = this.selectedRunId ? container.querySelector('#expl-flow-list') : null;
+        const scrollTop = flowList ? flowList.scrollTop : 0;
+
         try {
             if (this.selectedRunId) {
                 await this.renderDetail(container);
@@ -85,6 +91,12 @@ export const ExploratoriaTab = {
         } catch (err) {
             console.error('Error en ExploratoriaTab:', err);
             container.innerHTML = `<div class="expl-empty-state" style="color: var(--apple-red);">Error: ${UI.escapeHTML(err.message)}</div>`;
+        }
+
+        // Restaurar scroll solo si seguimos en vista detalle
+        if (this.selectedRunId && scrollTop > 0) {
+            const newFlowList = container.querySelector('#expl-flow-list');
+            if (newFlowList) newFlowList.scrollTop = scrollTop;
         }
 
         this.bindRealtimeListener();
@@ -395,6 +407,7 @@ export const ExploratoriaTab = {
                             ${!isFinished ? `<button class="btn btn-danger btn-sm" id="expl-btn-finish" style="padding: 5px 12px; font-size: 0.7rem; font-weight: 600; border-radius: var(--apple-radius-sm);">🏁 Finalizar sesión</button>` : ''}
                         </div>
                     </div>
+                    ${this._renderMetricsBar(run)}
                     <div id="expl-flow-list" style="flex: 1; overflow-y: auto; padding: 20px 24px;">
                         ${flows.length === 0 ? `
                             <div class="expl-empty-state">
@@ -434,6 +447,60 @@ export const ExploratoriaTab = {
                         ${rows}
                     </tbody>
                 </table>
+            </div>
+        `;
+    },
+
+    _renderMetricsBar(run) {
+        const total = run.total_flows || 0;
+        if (total === 0) return '';
+
+        const ok = run.ok_count || 0;
+        const fail = run.fail_count || 0;
+        const warning = run.warning_count || 0;
+        const block = run.block_count || 0;
+        const skip = run.skip_count || 0;
+        const pending = run.pending_count || 0;
+
+        const tested = total - pending;
+        const progressPct = total > 0 ? Math.round((tested / total) * 100) : 0;
+        const acceptancePct = total > 0 ? Math.round((ok / total) * 100) : 0;
+
+        const badge = (label, count, colorVar) => `
+            <div style="display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 20px; background: var(${colorVar}-soft, var(--apple-fill)); font-size: 0.65rem; font-weight: 600; color: var(${colorVar}); white-space: nowrap;">
+                <span>${label}</span>
+                <span style="font-weight: 700;">${count}</span>
+            </div>
+        `;
+
+        return `
+            <div style="padding: 10px 24px; background: var(--apple-bg-elevated); border-bottom: 1px solid var(--apple-separator); display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                <div style="display: flex; align-items: center; gap: 6px; font-size: 0.72rem; font-weight: 700; color: var(--apple-label-secondary); text-transform: uppercase; letter-spacing: 0.04em; margin-right: 6px;">
+                    📊 Métricas
+                </div>
+                ${badge('Total', total, '--apple-label-secondary')}
+                ${badge('OK', ok, '--apple-green')}
+                ${badge('FAIL', fail, '--apple-red')}
+                ${badge('WARN', warning, '--apple-orange')}
+                ${badge('BLOCK', block, '--apple-yellow')}
+                ${badge('SKIP', skip, '--apple-label-tertiary')}
+                ${badge('PEND', pending, '--apple-blue')}
+                <div style="margin-left: auto; display: flex; align-items: center; gap: 10px;">
+                    <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 2px;">
+                        <span style="font-size: 0.6rem; font-weight: 600; color: var(--apple-label-tertiary); text-transform: uppercase; letter-spacing: 0.04em;">Avance</span>
+                        <span style="font-size: 0.78rem; font-weight: 700; color: var(--apple-blue);">${progressPct}%</span>
+                    </div>
+                    <div style="width: 60px; height: 4px; background: var(--apple-fill); border-radius: 2px; overflow: hidden;">
+                        <div style="width: ${progressPct}%; height: 100%; background: var(--apple-blue); border-radius: 2px; transition: width 0.3s ease;"></div>
+                    </div>
+                    <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 2px;">
+                        <span style="font-size: 0.6rem; font-weight: 600; color: var(--apple-label-tertiary); text-transform: uppercase; letter-spacing: 0.04em;">Aceptación</span>
+                        <span style="font-size: 0.78rem; font-weight: 700; color: var(--apple-green);">${acceptancePct}%</span>
+                    </div>
+                    <div style="width: 60px; height: 4px; background: var(--apple-fill); border-radius: 2px; overflow: hidden;">
+                        <div style="width: ${acceptancePct}%; height: 100%; background: var(--apple-green); border-radius: 2px; transition: width 0.3s ease;"></div>
+                    </div>
+                </div>
             </div>
         `;
     },

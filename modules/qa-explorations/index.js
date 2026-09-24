@@ -91,10 +91,9 @@ router.get('/sessions', async (req, res) => {
             `SELECT r.id, r.name, r.charter, r.timebox_minutes, r.status,
                     r.started_at, r.finished_at, r.created_by, r.run_type,
                     u.name AS creator_name,
-                    (SELECT COUNT(*) FROM qa_executions e WHERE e.run_id = r.id) AS flow_count,
-                    (SELECT COUNT(*) FROM qa_executions e
-                       JOIN qa_defects d ON d.execution_id = e.id
-                      WHERE e.run_id = r.id) AS fail_count
+                    r.total_flows AS flow_count,
+                    r.ok_count, r.fail_count, r.warning_count, r.block_count,
+                    r.skip_count, r.pending_count
                FROM qa_test_runs r
                LEFT JOIN qa_users u ON u.id = r.created_by
               WHERE r.project_id = ? AND r.run_type = 'EXPLORATORY' ${statusFilter}
@@ -249,6 +248,9 @@ router.post('/sessions/:runId/flows', async (req, res) => {
             [tcId, runId, req.user.name, req.user.id, run.project_id, suiteId]
         );
 
+        // Recalcular métricas de la sesión
+        await query(`SELECT recalc_exploratory_metrics(?)`, [runId]);
+
         res.json({ ok: true, tc_id: tcId, key_id: keyId });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -337,6 +339,9 @@ router.post('/flows/:tcId/execute', async (req, res) => {
                 createdDefectIds.push(dIns.rows[0].id);
             }
         }
+
+        // Recalcular métricas de la sesión
+        await query(`SELECT recalc_exploratory_metrics(?)`, [run_id]);
 
         res.json({ ok: true, execution_id: execId, defect_ids: createdDefectIds });
     } catch (err) {
@@ -526,6 +531,11 @@ router.post('/sessions/:runId/import-flows', upload.single('xlsx'), async (req, 
             } catch (rowErr) {
                 errors.push(`Fila ${i + 1}: ${rowErr.message}`);
             }
+        }
+
+        // Recalcular métricas de la sesión tras importar
+        if (imported > 0) {
+            await query(`SELECT recalc_exploratory_metrics(?)`, [runId]);
         }
 
         res.json({
