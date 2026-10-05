@@ -186,14 +186,27 @@ ${bug.evidences.map(f => `- ${f}`).join('\n')}
     async getAssignableUsers(userCredentials, projectKey, domain) {
         const auth = Buffer.from(`${userCredentials.jira_user_email}:${decrypt(userCredentials.encrypted_token)}`).toString('base64');
         const baseUrl = domain.replace(/\/$/, '');
-        const url = `${baseUrl}/rest/api/3/user/assignable/search?project=${projectKey}`;
 
-        const res = await fetch(url, {
-            headers: { 'Authorization': `Basic ${auth}`, 'Accept': 'application/json' }
-        });
-        if (!res.ok) return [];
-        const data = await res.json();
-        return data.map(u => ({ accountId: u.accountId, displayName: u.displayName }));
+        let allUsers = [];
+        let startAt = 0;
+        const maxResults = 100;
+
+        while (true) {
+            const url = `${baseUrl}/rest/api/3/user/assignable/search?project=${projectKey}&maxResults=${maxResults}&startAt=${startAt}`;
+            const res = await fetch(url, {
+                headers: { 'Authorization': `Basic ${auth}`, 'Accept': 'application/json' }
+            });
+            if (!res.ok) {
+                console.error(`[JiraService] Error fetching assignable users: ${res.status} ${res.statusText}`);
+                break;
+            }
+            const data = await res.json();
+            allUsers = allUsers.concat(data.map(u => ({ accountId: u.accountId, displayName: u.displayName })));
+            if (data.length < maxResults) break;
+            startAt += maxResults;
+        }
+
+        return allUsers;
     },
 
     async getPriorities(userCredentials, domain) {
