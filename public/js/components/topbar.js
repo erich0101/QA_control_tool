@@ -28,7 +28,7 @@ export const TopBar = {
             <div class="topbar-actions">
                 <div class="topbar-project-actions">
                     ${activeProjectId && user?.perfil === 'admin' ? `<button class="btn btn-ghost btn-sm" id="btn-edit-project">Editar Proyecto</button>` : ''}
-                    ${activeProjectId && user?.perfil === 'admin' ? `<button class="btn btn-ghost btn-sm" id="btn-jira-config">Configurar JIRA</button>` : ''}
+                    ${activeProjectId && (user?.perfil === 'admin' || user?.permissions?.can_configure_jira) ? `<button class="btn btn-ghost btn-sm" id="btn-jira-config">Configurar JIRA</button>` : ''}
                     ${activeProjectId ? `<button class="btn btn-ghost btn-sm" id="btn-export-project">Exportar Matriz</button>` : ''}
                 </div>
                 <div class="topbar-controls">

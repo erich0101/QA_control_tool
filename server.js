@@ -608,7 +608,10 @@ app.get('/api/projects/:id/jira-config', requireAuth, async (req, res) => {
     }
 });
 
-app.post('/api/projects/:id/jira-config', requireAuth, requireAdmin, async (req, res) => {
+app.post('/api/projects/:id/jira-config', requireAuth, async (req, res) => {
+    if (req.user.perfil !== 'admin' && !(await checkPermission(req.user.id, 'can_configure_jira'))) {
+        return res.status(403).json({ error: 'No tienes permiso para configurar Jira' });
+    }
     try {
         const { jira_domain, jira_project_key } = req.body;
         const projectId = req.params.id;
