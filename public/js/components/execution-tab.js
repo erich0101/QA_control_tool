@@ -3,6 +3,7 @@ import { ApiService } from '../services/api.js';
 import { UI } from '../utils/ui-utils.js';
 import { Modals } from './modals.js';
 import { modalManager } from '../utils/modal-manager.js';
+import { VoiceInput } from '../utils/voice-input.js';
 
 window.ExecutionTab = null;
 
@@ -280,9 +281,12 @@ export const ExecutionTab = {
 
                 <div class="obtained-result-panel" id="obtained-panel-${tc.id}" style="margin-top: 10px; padding: 10px 12px; background: var(--apple-fill); border-radius: var(--apple-radius-md); border: 1px solid var(--apple-separator);">
                     <label class="block-report-title" style="display:block; margin-bottom: 6px;">📝 RESULTADO REAL (opcional)</label>
-                    <textarea class="obtained-input" data-tc-id="${tc.id}" placeholder="Describí brevemente el resultado real observado durante la ejecución (aparecerá en el reporte HTML)."
-                              style="width: 100%; min-height: 50px; padding: 8px; border-radius: var(--apple-radius-sm); border: 1px solid var(--apple-separator); background: var(--apple-bg); color: var(--apple-label); font-family: inherit; font-size: 0.82rem; resize: vertical;"
-                              ${isLocked ? 'disabled' : ''}>${UI.escapeHTML(tc.obtained_result || '')}</textarea>
+                    <div style="position:relative;">
+                        <textarea class="obtained-input" data-tc-id="${tc.id}" placeholder="Describí brevemente el resultado real observado durante la ejecución (aparecerá en el reporte HTML)."
+                                  style="width: 100%; min-height: 50px; padding: 8px; padding-right: 40px; border-radius: var(--apple-radius-sm); border: 1px solid var(--apple-separator); background: var(--apple-bg); color: var(--apple-label); font-family: inherit; font-size: 0.82rem; resize: vertical;"
+                                  ${isLocked ? 'disabled' : ''}>${UI.escapeHTML(tc.obtained_result || '')}</textarea>
+                        ${!isLocked ? VoiceInput.createButton(null) : ''}
+                    </div>
                 </div>
 
                 <div class="tc-detail-footer">
@@ -428,7 +432,10 @@ export const ExecutionTab = {
                     </div>
                     <div class="field-group">
                         <div class="result-box-title actual">Resultado Actual</div>
-                        <textarea class="bug-input" data-field="actual_result" data-tc-id="${tc.id}" data-bug-index="${index}" placeholder="¿Qué pasó realmente?">${UI.escapeHTML(draft.actual_result)}</textarea>
+                        <div style="position:relative;">
+                            <textarea class="bug-input" data-field="actual_result" data-tc-id="${tc.id}" data-bug-index="${index}" placeholder="¿Qué pasó realmente?" style="padding-right: 40px;">${UI.escapeHTML(draft.actual_result)}</textarea>
+                            ${VoiceInput.createButton(null, { compact: true })}
+                        </div>
                     </div>
                 </div>
                 <div class="bug-grid-impact">

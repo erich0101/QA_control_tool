@@ -3528,3 +3528,62 @@ input:checked + .slider:before {
     display: block;
 }
 
+/* Voice Input - Botón de micrófono */
+.voice-btn {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 2px solid #007aff;
+    cursor: pointer;
+    background: #007aff;
+    color: white;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    z-index: 10;
+    padding: 0;
+    opacity: 1;
+    box-shadow: 0 2px 8px rgba(0, 122, 255, 0.3);
+}
+
+.voice-btn:hover {
+    background: #0056b3;
+    border-color: #0056b3;
+    box-shadow: 0 2px 12px rgba(0, 122, 255, 0.5);
+    transform: scale(1.1);
+}
+
+.voice-btn.recording {
+    background: #ff3b30;
+    border-color: #ff3b30;
+    color: white;
+    animation: voice-pulse 1.5s ease-in-out infinite;
+    box-shadow: 0 2px 12px rgba(255, 59, 48, 0.5);
+}
+
+@keyframes voice-pulse {
+    0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 59, 48, 0.4); }
+    50% { transform: scale(1.05); box-shadow: 0 0 0 8px rgba(255, 59, 48, 0); }
+}
+
+.voice-active {
+    border-color: #007aff !important;
+    box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.2);
+}
+
+.voice-unsupported {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+.voice-btn-compact {
+    width: 28px;
+    height: 28px;
+    font-size: 14px;
+}
+

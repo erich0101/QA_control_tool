@@ -30,9 +30,16 @@ El proyecto es una herramienta de QA manual y visual diseñada para gestionar ca
 - [RULES.md](file:///c:/Users/Erich_Petrocelli/test-opencode/RULES.md): Reglas de codificación.
 - [KNOWLEDGE.md](file:///c:/Users/Erich_Petrocelli/test-opencode/KNOWLEDGE.md): Documentación de conocimiento.
 
-### 🐍 Python Scripts
+### 🐍 Python Scripts (en raíz)
 - [qa_report_builder.py](file:///c:/Users/Erich_Petrocelli/test-opencode/qa_report_builder.py): Generador de reportes visuales complejos.
 - [import_excel.py](file:///c:/Users/Erich_Petrocelli/test-opencode/import_excel.py): Importación masiva de casos desde Excel.
+- [generate_hml_report.py](file:///c:/Users/Erich_Petrocelli/test-opencode/generate_hml_report.py): Generador de informes HML.
+- [generate_hml_pdf.py](file:///c:/Users/Erich_Petrocelli/test-opencode/generate_hml_pdf.py): Generador de PDF HML.
+
+### 🐍 Python Scripts (en scripts/python/)
+- [scripts/python/q4/](file:///c:/Users/Erich_Petrocelli/test-opencode/scripts/python/q4/): Scripts de validación y debug Q4.
+- [scripts/python/hml_delivery_data.py](file:///c:/Users/Erich_Petrocelli/test-opencode/scripts/python/hml_delivery_data.py): Datos crudos para informe HML.
+- [scripts/python/status_report.py](file:///c:/Users/Erich_Petrocelli/test-opencode/scripts/python/status_report.py): Reporte de estado de situación.
 
 ### ⚙️ Utilities & Scripts
 - [scripts/](file:///c:/Users/Erich_Petrocelli/test-opencode/scripts/): Scripts utilitarios.
@@ -58,6 +65,40 @@ El proyecto es una herramienta de QA manual y visual diseñada para gestionar ca
 1. **Selección de Caso:** El usuario elige un CU -> Se carga vía API -> Se renderiza en el Sidebar.
 2. **Ejecución:** Se marcan estados (OK/FAIL) -> Se suben capturas -> Se guarda en DB en tiempo real.
 3. **Reporte:** Al finalizar -> Se consulta DB -> `report-generator.js` o Python generan el HTML final.
+
+---
+
+## 📊 Estructura de Reportes
+
+Los reportes generados por el agente se organizan en `reports/` siguiendo esta semántica:
+
+```
+reports/
+├── bugs/                    # Informes de bugs por rango de fechas
+│   └── {proyecto}/         # Agrupados por proyecto/épica
+│       └── {YYYY-MM}/      # Organizados por año-mes
+│
+├── daily/                   # Informes diarios de bugs
+│   └── {proyecto}/
+│
+├── hml/                     # Informes de entrega a HML/STG
+│   └── {proyecto}/
+│
+├── metrics/                 # Reportes de métricas y comparativas
+│
+├── retrospectives/          # Informes retrospectivos
+│
+└── dashboards/              # Dashboards y reportes especiales
+```
+
+**Convenciones:**
+- **Bugs:** `bugs-{PROYECTO}-{FECHA_INICIO}_to_{FECHA_FIN}.{ext}`
+- **Daily:** `daily-bugs-{PROYECTO}-{FECHA}.{ext}`
+- **HML:** `informe_HML_{PROYECTO}_{FECHA}.{ext}`
+
+**Ubicaciones adicionales:**
+- `screenshots/`: Capturas de pantalla organizadas por contexto
+- `data/`: Archivos de datos (CSV, JSON) para importación
 
 ---
 

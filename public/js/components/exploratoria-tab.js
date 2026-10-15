@@ -3,6 +3,7 @@ import { ApiService } from '../services/api.js';
 import { UI } from '../utils/ui-utils.js';
 import { getCachedTab, setCachedTab, invalidateTabCache } from '../store/state.js';
 import { EvidenceUploader } from './evidence-uploader.js';
+import { VoiceInput } from '../utils/voice-input.js';
 
 /**
  * EXPLORATORIA-TAB.JS — Testing Exploratorio.
@@ -854,10 +855,13 @@ export const ExploratoriaTab = {
         return `
             <div class="expl-flow-field expl-obtained-result" data-tc-id="${flow.id}">
                 <span class="expl-flow-label">📝 Resultado Real${isPersisted ? ' <span style="color: var(--apple-green); font-size: 0.6rem;">✓ guardado</span>' : ''}</span>
-                <textarea class="expl-flow-obtained-input" data-tc-id="${flow.id}"
-                          placeholder="Describí brevemente el resultado real observado (aparecerá en el reporte HTML)."
-                          style="width:100%; min-height:50px; padding: 8px; border-radius: var(--apple-radius-sm); border:1px solid var(--apple-separator); background: var(--apple-bg); color: var(--apple-label); font-size: 0.82rem; font-family: inherit; resize: vertical;"
-                          ${isFinished ? 'disabled' : ''}>${UI.escapeHTML(value)}</textarea>
+                <div style="position:relative;">
+                    <textarea class="expl-flow-obtained-input" data-tc-id="${flow.id}"
+                              placeholder="Describí brevemente el resultado real observado (aparecerá en el reporte HTML)."
+                              style="width:100%; min-height:50px; padding: 8px; padding-right: 40px; border-radius: var(--apple-radius-sm); border:1px solid var(--apple-separator); background: var(--apple-bg); color: var(--apple-label); font-size: 0.82rem; font-family: inherit; resize: vertical;"
+                              ${isFinished ? 'disabled' : ''}>${UI.escapeHTML(value)}</textarea>
+                    ${!isFinished ? VoiceInput.createButton(null, { compact: true }) : ''}
+                </div>
             </div>
         `;
     },
@@ -940,9 +944,12 @@ export const ExploratoriaTab = {
                                   ${isFinished ? 'disabled' : ''}>${UI.escapeHTML(bug.expected_result || '')}</textarea>
                     </div>
                     <div>
-                        <textarea class="expl-bug-actual" data-tc-id="${flow.id}" placeholder="Resultado actual"
-                                  style="width:100%; min-height:50px; padding: 8px; border-radius: var(--apple-radius-sm); border:1px solid var(--apple-separator); background: var(--apple-bg); color: var(--apple-label); font-size: 0.82rem; font-family: inherit; resize: vertical;"
-                                  ${isFinished ? 'disabled' : ''}>${UI.escapeHTML(bug.actual_result || '')}</textarea>
+                        <div style="position:relative;">
+                            <textarea class="expl-bug-actual" data-tc-id="${flow.id}" placeholder="Resultado actual"
+                                      style="width:100%; min-height:50px; padding: 8px; padding-right: 40px; border-radius: var(--apple-radius-sm); border:1px solid var(--apple-separator); background: var(--apple-bg); color: var(--apple-label); font-size: 0.82rem; font-family: inherit; resize: vertical;"
+                                      ${isFinished ? 'disabled' : ''}>${UI.escapeHTML(bug.actual_result || '')}</textarea>
+                            ${!isFinished ? VoiceInput.createButton(null, { compact: true }) : ''}
+                        </div>
                     </div>
                 </div>
             </div>

@@ -132,7 +132,7 @@ await query(`ALTER TABLE qa_defects ADD COLUMN IF NOT EXISTS observations TEXT`)
         await query(`ALTER TABLE qa_test_cases ADD COLUMN IF NOT EXISTS jira_epic_key TEXT`);
         await query(`ALTER TABLE qa_test_cases ADD COLUMN IF NOT EXISTS observations TEXT`);
         await query(`ALTER TABLE qa_test_cases ADD COLUMN IF NOT EXISTS is_exploratory BOOLEAN DEFAULT false`);
-        await query(`CREATE INDEX IF NOT EXISTS idx_tc_is_exploratory ON qa_test_cases (is_exploratory) WHERE is_exploratory = true`);
+        try { await query(`CREATE INDEX IF NOT EXISTS idx_tc_is_exploratory ON qa_test_cases (is_exploratory) WHERE is_exploratory = true`); } catch(e) { console.warn('⚠️ idx_tc_is_exploratory no creado (limitación Supabase):', e.message); }
         await query(`CREATE INDEX IF NOT EXISTS idx_runs_proj_type ON qa_test_runs (project_id, run_type)`);
 
         // qa_executions: run_id lo usa server.js:2463+ en cada INSERT de ejecucion
@@ -200,7 +200,7 @@ await query(`ALTER TABLE qa_defects ADD COLUMN IF NOT EXISTS observations TEXT`)
         await query(`CREATE INDEX IF NOT EXISTS idx_exec_run_id       ON qa_executions (run_id)`);
         await query(`CREATE INDEX IF NOT EXISTS idx_exec_run_status   ON qa_executions (run_id, status)`);
         await query(`CREATE INDEX IF NOT EXISTS idx_defects_exec_id   ON qa_defects (execution_id)`);
-        await query(`CREATE INDEX IF NOT EXISTS idx_defects_jira_key  ON qa_defects (jira_key) WHERE jira_key IS NOT NULL`);
+        try { await query(`CREATE INDEX IF NOT EXISTS idx_defects_jira_key  ON qa_defects (jira_key) WHERE jira_key IS NOT NULL`); } catch(e) { console.warn('⚠️ idx_defects_jira_key no creado (limitación Supabase):', e.message); }
         await query(`CREATE INDEX IF NOT EXISTS idx_defects_project_id ON qa_defects (project_id)`);
 await query(`CREATE INDEX IF NOT EXISTS idx_defects_proj_exec ON qa_defects (project_id, execution_id)`);
         await query(`CREATE TABLE IF NOT EXISTS qa_project_sequences (
@@ -233,8 +233,9 @@ await query(`CREATE INDEX IF NOT EXISTS idx_defects_proj_exec ON qa_defects (pro
         await query(`CREATE INDEX IF NOT EXISTS idx_hallazgo_bug_defect   ON qa_hallazgo_bug (defect_id)`);
 
         await query(`CREATE INDEX IF NOT EXISTS idx_suites_uc_id      ON qa_test_suites (use_case_id)`);
-        await query(`CREATE INDEX IF NOT EXISTS idx_suites_active_run ON qa_test_suites (active_run_id) WHERE active_run_id IS NOT NULL`);
-        await query(`CREATE INDEX IF NOT EXISTS idx_suites_is_active  ON qa_test_suites (is_active) WHERE is_active = false`);
+        // Índices parciales: exec_query de Supabase no soporta WHERE en CREATE INDEX (502 Bad Gateway)
+        try { await query(`CREATE INDEX IF NOT EXISTS idx_suites_active_run ON qa_test_suites (active_run_id) WHERE active_run_id IS NOT NULL`); } catch(e) { console.warn('⚠️ idx_suites_active_run no creado (limitación Supabase):', e.message); }
+        try { await query(`CREATE INDEX IF NOT EXISTS idx_suites_is_active  ON qa_test_suites (is_active) WHERE is_active = false`); } catch(e) { console.warn('⚠️ idx_suites_is_active no creado (limitación Supabase):', e.message); }
         await query(`CREATE INDEX IF NOT EXISTS idx_uc_project_id     ON qa_use_cases (project_id)`);
         await query(`CREATE INDEX IF NOT EXISTS idx_us_uc_id          ON qa_user_stories (use_case_id)`);
         await query(`CREATE INDEX IF NOT EXISTS idx_scenarios_us_id       ON qa_scenarios (us_id)`);
@@ -261,7 +262,7 @@ await query(`CREATE INDEX IF NOT EXISTS idx_defects_proj_exec ON qa_defects (pro
         await query(`CREATE INDEX IF NOT EXISTS idx_suggestions_assigned   ON qa_suggestions (assigned_to)`);
         await query(`ALTER TABLE qa_attachments ADD COLUMN IF NOT EXISTS suggestion_id INTEGER REFERENCES qa_suggestions(id) ON DELETE CASCADE`);
         await query(`CREATE INDEX IF NOT EXISTS idx_attachments_suggestion ON qa_attachments (suggestion_id)`);
-        await query(`CREATE INDEX IF NOT EXISTS idx_attachments_execution_id ON qa_attachments (execution_id) WHERE execution_id IS NOT NULL`);
+        try { await query(`CREATE INDEX IF NOT EXISTS idx_attachments_execution_id ON qa_attachments (execution_id) WHERE execution_id IS NOT NULL`); } catch(e) { console.warn('⚠️ idx_attachments_execution_id no creado (limitación Supabase):', e.message); }
 
         // ── Local evidence store (binarios fuera de PostgreSQL) ──
         await query(`ALTER TABLE qa_attachments ADD COLUMN IF NOT EXISTS project_id    INTEGER REFERENCES qa_projects(id) ON DELETE SET NULL`);

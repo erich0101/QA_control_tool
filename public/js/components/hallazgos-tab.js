@@ -3,6 +3,7 @@ import { ApiService } from '../services/api.js';
 import { UI } from '../utils/ui-utils.js';
 import { getCachedTab, setCachedTab, invalidateTabCache } from '../store/state.js';
 import { EvidenceUploader } from './evidence-uploader.js';
+import { VoiceInput } from '../utils/voice-input.js';
 
 const STATUS_COLORS = {
     'OPEN': 'var(--apple-red)',
@@ -354,7 +355,10 @@ export const HallazgosTab = {
                 </div>
                 <div class="field-group full-width">
                     <label style="display: block; font-size: 0.72rem; font-weight: 600; color: var(--apple-label-secondary); margin-bottom: 6px;">Resultado Obtenido</label>
-                    <textarea id="hf-obtained" placeholder="Lo que realmente ocurrió..." style="${inputStyle} min-height:80px; font-family:inherit; resize:vertical;" ${focusAttr}>${UI.escapeHTML(d.actual_result || '')}</textarea>
+                    <div style="position:relative;">
+                        <textarea id="hf-obtained" placeholder="Lo que realmente ocurrió..." style="${inputStyle} min-height:80px; font-family:inherit; resize:vertical; padding-right: 40px;" ${focusAttr}>${UI.escapeHTML(d.actual_result || '')}</textarea>
+                        ${VoiceInput.createButton(null)}
+                    </div>
                 </div>
             </div>
             <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:12px; margin-top: 16px;">
@@ -508,7 +512,10 @@ export const HallazgosTab = {
                             </div>
                             <div class="field-group">
                                 <div style="font-size: 0.68rem; font-weight: 700; color: var(--apple-red); text-transform: uppercase; margin-bottom: 6px;">❌ Resultado Actual</div>
-                                <textarea id="hf-obtained" placeholder="Lo que realmente ocurrió..." style="${inputStyle} width: 100%; min-height: 70px; padding: 10px 12px; background: rgba(255,59,48,0.06); border: 1px solid rgba(255,59,48,0.12); border-radius: var(--apple-radius-md); font-size: 0.85rem;">${UI.escapeHTML(h.actual_result || '')}</textarea>
+                                <div style="position:relative;">
+                                    <textarea id="hf-obtained" placeholder="Lo que realmente ocurrió..." style="${inputStyle} width: 100%; min-height: 70px; padding: 10px 40px 10px 12px; background: rgba(255,59,48,0.06); border: 1px solid rgba(255,59,48,0.12); border-radius: var(--apple-radius-md); font-size: 0.85rem;">${UI.escapeHTML(h.actual_result || '')}</textarea>
+                                    ${VoiceInput.createButton(null, { compact: true })}
+                                </div>
                             </div>
                         </div>
                         <div class="field-group">
