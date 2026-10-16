@@ -161,6 +161,7 @@ export const HallazgosTab = {
                             ${canCreate ? `<button class="btn btn-primary btn-sm" id="h-btn-new" style="width:100%; padding: 8px 12px; font-size: 0.75rem; font-weight: 600; border-radius: var(--apple-radius-md);">${newBtnLabel}</button>` : ''}
                             <div style="display: flex; gap: 6px;">
                                 <button id="h-btn-report-custom" style="flex:1; padding: 6px 8px; border-radius: var(--apple-radius-md); border: 1px solid #007aff; background: #007aff; color: white; font-size: 0.68rem; font-weight: 600; cursor: pointer;">Mi Reporte de QA</button>
+                                <button id="h-btn-report-selected" style="flex:1; padding: 6px 8px; border-radius: var(--apple-radius-md); border: 1px solid #7c3aed; background: #7c3aed; color: white; font-size: 0.68rem; font-weight: 600; cursor: pointer;">Reporte Hallazgos</button>
                             </div>
                         </div>
                     </div>
@@ -717,6 +718,10 @@ export const HallazgosTab = {
         container.querySelector('#h-btn-report-custom')?.addEventListener('click', async () => {
             const { projects } = await ApiService.getTesterProjects();
             Modals.render('tester-report', { projects });
+        });
+
+        container.querySelector('#h-btn-report-selected')?.addEventListener('click', () => {
+            Modals.openHallazgosReportModal();
         });
 
         this.bindSubTabs(container);

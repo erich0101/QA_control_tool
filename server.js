@@ -4328,6 +4328,113 @@ app.get('/api/reports/multi', requireAuth, async (req, res) => {
     }
 });
 
+// ── GET /api/reports/hallazgos?ids=1,2,3 ──────────────────────────────────────
+app.get('/api/reports/hallazgos', requireAuth, async (req, res) => {
+    try {
+        const ids = (req.query.ids || '').split(',').map(Number).filter(n => !isNaN(n) && n > 0);
+        if (ids.length === 0) return res.status(400).json({ error: 'Sin hallazgos seleccionados' });
+
+        const placeholders = ids.map(() => '?').join(',');
+        const defects = await query(`
+            SELECT d.id, d.title, d.description, d.severity, d.status, d.created_at,
+                   d.steps_to_reproduce, d.expected_result, d.actual_result,
+                   d.frequency, d.business_impact, d.preconditions, d.observations,
+                   d.jira_key, d.jira_url, d.component,
+                   p.name as project_name,
+                   u1.name as assignee_name, u2.name as reporter_name
+            FROM qa_defects d
+            JOIN qa_projects p ON d.project_id = p.id
+            LEFT JOIN qa_users u1 ON d.assigned_to = u1.id
+            LEFT JOIN qa_users u2 ON d.created_by = u2.id
+            WHERE d.id IN (${placeholders})
+            ORDER BY d.severity DESC, d.created_at DESC
+        `, ids);
+
+        const attachments = await query(`
+            SELECT a.id, a.defect_id
+            FROM qa_attachments a
+            WHERE a.defect_id IN (${placeholders})
+        `, ids);
+
+        const evidByDef = {};
+        for (const a of attachments.rows) {
+            const ev = await getEvidenceBase64(a.id);
+            if (ev) {
+                evidByDef[a.defect_id] = evidByDef[a.defect_id] || [];
+                evidByDef[a.defect_id].push(ev);
+            }
+        }
+
+        function esc(str) { return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+        const sevColors = { 'Crítica': '#dc2626', 'Alta': '#ea580c', 'Media': '#d97706', 'Baja': '#059669' };
+        const sevBg = { 'Crítica': '#fee2e2', 'Alta': '#ffedd5', 'Media': '#fef3c7', 'Baja': '#d1fae5' };
+
+        let defectsHTML = '';
+        for (const d of defects.rows) {
+            const evidHTML = (evidByDef[d.id] || []).map(ev => evidenceHTML(ev, 250)).join('');
+            const sevColor = sevColors[d.severity] || '#6b7280';
+            const sevBgColor = sevBg[d.severity] || '#f3f4f6';
+
+            defectsHTML += `
+                <div style="padding:16px; background:white; border-radius:10px; margin-bottom:14px; border-left:5px solid ${sevColor}; box-shadow:0 1px 4px rgba(0,0,0,0.08);">
+                    <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px;">
+                        <div style="flex:1;">
+                            <div style="font-weight:700; font-size:0.9rem; color:var(--apple-label);">#${d.id} - ${esc(d.title)}</div>
+                            <div style="font-size:0.72rem; color:var(--apple-label-secondary); margin-top:2px;">
+                                ${esc(d.project_name)} | Reportado por: ${esc(d.reporter_name || '—')} | ${d.created_at ? new Date(d.created_at).toLocaleDateString('es-AR') : '—'}
+                            </div>
+                        </div>
+                        <div style="display:flex; gap:6px; align-items:center;">
+                            <span style="padding:3px 10px; border-radius:20px; font-size:0.65rem; font-weight:700; background:${sevBgColor}; color:${sevColor};">${esc(d.severity)}</span>
+                            <span style="padding:3px 10px; border-radius:20px; font-size:0.65rem; font-weight:700; background:${d.status === 'OPEN' ? '#fee2e2' : '#d1fae5'}; color:${d.status === 'OPEN' ? '#dc2626' : '#059669'};">${esc(d.status)}</span>
+                        </div>
+                    </div>
+                    ${d.description ? `<div style="font-size:0.8rem; margin-top:6px; padding:8px; background:var(--apple-fill); border-radius:6px;">${esc(d.description)}</div>` : ''}
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px;">
+                        ${d.steps_to_reproduce ? `<div style="font-size:0.75rem; padding:8px; background:#f9fafb; border-radius:6px;"><strong>Pasos:</strong><br>${esc(d.steps_to_reproduce)}</div>` : ''}
+                        ${d.expected_result ? `<div style="font-size:0.75rem; padding:8px; background:rgba(52,199,89,0.06); border-radius:6px;"><strong>Esperado:</strong><br>${esc(d.expected_result)}</div>` : ''}
+                        ${d.actual_result ? `<div style="font-size:0.75rem; padding:8px; background:rgba(255,59,48,0.06); border-radius:6px;"><strong>Actual:</strong><br>${esc(d.actual_result)}</div>` : ''}
+                        ${d.observations ? `<div style="font-size:0.75rem; padding:8px; background:#f9fafb; border-radius:6px;"><strong>Observaciones:</strong><br>${esc(d.observations)}</div>` : ''}
+                    </div>
+                    ${d.jira_key ? `<div style="font-size:0.72rem; margin-top:6px; color:var(--apple-blue);">Jira: <a href="${esc(d.jira_url || '#')}" target="_blank">${esc(d.jira_key)}</a></div>` : ''}
+                    ${evidHTML ? `<div style="margin-top:10px;"><div style="font-size:0.68rem; font-weight:700; color:var(--apple-label-tertiary); text-transform:uppercase; margin-bottom:4px;">Evidencias</div><div>${evidHTML}</div></div>` : ''}
+                </div>
+            `;
+        }
+
+        const totalOpen = defects.rows.filter(d => d.status === 'OPEN').length;
+        const totalCrit = defects.rows.filter(d => d.severity === 'Crítica' || d.severity === 'Alta').length;
+
+        const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Reporte de Hallazgos Seleccionados</title>
+        <style>body{font-family:'Segoe UI',system-ui,sans-serif;background:#f3f4f6;margin:0;padding:20px;color:#111827}
+        .header{background:linear-gradient(135deg,#7c3aed,#5b21b6);color:white;border-radius:12px;padding:24px;margin-bottom:24px}
+        .header h1{margin:0 0 4px;font-size:1.3rem}.header p{margin:0;opacity:.9;font-size:.85rem}
+        .kpi{background:white;border-radius:8px;padding:14px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.1);border-top:3px solid #e5e7eb}
+        .kpi-val{font-size:1.4rem;font-weight:700}.kpi-lab{font-size:.65rem;color:#6b7280;text-transform:uppercase}
+        .footer{text-align:center;padding:16px;color:#6b7280;font-size:.75rem}
+        @media print{body{background:white;padding:0}}</style></head><body>
+        <div class="header">
+            <h1>Reporte de Hallazgos Seleccionados</h1>
+            <p>${defects.rows.length} hallazgo(s) | ${new Date().toLocaleDateString('es-AR')}</p>
+        </div>
+        <div style="display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap;">
+            <div class="kpi"><div class="kpi-val">${defects.rows.length}</div><div class="kpi-lab">Total</div></div>
+            <div class="kpi"><div class="kpi-val" style="color:#dc2626">${totalOpen}</div><div class="kpi-lab">Abiertos</div></div>
+            <div class="kpi"><div class="kpi-val" style="color:#ea580c">${totalCrit}</div><div class="kpi-lab">Alta/Crítica</div></div>
+        </div>
+        ${defectsHTML}
+        <div class="footer">Reporte generado automáticamente | ${new Date().toLocaleString('es-AR')}</div>
+        ${lightboxHTML()}
+        </body></html>`;
+
+        res.setHeader('Content-Type', 'text/html');
+        res.send(html);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 app.get('/api/reports/:runId', requireAuth, async (req, res) => {
     try {
         const html = await generateReport(req.params.runId);
@@ -4359,15 +4466,48 @@ async function getEvidenceBase64(attachmentId) {
             buffer = fs.readFileSync(abs);
         }
 
+        const isVideo = (r.mime_type || '').startsWith('video/');
+        if (isVideo) {
+            return { type: 'video', mime: r.mime_type, data: `data:${r.mime_type};base64,${buffer.toString('base64')}` };
+        }
+
         const compressed = await sharp(buffer)
             .resize(800, 600, { fit: 'inside', withoutEnlargement: true })
             .jpeg({ quality: 60 })
             .toBuffer();
 
-        return `data:image/jpeg;base64,${compressed.toString('base64')}`;
+        return { type: 'image', mime: 'image/jpeg', data: `data:image/jpeg;base64,${compressed.toString('base64')}` };
     } catch (e) {
         return null;
     }
+}
+
+function evidenceHTML(ev, maxWidth = 200) {
+    if (!ev) return '';
+    if (ev.type === 'video') {
+        return `<video src="${ev.data}" controls preload="none" style="max-width:${maxWidth}px; border-radius:6px; margin:4px; cursor:pointer;" title="Click para reproducir"></video>`;
+    }
+    return `<img src="${ev.data}" style="max-width:${maxWidth}px; border-radius:6px; margin:4px; cursor:pointer; transition:transform 0.2s;" onclick="openLightbox(this.src)" onmouseenter="this.style.transform='scale(1.05)'" onmouseleave="this.style.transform='scale(1)'" title="Click para ampliar">`;
+}
+
+function lightboxHTML() {
+    return `
+        <div id="lightbox" onclick="closeLightbox()" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.9); z-index:9999; cursor:pointer; align-items:center; justify-content:center;">
+            <img id="lightbox-img" style="max-width:95vw; max-height:95vh; object-fit:contain; border-radius:8px;">
+            <button onclick="closeLightbox()" style="position:absolute; top:20px; right:20px; background:white; border:none; width:40px; height:40px; border-radius:50%; font-size:1.2rem; cursor:pointer; font-weight:700;">✕</button>
+        </div>
+        <script>
+            function openLightbox(src) {
+                document.getElementById('lightbox-img').src = src;
+                document.getElementById('lightbox').style.display = 'flex';
+            }
+            function closeLightbox() {
+                document.getElementById('lightbox').style.display = 'none';
+                document.getElementById('lightbox-img').src = '';
+            }
+            document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
+        </script>
+    `;
 }
 
 async function generateTesterReport(userId, { dateFrom, dateTo, projectIds } = {}) {
@@ -4484,7 +4624,7 @@ function renderTesterReportHTML(data, userName) {
         let execRows = '';
         for (const e of proj.execs) {
             const statusClass = ['OK', 'PASS'].includes(e.status) ? 'pass' : e.status === 'FAIL' ? 'fail' : e.status === 'SKIP' || e.status === 'SKIPPED' ? 'skip' : 'block';
-            const evidHTML = (evidByExec[e.id] || []).map(b64 => `<img src="${b64}" style="max-width:200px; border-radius:4px; margin:4px;">`).join('');
+            const evidHTML = (evidByExec[e.id] || []).map(ev => evidenceHTML(ev, 200)).join('');
             execRows += `<tr>
                 <td>${e.tc_title || 'N/A'}</td>
                 <td><span class="status-badge ${statusClass}">${e.status}</span></td>
@@ -4497,7 +4637,7 @@ function renderTesterReportHTML(data, userName) {
         let defectRows = '';
         for (const d of proj.defects) {
             const sevClass = d.severity === 'Alta' || d.severity === 'Crítica' ? 'fail' : d.severity === 'Media' ? 'block' : 'pass';
-            const evidHTML = (evidByDef[d.id] || []).map(b64 => `<img src="${b64}" style="max-width:200px; border-radius:4px; margin:4px;">`).join('');
+            const evidHTML = (evidByExec[e.id] || []).map(ev => evidenceHTML(ev, 200)).join('');
             defectRows += `<tr>
                 <td>${d.title}</td>
                 <td><span class="status-badge ${sevClass}">${d.severity}</span></td>
@@ -4564,6 +4704,7 @@ function renderTesterReportHTML(data, userName) {
     </div>
     ${Object.keys(projects).length === 0 ? '<div style="text-align:center;padding:40px;color:#6b7280;">Sin actividad registrada</div>' : projectsHTML}
     <div class="footer">Reporte generado automáticamente | ${new Date().toLocaleString('es-AR')}</div>
+    ${lightboxHTML()}
     </body></html>`;
 }
 

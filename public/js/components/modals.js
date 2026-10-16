@@ -40,6 +40,7 @@ export const Modals = {
             case 'import-dual': content = this.getImportDualContent(options); width = '450px'; break;
             case 'batch-jira-tickets': content = this.getBatchJiraTicketsContent(options); width = '720px'; break;
             case 'tester-report': content = this.getTesterReportContent(options); width = '500px'; break;
+            case 'hallazgos-report': content = this.getHallazgosReportContent(options); width = '520px'; break;
             // Hallazgos ahora usan master-detail inline — estos casos se eliminaron
         }
 
@@ -98,6 +99,8 @@ export const Modals = {
             this.bindBatchJiraTicketsEvents(dialog, options);
         } else if (type === 'tester-report') {
             this.bindTesterReportEvents(dialog.querySelector('.modal-content'), options);
+        } else if (type === 'hallazgos-report') {
+            this.bindHallazgosReportEvents(dialog.querySelector('.modal-content'), options);
         } else if (false) { // Hallazgos ahora usan master-detail inline
         } else {
             const content = dialog.querySelector('.modal-content');
@@ -2047,6 +2050,106 @@ getStartRunWizardContent({ suite, suites, cuTitle }) {
             params.set('project_ids', selectedProjects.join(','));
 
             window.open(`/api/reports/tester/custom?${params.toString()}`, '_blank');
+            closeModal();
+        });
+    },
+
+    async openHallazgosReportModal() {
+        const hallazgos = Store.state.hallazgos || [];
+        this.render('hallazgos-report', { hallazgos });
+    },
+
+    getHallazgosReportContent(options) {
+        const hallazgos = options.hallazgos || [];
+        const sevColors = { 'Crítica': '#dc2626', 'Alta': '#ea580c', 'Media': '#d97706', 'Baja': '#059669' };
+        return `
+            <h2 style="margin: 0 0 4px; font-size: 1.15rem; font-weight: 700;">Reporte de Hallazgos</h2>
+            <p style="margin: 0 0 16px; font-size: 0.8rem; color: var(--apple-label-secondary);">Selecciona los hallazgos a incluir en el reporte.</p>
+
+            <div style="display: flex; flex-direction: column; gap: 12px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <button id="hrpt-select-all" style="padding:4px 10px; border-radius:4px; border:1px solid var(--apple-separator); background:transparent; color:var(--apple-blue); font-size:0.72rem; cursor:pointer;">Todos / Ninguno</button>
+                        <select id="hrpt-filter-sev" style="padding:4px 8px; border-radius:4px; border:1px solid var(--apple-separator); background:var(--apple-bg-tertiary); color:var(--apple-label); font-size:0.72rem;">
+                            <option value="">Todas severidades</option>
+                            <option value="Crítica">Crítica</option>
+                            <option value="Alta">Alta</option>
+                            <option value="Media">Media</option>
+                            <option value="Baja">Baja</option>
+                        </select>
+                    </div>
+                    <span id="hrpt-count" style="font-size:0.72rem; color:var(--apple-label-secondary);">0 seleccionados</span>
+                </div>
+
+                <div id="hrpt-list" style="max-height: 350px; overflow-y: auto; padding: 8px; background: var(--apple-bg-tertiary); border-radius: var(--apple-radius-md); border: 1px solid var(--apple-separator);">
+                    ${hallazgos.length === 0
+                        ? '<div style="text-align:center; padding:20px; color:var(--apple-label-tertiary); font-size:0.8rem;">Sin hallazgos cargados</div>'
+                        : hallazgos.map(h => {
+                            const sevColor = sevColors[h.severity] || '#6b7280';
+                            return `
+                                <label class="hrpt-item" data-severity="${h.severity}" style="display:flex; align-items:flex-start; gap:8px; padding:8px; border-radius:6px; cursor:pointer; transition:background 0.1s; border-bottom:1px solid var(--apple-separator);" onmouseenter="this.style.background='var(--apple-fill)'" onmouseleave="this.style.background='transparent'">
+                                    <input type="checkbox" value="${h.id}" style="width:16px; height:16px; margin-top:2px; accent-color:var(--apple-blue);">
+                                    <div style="flex:1; min-width:0;">
+                                        <div style="font-size:0.8rem; font-weight:600; color:var(--apple-label); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">#${h.id} - ${UI.escapeHTML(h.title)}</div>
+                                        <div style="font-size:0.68rem; color:var(--apple-label-secondary); margin-top:2px;">
+                                            <span style="color:${sevColor}; font-weight:600;">${UI.escapeHTML(h.severity)}</span> | ${UI.escapeHTML(h.status)}
+                                        </div>
+                                    </div>
+                                </label>
+                            `;
+                        }).join('')}
+                </div>
+
+                <div style="display: flex; gap: 10px; margin-top: 8px;">
+                    <button class="btn btn-ghost" id="hrpt-cancel" style="flex: 1; padding: 10px; border-radius: var(--apple-radius-md); font-size: 0.82rem;">Cancelar</button>
+                    <button class="btn btn-primary" id="hrpt-generate" style="flex: 2; padding: 10px; border-radius: var(--apple-radius-md); font-size: 0.82rem; font-weight: 600;">Generar Reporte</button>
+                </div>
+            </div>
+        `;
+    },
+
+    bindHallazgosReportEvents(content) {
+        const dialog = content.closest('dialog');
+        const selectAllBtn = content.querySelector('#hrpt-select-all');
+        const filterSev = content.querySelector('#hrpt-filter-sev');
+        const checkboxes = content.querySelectorAll('#hrpt-list input[type="checkbox"]');
+        const countSpan = content.querySelector('#hrpt-count');
+        const cancelBtn = content.querySelector('#hrpt-cancel');
+        const generateBtn = content.querySelector('#hrpt-generate');
+
+        const closeModal = () => { if (dialog) { dialog.close(); dialog.remove(); } };
+
+        const updateCount = () => {
+            const checked = content.querySelectorAll('#hrpt-list input[type="checkbox"]:checked');
+            countSpan.textContent = checked.length + ' seleccionados';
+        };
+
+        selectAllBtn?.addEventListener('click', () => {
+            const visible = Array.from(checkboxes).filter(cb => cb.closest('.hrpt-item').style.display !== 'none');
+            const allChecked = visible.every(cb => cb.checked);
+            visible.forEach(cb => cb.checked = !allChecked);
+            updateCount();
+        });
+
+        filterSev?.addEventListener('change', () => {
+            const sev = filterSev.value;
+            content.querySelectorAll('.hrpt-item').forEach(item => {
+                item.style.display = (!sev || item.dataset.severity === sev) ? '' : 'none';
+            });
+        });
+
+        checkboxes.forEach(cb => cb.addEventListener('change', updateCount));
+        updateCount();
+
+        cancelBtn?.addEventListener('click', closeModal);
+
+        generateBtn?.addEventListener('click', () => {
+            const selected = Array.from(checkboxes).filter(cb => cb.checked).map(cb => cb.value);
+            if (selected.length === 0) {
+                UI.toast('Selecciona al menos un hallazgo', 'warning');
+                return;
+            }
+            window.open(`/api/reports/hallazgos?ids=${selected.join(',')}`, '_blank');
             closeModal();
         });
     },
