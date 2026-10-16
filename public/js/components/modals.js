@@ -39,6 +39,7 @@ export const Modals = {
             case 'evidence-upload': content = this.getEvidenceUploadContent(options); width = '450px'; break;
             case 'import-dual': content = this.getImportDualContent(options); width = '450px'; break;
             case 'batch-jira-tickets': content = this.getBatchJiraTicketsContent(options); width = '720px'; break;
+            case 'tester-report': content = this.getTesterReportContent(options); width = '500px'; break;
             // Hallazgos ahora usan master-detail inline — estos casos se eliminaron
         }
 
@@ -95,6 +96,8 @@ export const Modals = {
             this.bindImportDualEvents(dialog, options);
         } else if (type === 'batch-jira-tickets') {
             this.bindBatchJiraTicketsEvents(dialog, options);
+        } else if (type === 'tester-report') {
+            this.bindTesterReportEvents(dialog.querySelector('.modal-content'), options);
         } else if (false) { // Hallazgos ahora usan master-detail inline
         } else {
             const content = dialog.querySelector('.modal-content');
@@ -1955,6 +1958,97 @@ getStartRunWizardContent({ suite, suites, cuTitle }) {
             closeBtn.style.opacity = '1';
             closeBtn.style.cursor = 'pointer';
         };
+    },
+
+    async openTesterReportModal() {
+        const { projects } = await ApiService.getTesterProjects();
+        this.render('tester-report', { projects });
+    },
+
+    getTesterReportContent(options) {
+        const today = new Date().toISOString().split('T')[0];
+        const projects = options.projects || [];
+        return `
+            <h2 style="margin: 0 0 4px; font-size: 1.15rem; font-weight: 700;">Mi Reporte de QA</h2>
+            <p style="margin: 0 0 20px; font-size: 0.8rem; color: var(--apple-label-secondary);">Selecciona el rango de fechas y los proyectos a incluir.</p>
+
+            <div style="display: flex; flex-direction: column; gap: 16px;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div>
+                        <label style="display: block; font-size: 0.72rem; font-weight: 600; color: var(--apple-label-secondary); margin-bottom: 6px;">Desde</label>
+                        <input type="date" id="report-date-from" value="${today}"
+                            style="width: 100%; padding: 8px 12px; border-radius: var(--apple-radius-md); border: 1px solid var(--apple-separator); background: var(--apple-bg-tertiary); color: var(--apple-label); font-size: 0.82rem; outline: none; box-sizing: border-box;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 0.72rem; font-weight: 600; color: var(--apple-label-secondary); margin-bottom: 6px;">Hasta</label>
+                        <input type="date" id="report-date-to" value="${today}"
+                            style="width: 100%; padding: 8px 12px; border-radius: var(--apple-radius-md); border: 1px solid var(--apple-separator); background: var(--apple-bg-tertiary); color: var(--apple-label); font-size: 0.82rem; outline: none; box-sizing: border-box;">
+                    </div>
+                </div>
+
+                <div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <label style="font-size: 0.72rem; font-weight: 600; color: var(--apple-label-secondary);">Proyectos</label>
+                        <button id="report-select-all" style="padding: 2px 8px; border-radius: 4px; border: 1px solid var(--apple-separator); background: transparent; color: var(--apple-blue); font-size: 0.68rem; cursor: pointer;">Todos / Ninguno</button>
+                    </div>
+                    <div id="report-projects-list" style="display: flex; flex-direction: column; gap: 6px; max-height: 200px; overflow-y: auto; padding: 8px; background: var(--apple-bg-tertiary); border-radius: var(--apple-radius-md); border: 1px solid var(--apple-separator);">
+                        ${projects.length === 0
+                            ? '<div style="text-align:center; padding:16px; color:var(--apple-label-tertiary); font-size:0.8rem;">Sin proyectos con actividad</div>'
+                            : projects.map(p => `
+                                <label style="display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; cursor: pointer; transition: background 0.1s;" onmouseenter="this.style.background='var(--apple-fill)'" onmouseleave="this.style.background='transparent'">
+                                    <input type="checkbox" value="${p.id}" checked style="width: 16px; height: 16px; accent-color: var(--apple-blue);">
+                                    <span style="font-size: 0.82rem; color: var(--apple-label);">${UI.escapeHTML(p.name)}</span>
+                                </label>
+                            `).join('')}
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 10px; margin-top: 8px;">
+                    <button class="btn btn-ghost" id="report-cancel" style="flex: 1; padding: 10px; border-radius: var(--apple-radius-md); font-size: 0.82rem;">Cancelar</button>
+                    <button class="btn btn-primary" id="report-generate" style="flex: 2; padding: 10px; border-radius: var(--apple-radius-md); font-size: 0.82rem; font-weight: 600;">Generar Reporte</button>
+                </div>
+            </div>
+        `;
+    },
+
+    bindTesterReportEvents(content) {
+        const dialog = content.closest('dialog');
+        const selectAllBtn = content.querySelector('#report-select-all');
+        const checkboxes = content.querySelectorAll('#report-projects-list input[type="checkbox"]');
+        const cancelBtn = content.querySelector('#report-cancel');
+        const generateBtn = content.querySelector('#report-generate');
+
+        const closeModal = () => {
+            if (dialog) { dialog.close(); dialog.remove(); }
+        };
+
+        selectAllBtn?.addEventListener('click', () => {
+            const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+            checkboxes.forEach(cb => cb.checked = !allChecked);
+        });
+
+        cancelBtn?.addEventListener('click', closeModal);
+
+        generateBtn?.addEventListener('click', () => {
+            const dateFrom = content.querySelector('#report-date-from')?.value;
+            const dateTo = content.querySelector('#report-date-to')?.value;
+            const selectedProjects = Array.from(checkboxes)
+                .filter(cb => cb.checked)
+                .map(cb => cb.value);
+
+            if (selectedProjects.length === 0) {
+                UI.toast('Seleccioná al menos un proyecto', 'warning');
+                return;
+            }
+
+            const params = new URLSearchParams();
+            if (dateFrom) params.set('date_from', dateFrom);
+            if (dateTo) params.set('date_to', dateTo);
+            params.set('project_ids', selectedProjects.join(','));
+
+            window.open(`/api/reports/tester/custom?${params.toString()}`, '_blank');
+            closeModal();
+        });
     },
 
 };

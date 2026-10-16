@@ -102,6 +102,8 @@ export const HistoryTab = {
                             </button>
                         ` : ''}
                         <button class="btn btn-ghost btn-sm" id="btn-refresh-history" style="padding: 6px 12px; border-radius: var(--apple-radius-sm); font-size: 0.72rem;">🔄 Recargar</button>
+                        <div style="width:1px; height:20px; background:var(--apple-separator);"></div>
+                        <button onclick="Modals.openTesterReportModal()" style="padding:6px 14px; border-radius:6px; border:none; background:#007aff; color:white; font-size:0.72rem; font-weight:600; cursor:pointer;">Mi Reporte de QA</button>
                     </div>
                 </div>
 

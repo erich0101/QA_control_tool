@@ -4,6 +4,7 @@ import { UI } from '../utils/ui-utils.js';
 import { getCachedTab, setCachedTab, invalidateTabCache } from '../store/state.js';
 import { EvidenceUploader } from './evidence-uploader.js';
 import { VoiceInput } from '../utils/voice-input.js';
+import { Modals } from './modals.js';
 
 const STATUS_COLORS = {
     'OPEN': 'var(--apple-red)',
@@ -158,6 +159,9 @@ export const HallazgosTab = {
                                 }
                             </div>
                             ${canCreate ? `<button class="btn btn-primary btn-sm" id="h-btn-new" style="width:100%; padding: 8px 12px; font-size: 0.75rem; font-weight: 600; border-radius: var(--apple-radius-md);">${newBtnLabel}</button>` : ''}
+                            <div style="display: flex; gap: 6px;">
+                                <button id="h-btn-report-custom" style="flex:1; padding: 6px 8px; border-radius: var(--apple-radius-md); border: 1px solid #007aff; background: #007aff; color: white; font-size: 0.68rem; font-weight: 600; cursor: pointer;">Mi Reporte de QA</button>
+                            </div>
                         </div>
                     </div>
                     <div class="hallazgos-sidebar-list" id="h-sidebar-list" style="flex: 1; overflow-y: auto;">
@@ -708,6 +712,11 @@ export const HallazgosTab = {
             } else {
                 this.bindSuggestionFormEvents(container, false, null);
             }
+        });
+
+        container.querySelector('#h-btn-report-custom')?.addEventListener('click', async () => {
+            const { projects } = await ApiService.getTesterProjects();
+            Modals.render('tester-report', { projects });
         });
 
         this.bindSubTabs(container);

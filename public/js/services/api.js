@@ -378,6 +378,10 @@ export const ApiService = {
         window.location.href = `/api/projects/${projectId}/export-excel`;
     },
 
+    async getTesterProjects() {
+        return fetch('/api/reports/tester/projects').then(json);
+    },
+
     async startAllCU(cuId) {
         return fetch(`/api/use-cases/${cuId}/start-all`, {
             method: 'POST',

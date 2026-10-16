@@ -10,6 +10,7 @@ export const TopBar = {
     render(container) {
         const { projects, activeProjectId, theme } = Store.state;
         const user = Store.state.user;
+        console.log('[TopBar] user:', user?.name, 'perfil:', user?.perfil, 'can_configure_jira:', user?.permissions?.can_configure_jira, 'activeProjectId:', activeProjectId);
 
         container.innerHTML = `
             <div class="topbar-brand">

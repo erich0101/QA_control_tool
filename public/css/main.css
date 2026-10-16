@@ -2453,6 +2453,8 @@ input:checked + .slider:before {
     background: var(--bg-surface);
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
 }
 
 .exec-toolbar-left {

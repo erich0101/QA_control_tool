@@ -1,5 +1,6 @@
 import { Store } from './store/state.js';
 import { ApiService } from './services/api.js';
+window.ApiService = ApiService;
 import { TopBar } from './components/topbar.js';
 import { TabBar } from './components/tabbar.js';
 import { UserStories } from './components/user-stories.js';
@@ -16,6 +17,7 @@ import { ToolsTab } from './components/tools-tab.js';
 import { UI } from './utils/ui-utils.js';
 import { RealtimeService } from './services/realtime.js';
 import { Modals } from './components/modals.js';
+window.Modals = Modals;
 
 /**
  * APP.JS - Entry point de la aplicación.

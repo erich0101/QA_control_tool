@@ -56,6 +56,10 @@ export const ExecutionTab = {
         container.innerHTML = `
             <div class="exec-flat-layout">
                 ${this.renderToolbar(activeSuites, totalActiveTests)}
+                <div style="display:flex; align-items:center; gap:8px; padding:10px 24px; background:#007aff; border-bottom:2px solid #0056b3;">
+                    <span style="font-size:0.8rem; font-weight:700; color:white;">Mi Reporte de QA</span>
+                    <button id="btn-report-custom" style="padding:8px 16px; border-radius:6px; border:2px solid white; background:white; color:#007aff; font-size:0.75rem; font-weight:700; cursor:pointer;">Generar Reporte</button>
+                </div>
                 <div class="exec-tree-container">
                     ${this.renderSuiteTree(activeSuites)}
                 </div>
@@ -74,7 +78,7 @@ export const ExecutionTab = {
 
     renderToolbar(activeSuites, totalActiveTests) {
         return `
-            <div class="exec-toolbar" style="padding: 12px 24px; background: var(--apple-bg-elevated); border-bottom: 1px solid var(--apple-separator); display: flex; align-items: center; gap: 16px;">
+            <div class="exec-toolbar" style="padding: 12px 24px; background: var(--apple-bg-elevated); border-bottom: 1px solid var(--apple-separator); display: flex; align-items: center; gap: 12px; flex-wrap: wrap; overflow: visible;">
                 <div style="display: flex; align-items: center; gap: 10px;">
                     <span style="font-size: 0.68rem; font-weight: 700; color: var(--apple-label-tertiary); letter-spacing: 0.05em; text-transform: uppercase;">EJECUCIÓN</span>
                     <span style="display: inline-flex; align-items: center; gap: 3px; padding: 3px 8px; border-radius: 20px; background: var(--apple-fill); font-size: 0.62rem; font-weight: 600; color: var(--apple-label-secondary);">${activeSuites.length} <span style="color: var(--apple-label-tertiary);">C</span></span>
@@ -935,6 +939,15 @@ export const ExecutionTab = {
             this.render(container);
             UI.hideLoading();
             UI.toast('Estado sincronizado');
+        });
+
+        container.querySelector('#btn-report-daily')?.addEventListener('click', () => {
+            window.open('/api/reports/tester/daily', '_blank');
+        });
+
+        container.querySelector('#btn-report-custom')?.addEventListener('click', async () => {
+            const { projects } = await ApiService.getTesterProjects();
+            Modals.render('tester-report', { projects });
         });
     },
 

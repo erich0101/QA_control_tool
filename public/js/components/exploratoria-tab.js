@@ -147,7 +147,8 @@ export const ExploratoriaTab = {
                                 <div class="expl-subtab ${this.subTab === 'active' ? 'active' : ''}" data-subtab="active">Activas</div>
                                 <div class="expl-subtab ${this.subTab === 'history' ? 'active' : ''}" data-subtab="history">Finalizadas</div>
                             </div>
-                            <button class="btn btn-primary btn-sm" id="expl-btn-new-session" style="width: 100%; padding: 8px 12px; font-size: 0.75rem; font-weight: 600; border-radius: var(--apple-radius-md);">+ Nueva sesión</button>
+                            <button class="btn btn-primary btn-sm" id="expl-btn-new-session" style="width: 100%; padding: 8px 12px; font-size: 0.75rem; font-weight: 600; border-radius: var(--apple-radius-md);">+ Nueva sesion</button>
+                            <button onclick="Modals.openTesterReportModal()" style="width:100%; padding:7px 10px; border-radius:6px; border:none; background:#007aff; color:white; font-size:0.7rem; font-weight:700; cursor:pointer; margin-top:4px;">Mi Reporte de QA</button>
                         </div>
                     </div>
                     <div class="ts-sidebar-list" id="expl-session-list">
@@ -380,7 +381,8 @@ export const ExploratoriaTab = {
                                 <div class="expl-subtab ${this.subTab === 'active' ? 'active' : ''}" data-subtab="active">Activas</div>
                                 <div class="expl-subtab ${this.subTab === 'history' ? 'active' : ''}" data-subtab="history">Finalizadas</div>
                             </div>
-                            <button class="btn btn-primary btn-sm" id="expl-btn-new-session" style="width: 100%; padding: 8px 12px; font-size: 0.75rem; font-weight: 600; border-radius: var(--apple-radius-md);">+ Nueva sesión</button>
+                            <button class="btn btn-primary btn-sm" id="expl-btn-new-session" style="width: 100%; padding: 8px 12px; font-size: 0.75rem; font-weight: 600; border-radius: var(--apple-radius-md);">+ Nueva sesion</button>
+                            <button onclick="Modals.openTesterReportModal()" style="width:100%; padding:7px 10px; border-radius:6px; border:none; background:#007aff; color:white; font-size:0.7rem; font-weight:700; cursor:pointer; margin-top:4px;">Mi Reporte de QA</button>
                         </div>
                     </div>
                     <div class="ts-sidebar-list" id="expl-session-list">

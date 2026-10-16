@@ -325,6 +325,14 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 app.use(express.json());
 app.use(cookieParser());
+app.use((req, res, next) => {
+    if (req.path.endsWith('.js') || req.path.endsWith('.css')) {
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+    }
+    next();
+});
 app.use(express.static(path.join(BASE_DIR, 'public')));
 
 // ── Middlewares de Auth ──
@@ -2582,9 +2590,9 @@ app.post('/api/test-suites/:id/start-execution', requireAuth, async (req, res) =
         // 4. Crear ejecuciones PENDING solo para los tests filtrados
         for (const tc of finalEligible) {
             await query(`
-                INSERT INTO qa_executions (tc_id, run_id, tester, status) 
-                VALUES (?, ?, ?, 'PENDING')
-            `, [tc.id, runId, req.user.name]);
+                INSERT INTO qa_executions (tc_id, run_id, tester, tester_id, status) 
+                VALUES (?, ?, ?, ?, 'PENDING')
+            `, [tc.id, runId, req.user.name, req.user.id]);
         }
         
         res.json({ ok: true, runId, testCount: finalEligible.length });
@@ -2614,9 +2622,9 @@ app.post('/api/test-cases/:id/start-execution', requireAuth, async (req, res) =>
         await query(`UPDATE qa_test_suites SET active_run_id = ? WHERE id = ?`, [runId, suiteId]);
 
         await query(`
-            INSERT INTO qa_executions (tc_id, run_id, tester, status) 
-            VALUES (?, ?, ?, 'PENDING')
-        `, [tcId, runId, req.user.name]);
+            INSERT INTO qa_executions (tc_id, run_id, tester, tester_id, status) 
+            VALUES (?, ?, ?, ?, 'PENDING')
+        `, [tcId, runId, req.user.name, req.user.id]);
 
         res.json({ ok: true, runId });
     } catch (err) {
@@ -2680,7 +2688,7 @@ let filterSql = `SELECT id, assigned_to FROM qa_test_cases WHERE suite_id = ?`;
                 await query(`UPDATE qa_test_suites SET active_run_id = ? WHERE id = ?`, [runId, suite.id]);
 
                 for (const tc of finalEligible) {
-                    await query(`INSERT INTO qa_executions (tc_id, run_id, tester, status) VALUES (?, ?, ?, 'PENDING')`, [tc.id, runId, req.user.name]);
+                    await query(`INSERT INTO qa_executions (tc_id, run_id, tester, tester_id, status) VALUES (?, ?, ?, ?, 'PENDING')`, [tc.id, runId, req.user.name, req.user.id]);
                 }
 
                 results.push({ suiteId: suite.id, title: suite.title, runId, testCount: finalEligible.length, status: 'ok' });
@@ -3079,9 +3087,9 @@ app.post('/api/defects', requireAuth, async (req, res) => {
         const jira_epic_key = suiteRes.rows[0]?.jira_epic_key || '';
 
         const result = await query(
-            `INSERT INTO qa_defects (execution_id, title, description, severity, steps_to_reproduce, expected_result, actual_result, frequency, business_impact, status, jira_epic_key) 
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?)`,
-            [execution_id, title, description || '', severity || 'Media', steps_to_reproduce || '', expected_result || '', actual_result || '', frequency || 'Siempre', business_impact || '', jira_epic_key]
+            `INSERT INTO qa_defects (execution_id, title, description, severity, steps_to_reproduce, expected_result, actual_result, frequency, business_impact, status, jira_epic_key, created_by, project_id) 
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?, ?, ?)`,
+            [execution_id, title, description || '', severity || 'Media', steps_to_reproduce || '', expected_result || '', actual_result || '', frequency || 'Siempre', business_impact || '', jira_epic_key, req.user.id, req.body.project_id || null]
         );
         res.json({ ok: true, defect_id: result.lastID });
     } catch (err) {
@@ -3153,9 +3161,9 @@ app.post('/api/runs/:id/retest', requireAuth, async (req, res) => {
         // 4. Pre-poblar ejecuciones PENDING para los tests seleccionados
         for (const test of failedTests.rows) {
             await query(`
-                INSERT INTO qa_executions (tc_id, run_id, tester, status, observations) 
-                VALUES (?, ?, ?, 'PENDING', 'Pendiente de retest')
-            `, [test.tc_id, newRunId, req.user.name]);
+                INSERT INTO qa_executions (tc_id, run_id, tester, tester_id, status, observations) 
+                VALUES (?, ?, ?, ?, 'PENDING', 'Pendiente de retest')
+            `, [test.tc_id, newRunId, req.user.name, req.user.id]);
         }
 
         res.json({ ok: true, runId: newRunId, suite_id: suiteId, testCount: failedTests.rows.length });
@@ -3517,8 +3525,8 @@ app.put('/api/test-cases/:id', requireAuth, async (req, res) => {
                     await query(`UPDATE qa_executions SET ${execFields.join(', ')} WHERE id = ?`, execParams);
                 }
             } else {
-                const insertRes = await query(`INSERT INTO qa_executions (tc_id, run_id, tester, status, observations, obtained_result) VALUES (?, ?, ?, ?, ?, ?)`,
-                    [tcId, runId, req.user.name, status || 'PENDING', observations || '', obtained_result || '']);
+                const insertRes = await query(`INSERT INTO qa_executions (tc_id, run_id, tester, tester_id, status, observations, obtained_result) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                    [tcId, runId, req.user.name, req.user.id, status || 'PENDING', observations || '', obtained_result || '']);
                 execId = insertRes.lastID;
             }
             const { bug_title, bug_description, bug_severity, bug_steps_to_reproduce, bug_expected_result, bug_actual_result, bug_frequency, bug_business_impact, bug_observations, bugs } = req.body;
@@ -3536,9 +3544,9 @@ app.put('/api/test-cases/:id', requireAuth, async (req, res) => {
 
                 const existingBug = await query(`SELECT id FROM qa_defects WHERE execution_id = ? AND title = ?`, [execId, b.title]);
                 if (existingBug.rows.length === 0) {
-                    await query(`INSERT INTO qa_defects (execution_id, title, description, severity, steps_to_reproduce, expected_result, actual_result, frequency, business_impact, observations, status, jira_epic_key)
-                                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?)`,
-                        [execId, b.title, b.description || '', b.severity || 'Media', b.steps_to_reproduce || '', b.expected_result || '', b.actual_result || '', b.frequency || 'Siempre', b.business_impact || '', b.observations || '', jira_epic_key]);
+                    await query(`INSERT INTO qa_defects (execution_id, title, description, severity, steps_to_reproduce, expected_result, actual_result, frequency, business_impact, observations, status, jira_epic_key, created_by, project_id)
+                                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?, ?, ?)`,
+                        [execId, b.title, b.description || '', b.severity || 'Media', b.steps_to_reproduce || '', b.expected_result || '', b.actual_result || '', b.frequency || 'Siempre', b.business_impact || '', b.observations || '', jira_epic_key, req.user.id, req.body.project_id || null]);
                 }
             };
 
@@ -4325,6 +4333,294 @@ app.get('/api/reports/:runId', requireAuth, async (req, res) => {
         const html = await generateReport(req.params.runId);
         res.setHeader('Content-Type', 'text/html');
         res.send(html);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ── Reportes por Tester ──
+
+async function getEvidenceBase64(attachmentId) {
+    try {
+        const result = await query(
+            `SELECT id, mime_type, storage_kind, storage_path, file_data FROM qa_attachments WHERE id = ?`,
+            [attachmentId]
+        );
+        if (result.rows.length === 0) return null;
+        const r = result.rows[0];
+
+        let buffer;
+        if (r.storage_kind === 'legacy_pg' || !r.storage_kind || !r.storage_path) {
+            if (!r.file_data) return null;
+            buffer = Buffer.from(r.file_data, 'base64');
+        } else {
+            const abs = evidenceStore.absolutePath(r.storage_path);
+            if (!fs.existsSync(abs)) return null;
+            buffer = fs.readFileSync(abs);
+        }
+
+        const compressed = await sharp(buffer)
+            .resize(800, 600, { fit: 'inside', withoutEnlargement: true })
+            .jpeg({ quality: 60 })
+            .toBuffer();
+
+        return `data:image/jpeg;base64,${compressed.toString('base64')}`;
+    } catch (e) {
+        return null;
+    }
+}
+
+async function generateTesterReport(userId, { dateFrom, dateTo, projectIds } = {}) {
+    const params = [userId];
+    let dateExecClause = '';
+    let dateDefectClause = '';
+
+    if (dateFrom) {
+        dateExecClause += ` AND DATE(e.executed_at) >= ?`;
+        params.push(dateFrom);
+    }
+    if (dateTo) {
+        dateExecClause += ` AND DATE(e.executed_at) <= ?`;
+        params.push(dateTo);
+    }
+
+    const defectParams = [userId];
+    if (dateFrom) {
+        dateDefectClause += ` AND DATE(d.created_at) >= ?`;
+        defectParams.push(dateFrom);
+    }
+    if (dateTo) {
+        dateDefectClause += ` AND DATE(d.created_at) <= ?`;
+        defectParams.push(dateTo);
+    }
+
+    let projectClause = '';
+    if (projectIds && projectIds.length > 0) {
+        const placeholders = projectIds.map(() => '?').join(',');
+        projectClause = ` AND p.id IN (${placeholders})`;
+    }
+
+    const execSql = `
+        SELECT e.id, e.status, e.executed_at, e.observations, e.obtained_result,
+               tc.title as tc_title, tc.id as tc_id,
+               p.name as project_name, p.id as project_id,
+               s.title as suite_name
+        FROM qa_executions e
+        JOIN qa_test_cases tc ON e.tc_id = tc.id
+        JOIN qa_test_runs r ON e.run_id = r.id
+        JOIN qa_test_suites s ON r.suite_id = s.id
+        JOIN qa_projects p ON s.project_id = p.id
+        WHERE e.tester_id = ? ${dateExecClause} ${projectClause}
+        ORDER BY p.name, e.executed_at DESC
+    `;
+    const execParams = projectIds && projectIds.length > 0 ? [...params, ...projectIds] : params;
+    const execs = await query(execSql, execParams);
+
+    const defectSql = `
+        SELECT d.id, d.title, d.severity, d.status, d.created_at, d.actual_result,
+               p.name as project_name, p.id as project_id
+        FROM qa_defects d
+        JOIN qa_projects p ON d.project_id = p.id
+        WHERE d.created_by = ? ${dateDefectClause} ${projectClause}
+        ORDER BY p.name, d.created_at DESC
+    `;
+    const defectParamsFinal = projectIds && projectIds.length > 0 ? [...defectParams, ...projectIds] : defectParams;
+    const defects = await query(defectSql, defectParamsFinal);
+
+    const attachments = await query(`
+        SELECT a.id, a.execution_id, a.defect_id
+        FROM qa_attachments a
+        WHERE a.execution_id IN (${execs.rows.map(e => e.id).join(',') || '0'})
+           OR a.defect_id IN (${defects.rows.map(d => d.id).join(',') || '0'})
+    `, []);
+
+    const evidByExec = {};
+    const evidByDef = {};
+    for (const a of attachments.rows) {
+        const b64 = await getEvidenceBase64(a.id);
+        if (b64) {
+            if (a.execution_id) { evidByExec[a.execution_id] = evidByExec[a.execution_id] || []; evidByExec[a.execution_id].push(b64); }
+            if (a.defect_id) { evidByDef[a.defect_id] = evidByDef[a.defect_id] || []; evidByDef[a.defect_id].push(b64); }
+        }
+    }
+
+    const projects = {};
+    for (const e of execs.rows) {
+        if (!projects[e.project_id]) projects[e.project_id] = { name: e.project_name, execs: [], defects: [] };
+        projects[e.project_id].execs.push(e);
+    }
+    for (const d of defects.rows) {
+        if (!projects[d.project_id]) projects[d.project_id] = { name: d.project_name, execs: [], defects: [] };
+        projects[d.project_id].defects.push(d);
+    }
+
+    return { projects, evidByExec, evidByDef, dateFrom, dateTo };
+}
+
+function renderTesterReportHTML(data, userName) {
+    const { projects, evidByExec, evidByDef, dateFrom, dateTo } = data;
+    const dateLabel = dateFrom && dateTo ? `${dateFrom} al ${dateTo}` : dateFrom ? `Desde ${dateFrom}` : dateTo ? `Hasta ${dateTo}` : 'Completo';
+    const title = `Reporte de Actividad - ${dateLabel}`;
+    const totalExecs = Object.values(projects).reduce((s, p) => s + p.execs.length, 0);
+    const totalDefects = Object.values(projects).reduce((s, p) => s + p.defects.length, 0);
+    const totalPassed = Object.values(projects).reduce((s, p) => s + p.execs.filter(e => ['OK', 'PASS'].includes(e.status)).length, 0);
+    const totalFailed = Object.values(projects).reduce((s, p) => s + p.execs.filter(e => e.status === 'FAIL').length, 0);
+    const totalBlocked = Object.values(projects).reduce((s, p) => s + p.execs.filter(e => ['BLOCK', 'BLOCKED'].includes(e.status)).length, 0);
+    const passRate = totalExecs > 0 ? ((totalPassed / totalExecs) * 100).toFixed(1) : 0;
+
+    let projectsHTML = '';
+    for (const [pid, proj] of Object.entries(projects)) {
+        const pPassed = proj.execs.filter(e => ['OK', 'PASS'].includes(e.status)).length;
+        const pFailed = proj.execs.filter(e => e.status === 'FAIL').length;
+        const pBlocked = proj.execs.filter(e => ['BLOCK', 'BLOCKED'].includes(e.status)).length;
+        const pSkip = proj.execs.filter(e => ['SKIP', 'SKIPPED'].includes(e.status)).length;
+
+        let execRows = '';
+        for (const e of proj.execs) {
+            const statusClass = ['OK', 'PASS'].includes(e.status) ? 'pass' : e.status === 'FAIL' ? 'fail' : e.status === 'SKIP' || e.status === 'SKIPPED' ? 'skip' : 'block';
+            const evidHTML = (evidByExec[e.id] || []).map(b64 => `<img src="${b64}" style="max-width:200px; border-radius:4px; margin:4px;">`).join('');
+            execRows += `<tr>
+                <td>${e.tc_title || 'N/A'}</td>
+                <td><span class="status-badge ${statusClass}">${e.status}</span></td>
+                <td>${e.executed_at ? new Date(e.executed_at).toLocaleString('es-AR') : 'N/A'}</td>
+                <td>${e.obtained_result || '-'}</td>
+                <td>${evidHTML || '-'}</td>
+            </tr>`;
+        }
+
+        let defectRows = '';
+        for (const d of proj.defects) {
+            const sevClass = d.severity === 'Alta' || d.severity === 'Crítica' ? 'fail' : d.severity === 'Media' ? 'block' : 'pass';
+            const evidHTML = (evidByDef[d.id] || []).map(b64 => `<img src="${b64}" style="max-width:200px; border-radius:4px; margin:4px;">`).join('');
+            defectRows += `<tr>
+                <td>${d.title}</td>
+                <td><span class="status-badge ${sevClass}">${d.severity}</span></td>
+                <td><span class="status-badge ${d.status === 'OPEN' ? 'fail' : 'pass'}">${d.status}</span></td>
+                <td>${d.actual_result || '-'}</td>
+                <td>${d.created_at ? new Date(d.created_at).toLocaleString('es-AR') : 'N/A'}</td>
+                <td>${evidHTML || '-'}</td>
+            </tr>`;
+        }
+
+        projectsHTML += `
+        <div class="project-section">
+            <h2>${proj.name}</h2>
+            <div class="project-kpis">
+                <div class="kpi"><div class="kpi-val">${proj.execs.length}</div><div class="kpi-lab">Tests</div></div>
+                <div class="kpi green"><div class="kpi-val">${pPassed}</div><div class="kpi-lab">Pasados</div></div>
+                <div class="kpi red"><div class="kpi-val">${pFailed}</div><div class="kpi-lab">Fallidos</div></div>
+                <div class="kpi orange"><div class="kpi-val">${pBlocked}</div><div class="kpi-lab">Bloqueados</div></div>
+                <div class="kpi"><div class="kpi-val">${pSkip}</div><div class="kpi-lab">Saltados</div></div>
+                <div class="kpi purple"><div class="kpi-val">${proj.defects.length}</div><div class="kpi-lab">Hallazgos</div></div>
+            </div>
+            ${proj.execs.length > 0 ? `
+            <h3>Ejecuciones</h3>
+            <table><thead><tr><th>Test Case</th><th>Estado</th><th>Fecha</th><th>Resultado Real</th><th>Evidencias</th></tr></thead><tbody>${execRows}</tbody></table>` : ''}
+            ${proj.defects.length > 0 ? `
+            <h3>Hallazgos</h3>
+            <table><thead><tr><th>Título</th><th>Severidad</th><th>Estado</th><th>Resultado Actual</th><th>Fecha</th><th>Evidencias</th></tr></thead><tbody>${defectRows}</tbody></table>` : ''}
+        </div>`;
+    }
+
+    return `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>${title}</title>
+    <style>
+        body{font-family:'Segoe UI',system-ui,sans-serif;background:#f3f4f6;margin:0;padding:20px;color:#111827}
+        .header{background:linear-gradient(135deg,#1e40af,#7c3aed);color:white;border-radius:12px;padding:24px;margin-bottom:24px}
+        .header h1{margin:0 0 4px;font-size:1.5rem}.header p{margin:0;opacity:.9;font-size:.9rem}
+        .kpis{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:24px}
+        .kpi{background:white;border-radius:8px;padding:16px;text-align:center;min-width:100px;box-shadow:0 1px 3px rgba(0,0,0,.1);border-top:3px solid #e5e7eb}
+        .kpi.green{border-top-color:#059669}.kpi.red{border-top-color:#dc2626}.kpi.orange{border-top-color:#d97706}.kpi.purple{border-top-color:#7c3aed}
+        .kpi-val{font-size:1.5rem;font-weight:700;color:#111827}.kpi-lab{font-size:.7rem;color:#6b7280;text-transform:uppercase}
+        .project-section{background:white;border-radius:8px;padding:20px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,.1)}
+        .project-section h2{margin:0 0 12px;font-size:1.1rem;color:#1e40af}
+        .project-section h3{margin:16px 0 8px;font-size:.85rem;color:#6b7280;text-transform:uppercase}
+        .project-kpis{display:flex;gap:12px;flex-wrap:wrap}
+        table{width:100%;border-collapse:collapse;font-size:.82rem}
+        th{background:#f9fafb;padding:8px;text-align:left;font-size:.7rem;color:#6b7280;text-transform:uppercase;border-bottom:2px solid #e5e7eb}
+        td{padding:8px;border-bottom:1px solid #f3f4f6;vertical-align:top}
+        .status-badge{padding:2px 8px;border-radius:4px;font-size:.7rem;font-weight:600}
+        .status-badge.pass{background:#d1fae5;color:#059669}.status-badge.fail{background:#fee2e2;color:#dc2626}
+        .status-badge.block{background:#fef3c7;color:#d97706}.status-badge.skip{background:#f3f4f6;color:#6b7280}
+        .footer{text-align:center;padding:16px;color:#6b7280;font-size:.75rem}
+        @media print{body{background:white;padding:0}}
+    </style></head><body>
+    <div class="header">
+        <h1>${title}</h1>
+        <p>Tester: ${userName} | Periodo: ${dateLabel}</p>
+    </div>
+    <div class="kpis">
+        <div class="kpi"><div class="kpi-val">${totalExecs}</div><div class="kpi-lab">Tests Totales</div></div>
+        <div class="kpi green"><div class="kpi-val">${totalPassed}</div><div class="kpi-lab">Pasados</div></div>
+        <div class="kpi red"><div class="kpi-val">${totalFailed}</div><div class="kpi-lab">Fallidos</div></div>
+        <div class="kpi orange"><div class="kpi-val">${totalBlocked}</div><div class="kpi-lab">Bloqueados</div></div>
+        <div class="kpi"><div class="kpi-val">${passRate}%</div><div class="kpi-lab">Tasa Aprobación</div></div>
+        <div class="kpi purple"><div class="kpi-val">${totalDefects}</div><div class="kpi-lab">Hallazgos</div></div>
+    </div>
+    ${Object.keys(projects).length === 0 ? '<div style="text-align:center;padding:40px;color:#6b7280;">Sin actividad registrada</div>' : projectsHTML}
+    <div class="footer">Reporte generado automáticamente | ${new Date().toLocaleString('es-AR')}</div>
+    </body></html>`;
+}
+
+app.get('/api/reports/tester/daily', requireAuth, async (req, res) => {
+    try {
+        const today = new Date().toISOString().split('T')[0];
+        const data = await generateTesterReport(req.user.id, { dateFrom: today, dateTo: today });
+        const html = renderTesterReportHTML(data, req.user.name);
+        res.setHeader('Content-Type', 'text/html');
+        res.send(html);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get('/api/reports/tester/all', requireAuth, async (req, res) => {
+    try {
+        const data = await generateTesterReport(req.user.id, {});
+        const html = renderTesterReportHTML(data, req.user.name);
+        res.setHeader('Content-Type', 'text/html');
+        res.send(html);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get('/api/reports/tester/custom', requireAuth, async (req, res) => {
+    try {
+        const { date_from, date_to, project_ids } = req.query;
+        const projectIds = project_ids ? project_ids.split(',').map(Number).filter(n => !isNaN(n)) : [];
+        const data = await generateTesterReport(req.user.id, {
+            dateFrom: date_from || null,
+            dateTo: date_to || null,
+            projectIds: projectIds.length > 0 ? projectIds : null
+        });
+        const html = renderTesterReportHTML(data, req.user.name);
+        res.setHeader('Content-Type', 'text/html');
+        res.send(html);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get('/api/reports/tester/projects', requireAuth, async (req, res) => {
+    try {
+        const projects = await query(`
+            SELECT DISTINCT p.id, p.name
+            FROM qa_projects p
+            WHERE EXISTS (
+                SELECT 1 FROM qa_executions e
+                JOIN qa_test_runs r ON e.run_id = r.id
+                JOIN qa_test_suites s ON r.suite_id = s.id
+                WHERE e.tester_id = ? AND s.project_id = p.id
+            ) OR EXISTS (
+                SELECT 1 FROM qa_defects d
+                WHERE d.created_by = ? AND d.project_id = p.id
+            ) OR EXISTS (
+                SELECT 1 FROM qa_project_users pu
+                WHERE pu.user_id = ? AND pu.project_id = p.id
+            )
+            ORDER BY p.name
+        `, [req.user.id, req.user.id, req.user.id]);
+        res.json({ projects: projects.rows });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
