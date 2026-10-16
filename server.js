@@ -4637,7 +4637,7 @@ function renderTesterReportHTML(data, userName) {
         let defectRows = '';
         for (const d of proj.defects) {
             const sevClass = d.severity === 'Alta' || d.severity === 'Crítica' ? 'fail' : d.severity === 'Media' ? 'block' : 'pass';
-            const evidHTML = (evidByExec[e.id] || []).map(ev => evidenceHTML(ev, 200)).join('');
+            const evidHTML = (evidByDef[d.id] || []).map(ev => evidenceHTML(ev, 200)).join('');
             defectRows += `<tr>
                 <td>${d.title}</td>
                 <td><span class="status-badge ${sevClass}">${d.severity}</span></td>
