@@ -242,10 +242,11 @@ router.post('/sessions/:runId/flows', async (req, res) => {
         // Vincular el TC a este run con una ejecución PENDING. Esto es lo que
         // permite que cada sesión vea SOLO sus propios flujos (la pertenencia
         // se deriva de qa_executions, no del project_id del TC).
+        // Tester se asigna al ejecutar, no al crear.
         await query(
             `INSERT INTO qa_executions (tc_id, run_id, tester, tester_id, status, project_id, suite_id, executed_at)
-             VALUES (?, ?, ?, ?, 'PENDING', ?, ?, CURRENT_TIMESTAMP)`,
-            [tcId, runId, req.user.name, req.user.id, run.project_id, suiteId]
+             VALUES (?, ?, NULL, NULL, 'PENDING', ?, ?, CURRENT_TIMESTAMP)`,
+            [tcId, runId, run.project_id, suiteId]
         );
 
         // Recalcular métricas de la sesión
@@ -286,15 +287,55 @@ router.post('/flows/:tcId/execute', async (req, res) => {
         let execId;
         if (existing.rows.length > 0) {
             execId = existing.rows[0].id;
-            await query(
-                `UPDATE qa_executions SET status = ?, observations = ?, obtained_result = ?, executed_at = CURRENT_TIMESTAMP WHERE id = ?`,
-                [status || 'PENDING', observations || '', obtained_result || '', execId]
-            );
+            // Si la ejecución era PENDING, asignar el tester correcto
+            const existingExec = await query(`SELECT status, tester_id FROM qa_executions WHERE id = ?`, [execId]);
+            let updateTester = '';
+            let updateTesterId = null;
+            if (existingExec.rows[0]?.status === 'PENDING' || !existingExec.rows[0]?.tester_id) {
+                const tcRes = await query(`SELECT assigned_to FROM qa_test_cases WHERE id = ?`, [tcId]);
+                const assignedTo = tcRes.rows[0]?.assigned_to;
+                if (assignedTo) {
+                    const assigneeRes = await query(`SELECT id, name FROM qa_users WHERE id = ?`, [assignedTo]);
+                    if (assigneeRes.rows.length > 0) {
+                        updateTester = assigneeRes.rows[0].name;
+                        updateTesterId = assigneeRes.rows[0].id;
+                    }
+                }
+                if (!updateTester) {
+                    updateTester = req.user.name;
+                    updateTesterId = req.user.id;
+                }
+            }
+
+            if (updateTester) {
+                await query(
+                    `UPDATE qa_executions SET status = ?, observations = ?, obtained_result = ?, tester = ?, tester_id = ?, executed_at = CURRENT_TIMESTAMP WHERE id = ?`,
+                    [status || 'PENDING', observations || '', obtained_result || '', updateTester, updateTesterId, execId]
+                );
+            } else {
+                await query(
+                    `UPDATE qa_executions SET status = ?, observations = ?, obtained_result = ?, executed_at = CURRENT_TIMESTAMP WHERE id = ?`,
+                    [status || 'PENDING', observations || '', obtained_result || '', execId]
+                );
+            }
         } else {
+            // Obtener assigned_to del test case para usar como tester real
+            const tcRes = await query(`SELECT assigned_to FROM qa_test_cases WHERE id = ?`, [tcId]);
+            const assignedTo = tcRes.rows[0]?.assigned_to;
+            let testerName = req.user.name;
+            let testerId = req.user.id;
+            if (assignedTo) {
+                const assigneeRes = await query(`SELECT id, name FROM qa_users WHERE id = ?`, [assignedTo]);
+                if (assigneeRes.rows.length > 0) {
+                    testerName = assigneeRes.rows[0].name;
+                    testerId = assigneeRes.rows[0].id;
+                }
+            }
+
             const ins = await query(
                 `INSERT INTO qa_executions (tc_id, run_id, tester, tester_id, status, observations, obtained_result, project_id, executed_at)
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP) RETURNING id`,
-                [tcId, run_id, req.user.name, req.user.id, status || 'PENDING', observations || '', obtained_result || '', runRes.rows[0].project_id]
+                [tcId, run_id, testerName, testerId, status || 'PENDING', observations || '', obtained_result || '', runRes.rows[0].project_id]
             );
             execId = ins.rows[0].id;
         }
@@ -520,11 +561,11 @@ router.post('/sessions/:runId/import-flows', upload.single('xlsx'), async (req, 
                 );
                 const tcId = tcRes.rows[0].id;
 
-                // Vincular al run con ejecución PENDING
+                // Vincular al run con ejecución PENDING (tester se asigna al ejecutar)
                 await query(
                     `INSERT INTO qa_executions (tc_id, run_id, tester, tester_id, status, project_id, suite_id, executed_at)
-                     VALUES (?, ?, ?, ?, 'PENDING', ?, ?, CURRENT_TIMESTAMP)`,
-                    [tcId, runId, req.user.name, req.user.id, run.project_id, suiteId]
+                     VALUES (?, ?, NULL, NULL, 'PENDING', ?, ?, CURRENT_TIMESTAMP)`,
+                    [tcId, runId, run.project_id, suiteId]
                 );
 
                 imported++;

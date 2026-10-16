@@ -4371,7 +4371,13 @@ async function getEvidenceBase64(attachmentId) {
 }
 
 async function generateTesterReport(userId, { dateFrom, dateTo, projectIds } = {}) {
-    const params = [userId];
+    // Obtener nombre y email del usuario para fallback con campo 'tester'
+    const userRow = await query(`SELECT name, email FROM qa_users WHERE id = ?`, [userId]);
+    const userName = userRow.rows[0]?.name || '';
+    const userEmail = userRow.rows[0]?.email || '';
+
+    const testerClause = `(e.tester_id = ? OR (e.tester_id IS NULL AND (e.tester = ? OR e.tester = ?)))`;
+    const params = [userId, userName, userEmail];
     let dateExecClause = '';
     let dateDefectClause = '';
 
@@ -4410,7 +4416,7 @@ async function generateTesterReport(userId, { dateFrom, dateTo, projectIds } = {
         JOIN qa_test_runs r ON e.run_id = r.id
         JOIN qa_test_suites s ON r.suite_id = s.id
         JOIN qa_projects p ON s.project_id = p.id
-        WHERE e.tester_id = ? ${dateExecClause} ${projectClause}
+        WHERE ${testerClause} ${dateExecClause} ${projectClause}
         ORDER BY p.name, e.executed_at DESC
     `;
     const execParams = projectIds && projectIds.length > 0 ? [...params, ...projectIds] : params;
