@@ -1898,8 +1898,8 @@ app.post('/api/test-suites', requireAuth, async (req, res) => {
         const projectId = await getProjectIdFromUC(use_case_id);
         const finalKeyId = await generateKey(projectId, 'TS');
         
-        const result = await query(`INSERT INTO qa_test_suites (use_case_id, title, description, created_by, updated_by, key_id, jira_epic_key) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [use_case_id, title, description || '', req.user.id, req.user.id, finalKeyId, jira_epic_key || '']);
+        const result = await query(`INSERT INTO qa_test_suites (use_case_id, project_id, title, description, created_by, updated_by, key_id, jira_epic_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [use_case_id, projectId, title, description || '', req.user.id, req.user.id, finalKeyId, jira_epic_key || '']);
         res.json({ ok: true, id: result.lastID, key_id: finalKeyId });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -2043,10 +2043,10 @@ async function processFlatImport(req, res, data, headers, ucId, projectId, norma
             // Crear Suite para esta HU
             const suiteKey = await generateKey(projectId, 'ST', q);
             const suiteRes = await q(`
-                INSERT INTO qa_test_suites (use_case_id, title, description, key_id, created_by)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO qa_test_suites (use_case_id, project_id, title, description, key_id, created_by)
+                VALUES (?, ?, ?, ?, ?, ?)
                 RETURNING id
-            `, [ucId, `Suite: ${usTitle}`, `Importación automática ${suiteKey}`, suiteKey, req.user.id]);
+            `, [ucId, projectId, `Suite: ${usTitle}`, `Importación automática ${suiteKey}`, suiteKey, req.user.id]);
             const suiteId = suiteRes.rows[0].id;
 
             // Crear HU
@@ -2233,10 +2233,10 @@ async function processDualImport(req, res, workbook, isCSV, ucId, projectId, nor
 
             const suiteKey = await generateKey(projectId, 'ST', q);
             const suiteResNew = await q(`
-                INSERT INTO qa_test_suites (use_case_id, title, description, key_id, created_by)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO qa_test_suites (use_case_id, project_id, title, description, key_id, created_by)
+                VALUES (?, ?, ?, ?, ?, ?)
                 RETURNING id
-            `, [ucId, `Suite: ${usTitle}`, `Importación automática ${suiteKey}`, suiteKey, req.user.id]);
+            `, [ucId, projectId, `Suite: ${usTitle}`, `Importación automática ${suiteKey}`, suiteKey, req.user.id]);
             const suiteId = suiteResNew.rows[0].id;
 
             const usKey = await generateKey(projectId, 'US', q);
@@ -4518,25 +4518,26 @@ async function generateTesterReport(userId, { dateFrom, dateTo, projectIds } = {
 
     const testerClause = `(e.tester_id = ? OR (e.tester_id IS NULL AND (e.tester = ? OR e.tester = ?)))`;
     const params = [userId, userName, userEmail];
+    const REPORT_TZ = 'America/Argentina/Buenos_Aires';
     let dateExecClause = '';
     let dateDefectClause = '';
 
     if (dateFrom) {
-        dateExecClause += ` AND DATE(e.executed_at) >= ?`;
+        dateExecClause += ` AND (e.executed_at AT TIME ZONE '${REPORT_TZ}')::date >= ?`;
         params.push(dateFrom);
     }
     if (dateTo) {
-        dateExecClause += ` AND DATE(e.executed_at) <= ?`;
+        dateExecClause += ` AND (e.executed_at AT TIME ZONE '${REPORT_TZ}')::date <= ?`;
         params.push(dateTo);
     }
 
     const defectParams = [userId];
     if (dateFrom) {
-        dateDefectClause += ` AND DATE(d.created_at) >= ?`;
+        dateDefectClause += ` AND (d.created_at AT TIME ZONE '${REPORT_TZ}')::date >= ?`;
         defectParams.push(dateFrom);
     }
     if (dateTo) {
-        dateDefectClause += ` AND DATE(d.created_at) <= ?`;
+        dateDefectClause += ` AND (d.created_at AT TIME ZONE '${REPORT_TZ}')::date <= ?`;
         defectParams.push(dateTo);
     }
 
@@ -4549,26 +4550,31 @@ async function generateTesterReport(userId, { dateFrom, dateTo, projectIds } = {
     const execSql = `
         SELECT e.id, e.status, e.executed_at, e.observations, e.obtained_result,
                tc.title as tc_title, tc.id as tc_id,
-               p.name as project_name, p.id as project_id,
+               COALESCE(p.name, 'Sin proyecto') as project_name, COALESCE(p.id, 0) as project_id,
                s.title as suite_name
         FROM qa_executions e
         JOIN qa_test_cases tc ON e.tc_id = tc.id
         JOIN qa_test_runs r ON e.run_id = r.id
         JOIN qa_test_suites s ON r.suite_id = s.id
-        JOIN qa_projects p ON s.project_id = p.id
+        LEFT JOIN qa_use_cases uc ON s.use_case_id = uc.id
+        LEFT JOIN qa_projects p ON COALESCE(s.project_id, uc.project_id) = p.id
         WHERE ${testerClause} ${dateExecClause} ${projectClause}
-        ORDER BY p.name, e.executed_at DESC
+        ORDER BY COALESCE(p.name, 'Sin proyecto'), e.executed_at DESC
     `;
     const execParams = projectIds && projectIds.length > 0 ? [...params, ...projectIds] : params;
     const execs = await query(execSql, execParams);
 
     const defectSql = `
         SELECT d.id, d.title, d.severity, d.status, d.created_at, d.actual_result,
-               p.name as project_name, p.id as project_id
+               COALESCE(p.name, 'Sin proyecto') as project_name, COALESCE(p.id, 0) as project_id
         FROM qa_defects d
-        JOIN qa_projects p ON d.project_id = p.id
+        LEFT JOIN qa_executions e ON d.execution_id = e.id
+        LEFT JOIN qa_test_runs r ON e.run_id = r.id
+        LEFT JOIN qa_test_suites s ON r.suite_id = s.id
+        LEFT JOIN qa_use_cases uc ON s.use_case_id = uc.id
+        LEFT JOIN qa_projects p ON COALESCE(d.project_id, s.project_id, uc.project_id) = p.id
         WHERE d.created_by = ? ${dateDefectClause} ${projectClause}
-        ORDER BY p.name, d.created_at DESC
+        ORDER BY COALESCE(p.name, 'Sin proyecto'), d.created_at DESC
     `;
     const defectParamsFinal = projectIds && projectIds.length > 0 ? [...defectParams, ...projectIds] : defectParams;
     const defects = await query(defectSql, defectParamsFinal);
@@ -4710,7 +4716,7 @@ function renderTesterReportHTML(data, userName) {
 
 app.get('/api/reports/tester/daily', requireAuth, async (req, res) => {
     try {
-        const today = new Date().toISOString().split('T')[0];
+        const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' });
         const data = await generateTesterReport(req.user.id, { dateFrom: today, dateTo: today });
         const html = renderTesterReportHTML(data, req.user.name);
         res.setHeader('Content-Type', 'text/html');
@@ -4757,7 +4763,8 @@ app.get('/api/reports/tester/projects', requireAuth, async (req, res) => {
                 SELECT 1 FROM qa_executions e
                 JOIN qa_test_runs r ON e.run_id = r.id
                 JOIN qa_test_suites s ON r.suite_id = s.id
-                WHERE e.tester_id = ? AND s.project_id = p.id
+                LEFT JOIN qa_use_cases uc ON s.use_case_id = uc.id
+                WHERE e.tester_id = ? AND COALESCE(s.project_id, uc.project_id) = p.id
             ) OR EXISTS (
                 SELECT 1 FROM qa_defects d
                 WHERE d.created_by = ? AND d.project_id = p.id

@@ -92,6 +92,7 @@ reports/
 ```
 
 **Convenciones:**
+- **Estado de bugs (Jira, estándar):** `bugs-status-{FECHA_INICIO}_to_{FECHA_FIN}.html` vía skill `jira-bugs-status`
 - **Bugs:** `bugs-{PROYECTO}-{FECHA_INICIO}_to_{FECHA_FIN}.{ext}`
 - **Daily:** `daily-bugs-{PROYECTO}-{FECHA}.{ext}`
 - **HML:** `informe_HML_{PROYECTO}_{FECHA}.{ext}`
