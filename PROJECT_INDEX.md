@@ -20,6 +20,13 @@ El proyecto es una herramienta de QA manual y visual diseñada para gestionar ca
 - [report-generator.js](file:///c:/Users/Erich_Petrocelli/test-opencode/report-generator.js): Lógica para generar reportes HTML independientes.
 - [jira-service.js](file:///c:/Users/Erich_Petrocelli/test-opencode/jira-service.js): Integración con Jira.
 
+### 📈 Dashboard de Métricas (semanal)
+- [metrics/generate-dashboard.js](file:///c:/Users/Erich_Petrocelli/test-opencode/metrics/generate-dashboard.js): Orquestador. Consulta Supabase + Jira, guarda snapshots en `qa_metric_snapshots` y genera el HTML. **Nunca hace git push** (publicación solo tras OK del usuario).
+- [metrics/config.json](file:///c:/Users/Erich_Petrocelli/test-opencode/metrics/config.json): Selección semanal de proyectos (`projects`), período y repo de publicación.
+- [scripts/lib/metrics-dashboard-renderer.js](file:///c:/Users/Erich_Petrocelli/test-opencode/scripts/lib/metrics-dashboard-renderer.js): **Template base / fuente única** del design system de este dashboard (Family A Indigo/Inter). No duplicar su CSS.
+- Skill de invocación por chat: `.agents/skills/metrics-dashboard/SKILL.md` (local, gitignored).
+- **Salida**: `../metricas_qa_agip/public/` (repo GitLab hermano `metricas_qa_agip`) → `index.html` + `dashboard-{start}_to_{end}.html` histórico por semana.
+
 ### 🎨 Frontend
 - [ui.html](file:///c:/Users/Erich_Petrocelli/test-opencode/ui.html): Vista principal. Contiene la estructura de la app, modales y lógica JS del cliente.
 - [public/css/main.css](file:///c:/Users/Erich_Petrocelli/test-opencode/public/css/main.css): Estilos globales, sistema de diseño y utilidades.
