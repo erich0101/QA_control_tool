@@ -180,7 +180,7 @@ router.get('/sessions/:runId', async (req, res) => {
         let attachments = [];
         if (execIds.length > 0) {
             const defRes = await query(
-                `SELECT id, execution_id, title, description, severity, status, jira_key
+                `SELECT id, execution_id, title, description, severity, status, jira_key, jira_url
                    FROM qa_defects
                   WHERE execution_id IN (${execIds.map(() => '?').join(',')})`,
                 execIds
@@ -620,7 +620,7 @@ router.get('/sessions/:runId/bugs-report', async (req, res) => {
 
         const defects = await query(`
             SELECT d.id, d.title, d.description, d.severity, d.status, d.actual_result,
-                   d.steps_to_reproduce, d.expected_result, d.jira_key, d.execution_id
+                   d.steps_to_reproduce, d.expected_result, d.jira_key, d.jira_url, d.execution_id
             FROM qa_defects d
             WHERE d.execution_id IN (${execs.rows.map(e => e.id).join(',') || '0'})
             ORDER BY d.severity DESC, d.id DESC
@@ -713,7 +713,7 @@ router.get('/sessions/:runId/bugs-report', async (req, res) => {
                 return `
                     <div style="padding:8px 10px; background:rgba(255,59,48,0.04); border-radius:6px; margin-top:6px;">
                         <div style="font-weight:700; font-size:0.8rem; color:var(--apple-label);">${escapeHTML(d.title)}</div>
-                        <div style="font-size:0.72rem; color:var(--apple-label-secondary); margin-top:2px;">Severidad: ${escapeHTML(d.severity)} | Estado: ${escapeHTML(d.status)} ${d.jira_key ? '| Jira: ' + escapeHTML(d.jira_key) : ''}</div>
+                        <div style="font-size:0.72rem; color:var(--apple-label-secondary); margin-top:2px;">Severidad: ${escapeHTML(d.severity)} | Estado: ${escapeHTML(d.status)} ${d.jira_key ? '| Jira: ' + (d.jira_url ? `<a href="${escapeHTML(d.jira_url)}" target="_blank" rel="noopener" style="color:#2563eb; font-weight:600; text-decoration:none;">${escapeHTML(d.jira_key)} ↗</a>` : escapeHTML(d.jira_key)) : ''}</div>
                         ${d.actual_result ? `<div style="font-size:0.75rem; margin-top:4px;"><strong>Resultado actual:</strong> ${escapeHTML(d.actual_result)}</div>` : ''}
                         ${defEvid ? `<div style="margin-top:4px;">${defEvid}</div>` : ''}
                     </div>

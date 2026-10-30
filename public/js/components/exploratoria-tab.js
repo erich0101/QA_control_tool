@@ -782,7 +782,7 @@ export const ExploratoriaTab = {
                     <div style="flex: 1; min-width: 0;">
                         <div style="font-weight: 700; color: var(--apple-label); font-size: 0.85rem;">${UI.escapeHTML(d.title)}</div>
                         <div style="font-size: 0.7rem; color: var(--apple-label-secondary); margin-top: 2px;">
-                            Severidad: <strong>${UI.escapeHTML(d.severity || 'Media')}</strong>${hasAttachments ? ' · 📎 Evidencias adjuntas' : ''}
+                            Severidad: <strong>${UI.escapeHTML(d.severity || 'Media')}</strong>${hasAttachments ? ' · 📎 Evidencias adjuntas' : ''}${d.jira_key && d.jira_url ? ` · <a href="${UI.escapeHTML(d.jira_url)}" target="_blank" rel="noopener" style="font-size: 0.68rem; font-weight: 600; color: var(--apple-blue); text-decoration: none;" title="Abrir en JIRA">${UI.escapeHTML(d.jira_key)} ↗</a>` : ''}
                         </div>
                     </div>
                     <button class="btn btn-secondary expl-btn-convert-tc" data-defect-id="${d.id}" style="font-size: 0.72rem; padding: 4px 10px;">Enviar a TC</button>
@@ -895,6 +895,7 @@ export const ExploratoriaTab = {
                                 <div style="font-size:0.72rem; color: var(--apple-label-secondary); margin-top: 2px;">
                                     Severidad: <strong>${UI.escapeHTML(d.severity || 'Media')}</strong>
                                     ${hasAttachments ? ' · 📎 Evidencias adjuntas' : ''}
+                                    ${d.jira_key && d.jira_url ? ` · <a href="${UI.escapeHTML(d.jira_url)}" target="_blank" rel="noopener" style="font-size: 0.68rem; font-weight: 600; color: var(--apple-blue); text-decoration: none;" title="Abrir en JIRA">${UI.escapeHTML(d.jira_key)} ↗</a>` : ''}
                                 </div>
                             </div>
                             <button class="btn btn-secondary expl-btn-convert-tc" data-defect-id="${d.id}" style="font-size:0.72rem; padding: 4px 10px;">Enviar a TC</button>

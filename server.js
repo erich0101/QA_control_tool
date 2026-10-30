@@ -241,6 +241,58 @@ await query(`CREATE INDEX IF NOT EXISTS idx_defects_proj_exec ON qa_defects (pro
         await query(`CREATE INDEX IF NOT EXISTS idx_scenarios_us_id       ON qa_scenarios (us_id)`);
         await query(`CREATE INDEX IF NOT EXISTS idx_inconsistencias_us_id ON qa_inconsistencias (us_id)`);
 
+        // ── Integridad: project_id heredado desde suite/run/ejecución (nunca NULL en tablas de hechos) ──
+        try {
+            await query(`CREATE OR REPLACE FUNCTION qa_fill_project_id() RETURNS trigger AS $fn$
+DECLARE v_pid integer;
+BEGIN
+  IF NEW.project_id IS NOT NULL THEN RETURN NEW; END IF;
+  IF TG_TABLE_NAME IN ('qa_test_cases','qa_test_runs') THEN
+    SELECT project_id INTO v_pid FROM qa_test_suites WHERE id = NEW.suite_id;
+  ELSIF TG_TABLE_NAME = 'qa_user_stories' THEN
+    SELECT project_id INTO v_pid FROM qa_use_cases WHERE id = NEW.use_case_id;
+  ELSIF TG_TABLE_NAME = 'qa_executions' THEN
+    SELECT COALESCE(
+      (SELECT project_id FROM qa_test_suites WHERE id = NEW.suite_id),
+      (SELECT project_id FROM qa_test_runs WHERE id = NEW.run_id),
+      (SELECT s.project_id FROM qa_test_cases tc JOIN qa_test_suites s ON s.id = tc.suite_id WHERE tc.id = NEW.tc_id)
+    ) INTO v_pid;
+  ELSIF TG_TABLE_NAME = 'qa_defects' THEN
+    SELECT COALESCE(
+      (SELECT project_id FROM qa_test_suites WHERE id = NEW.suite_id),
+      (SELECT project_id FROM qa_executions WHERE id = NEW.execution_id)
+    ) INTO v_pid;
+  ELSIF TG_TABLE_NAME = 'qa_attachments' THEN
+    SELECT COALESCE(
+      (SELECT project_id FROM qa_executions WHERE id = NEW.execution_id),
+      (SELECT project_id FROM qa_defects WHERE id = NEW.defect_id)
+    ) INTO v_pid;
+  END IF;
+  NEW.project_id := v_pid;
+  RETURN NEW;
+END;
+$fn$ LANGUAGE plpgsql`);
+            // exec_query (RPC Supabase) no tiene 'do' en su whitelist de DDL y envuelve
+            // cualquier otro statement en un subquery SELECT, lo que rompe los bloques DO con
+            // "syntax error at or near DO" (42601). Se crean triggers individuales con
+            // DROP IF EXISTS + CREATE (ambos en la whitelist) para que el arranque sea
+            // idempotente y sin errores en BD nueva ni existente.
+            const fillPidTriggers = [
+                ['qa_test_cases',   'trg_fill_pid_qa_test_cases'],
+                ['qa_test_runs',    'trg_fill_pid_qa_test_runs'],
+                ['qa_executions',   'trg_fill_pid_qa_executions'],
+                ['qa_defects',      'trg_fill_pid_qa_defects'],
+                ['qa_attachments',  'trg_fill_pid_qa_attachments'],
+                ['qa_user_stories', 'trg_fill_pid_qa_user_stories'],
+            ];
+            for (const [tabla, trg] of fillPidTriggers) {
+                try {
+                    await query(`DROP TRIGGER IF EXISTS ${trg} ON ${tabla}`);
+                    await query(`CREATE TRIGGER ${trg} BEFORE INSERT OR UPDATE ON ${tabla} FOR EACH ROW EXECUTE FUNCTION qa_fill_project_id()`);
+                } catch (e) { console.warn(`⚠️ trigger ${trg} no creado:`, e.message); }
+            }
+        } catch (e) { console.warn('⚠️ trigger qa_fill_project_id no creado:', e.message); }
+
         // Sugerencias de mejora (tab separada dentro de Hallazgos)
         await query(`
             CREATE TABLE IF NOT EXISTS qa_suggestions (
