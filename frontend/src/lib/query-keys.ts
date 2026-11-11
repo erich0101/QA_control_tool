@@ -15,4 +15,8 @@ export const queryKeys = {
   history: (projectId: number | null, page: number) => ['history', projectId, page] as const,
   defects: (projectId: number | null) => ['defects', projectId] as const,
   runBugs: (runId: number | null) => ['run-bugs', runId] as const,
+  hallazgos: (projectId: number | null) => ['hallazgos', projectId] as const,
+  suggestions: (projectId: number | null) => ['suggestions', projectId] as const,
+  hallazgoEvidence: (id: number | null) => ['hallazgo-evidence', id] as const,
+  suggestionEvidence: (id: number | null) => ['suggestion-evidence', id] as const,
 };

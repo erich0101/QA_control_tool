@@ -33,6 +33,12 @@ const HistoryPage = lazy(() =>
   })),
 );
 
+const HallazgosPage = lazy(() =>
+  import('@/features/hallazgos/hallazgos-page').then((module) => ({
+    default: module.HallazgosPage,
+  })),
+);
+
 const PlaceholderPage = lazy(() =>
   import('@/pages/placeholder-page').then((module) => ({ default: module.PlaceholderPage })),
 );
@@ -69,6 +75,8 @@ export function AppRoutes() {
                 withSuspense(<ExecutionPage />)
               ) : item.id === 'history' ? (
                 withSuspense(<HistoryPage />)
+              ) : item.id === 'hallazgos' ? (
+                withSuspense(<HallazgosPage />)
               ) : item.requiresAdmin ? (
                 withSuspense(
                   <RequireAdmin>

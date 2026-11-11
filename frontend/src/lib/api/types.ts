@@ -223,6 +223,73 @@ export interface HistoryPage {
   totalPages: number;
 }
 
+export interface Hallazgo {
+  id: number;
+  project_id: number;
+  title: string;
+  description?: string | null;
+  severity?: string;
+  status?: string;
+  steps_to_reproduce?: string | null;
+  expected_result?: string | null;
+  actual_result?: string | null;
+  frequency?: string | null;
+  business_impact?: string | null;
+  preconditions?: string | null;
+  observations?: string | null;
+  assigned_to?: number | null;
+  assignee_name?: string | null;
+  reporter_name?: string | null;
+  jira_key?: string | null;
+  jira_url?: string | null;
+  jira_epic_key?: string | null;
+  component?: string | null;
+  created_at?: string;
+  evidence_count?: number;
+  converted_to_tc?: boolean;
+  converted_tc_id?: number | null;
+  converted_to_bug?: boolean;
+  converted_bug_id?: number | null;
+  origin_tc_id?: number | null;
+  origin_tc_key?: string | null;
+  origin_tc_title?: string | null;
+  [key: string]: unknown;
+}
+
+export const HALLZGO_STATUSES = ['OPEN', 'IN_PROGRESS', 'FIXED', 'CLOSED', 'WONT_FIX'] as const;
+export const HALLZGO_SEVERITIES = ['Baja', 'Media', 'Alta', 'Crítica'] as const;
+export const FREQUENCIES = ['Siempre', 'Casi Siempre', 'A veces', 'Rara vez'] as const;
+export const IMPACTS = ['', 'Bajo', 'Medio', 'Alto', 'Crítico'] as const;
+
+export interface Suggestion {
+  id: number;
+  project_id: number;
+  title: string;
+  category?: string;
+  description?: string | null;
+  proposed_solution?: string | null;
+  priority?: string;
+  status?: string;
+  assigned_to?: number | null;
+  assignee_name?: string | null;
+  creator_name?: string | null;
+  created_at?: string;
+  evidence_count?: number;
+  [key: string]: unknown;
+}
+
+export const SUGGESTION_CATEGORIES = ['UX', 'Performance', 'Seguridad', 'Accesibilidad', 'Otro'] as const;
+export const SUGGESTION_STATUSES = ['OPEN', 'IN_REVIEW', 'ACCEPTED', 'REJECTED', 'DONE'] as const;
+export const SUGGESTION_PRIORITIES = ['Baja', 'Media', 'Alta'] as const;
+
+export interface EvidenceItem {
+  id: number;
+  file_name: string;
+  mime_type?: string;
+  evidence_category?: string;
+  created_at?: string;
+}
+
 export type ExecutionStatus = 'PENDING' | 'PASS' | 'FAIL' | 'BLOCK' | 'SKIP';
 
 export interface BugDraft {

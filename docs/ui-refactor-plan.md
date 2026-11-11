@@ -37,7 +37,8 @@ todos estén migrados, `/` pasa a servir la nueva UI y se borra la legacy.
 | `history-tab.js` → batch Jira tickets | — | ⏳ pendiente |
 | `jira-tracking-tab.js` (397) | `features/jira-tracking/*` | ⏳ |
 | `dashboard-*.js` (1.160) | `features/dashboard/*` | ⏳ |
-| `hallazgos-tab.js` (1.538) | `features/hallazgos/*` | ⏳ |
+| `hallazgos-tab.js` (1.538) | `features/hallazgos/*` | ✅ (sin Jira/promote) |
+| `hallazgos-tab.js` → crear ticket Jira / promover a bug | — | ⏳ pendiente |
 | `exploratoria-tab.js` (1.778) | `features/exploratoria/*` | ⏳ |
 | `mi-jira-tab.js` (328) | `features/mi-jira/*` | ⏳ |
 | `team-tab.js` (245) | `features/team/*` | ⏳ |
@@ -151,3 +152,19 @@ React se usa `skipped`.
 Pendiente respecto del legacy: reporte consolidado multi-ciclo, creación masiva
 de tickets en Jira desde la vista de bugs, reporte personalizado del tester y
 la integración Jira dentro del detalle del defecto.
+
+## Hallazgos — alcance
+
+Migrado: sub-tabs Bugs / Sugerencias, búsqueda y filtros (estado + severidad o
+categoría), alta y edición inline con guardado por diff, cambio rápido de estado
+en el header, evidencias por hallazgo/sugerencia (alta con categoría y borrado),
+eliminación con confirmación y **conversión de hallazgo a test case** eligiendo
+la suite destino.
+
+Selección en la URL: `/hallazgos?t=bug|suggestion&id=12` (y `new=1` para el alta).
+Editar y crear comparten los mismos campos (`HallazgoFields` / `SuggestionFields`)
+para que no haya dos maquetas que se desincronicen.
+
+Pendiente: crear ticket en Jira desde el hallazgo, promover hallazgo a bug
+(requiere `execution_id`), vincular el TC de origen (`PUT /api/hallazgos/:id/tc`),
+reportes (Mi Reporte de QA / Reporte de Hallazgos) y dictado por voz.
