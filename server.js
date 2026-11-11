@@ -34,6 +34,9 @@ const useCasesRouter = require('./src/routes/use-cases');
 const testSuitesRouter = require('./src/routes/test-suites');
 const testCasesRouter = require('./src/routes/test-cases');
 const { runsRouter, historyRouter } = require('./src/routes/execution');
+const defectsRouter = require('./src/routes/defects');
+const hallazgosRouter = require('./src/routes/hallazgos');
+const suggestionsRouter = require('./src/routes/suggestions');
 const userStoriesRouter = require('./src/routes/user-stories');
 const scenariosRouter = require('./src/routes/scenarios');
 const inconsistenciesRouter = require('./src/routes/inconsistencies');
@@ -711,6 +714,9 @@ app.use('/api/test-suites', testSuitesRouter);
 app.use('/api/test-cases', testCasesRouter);
 app.use('/api/runs', runsRouter);
 app.use('/api/history', historyRouter);
+app.use('/api/defects', defectsRouter);
+app.use('/api/hallazgos', hallazgosRouter);
+app.use('/api/suggestions', suggestionsRouter);
 
 
 
@@ -1358,350 +1364,33 @@ app.get('/api/projects/:id/export-excel', requireAuth, async (req, res) => {
 app.use('/api/stats', statsRouter);
 
 
-app.post('/api/defects', requireAuth, async (req, res) => {
-    try {
-        const { execution_id, title, description, severity, steps_to_reproduce, expected_result, actual_result, frequency, business_impact } = req.body;
-        if (!execution_id || !title) return res.status(400).json({ error: 'execution_id y title son requeridos' });
 
-        // Heredar jira_epic_key de la suite
-        const suiteRes = await query(`
-            SELECT s.jira_epic_key 
-            FROM qa_test_suites s
-            JOIN qa_test_cases tc ON s.id = tc.suite_id
-            JOIN qa_executions e ON tc.id = e.tc_id
-            WHERE e.id = ?
-        `, [execution_id]);
-        const jira_epic_key = suiteRes.rows[0]?.jira_epic_key || '';
-
-        const result = await query(
-            `INSERT INTO qa_defects (execution_id, title, description, severity, steps_to_reproduce, expected_result, actual_result, frequency, business_impact, status, jira_epic_key, created_by, project_id) 
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?, ?, ?)`,
-            [execution_id, title, description || '', severity || 'Media', steps_to_reproduce || '', expected_result || '', actual_result || '', frequency || 'Siempre', business_impact || '', jira_epic_key, req.user.id, req.body.project_id || null]
-        );
-        res.json({ ok: true, defect_id: result.lastID });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-app.put('/api/defects/:id/status', requireAuth, async (req, res) => {
-    try {
-        const { status } = req.body;
-        if (!status) return res.status(400).json({ error: 'status requerido' });
-        await query(`UPDATE qa_defects SET status = ? WHERE id = ?`, [status, req.params.id]);
-        res.json({ ok: true });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
 
 // Descartar / reabrir un bug (cualquier tester del proyecto).
 // `dismissed` = true → status='DISMISSED', false → status='OPEN'.
 // El bug descartado sigue visible (con badge atenuado) pero NO se cuenta en
 // las estadísticas agregadas (epic report, jira tracking).
-app.post('/api/defects/:id/dismiss', requireAuth, async (req, res) => {
-    try {
-        const { dismissed } = req.body;
-        const newStatus = dismissed ? 'DISMISSED' : 'OPEN';
-        const upd = await query(`UPDATE qa_defects SET status = ? WHERE id = ?`, [newStatus, req.params.id]);
-        if (upd.changes === 0) {
-            return res.status(404).json({ error: 'Bug no encontrado' });
-        }
-        res.json({ ok: true, status: newStatus });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
 
 // Iniciar Retesting: Crea un nuevo run basado en los fallos de uno anterior
 
-app.get('/api/defects', requireAuth, async (req, res) => {
-    try {
-        const { project_id } = req.query;
-        if (!project_id) return res.status(400).json({ error: 'project_id requerido' });
 
-        const sql = `
-            SELECT 
-                d.*, 
-                tc.title as tc_title, 
-                tc.key_id as tc_key,
-                e.tester as tester_name,
-                r.id as run_id,
-                assignee.name as assignee_name
-            FROM qa_defects d
-            JOIN qa_executions e ON d.execution_id = e.id
-            JOIN qa_test_cases tc ON e.tc_id = tc.id
-            JOIN qa_test_suites s ON tc.suite_id = s.id
-            JOIN qa_use_cases cu ON s.use_case_id = cu.id
-            JOIN qa_test_runs r ON e.run_id = r.id
-            LEFT JOIN qa_users assignee ON d.assigned_to = assignee.id
-            WHERE cu.project_id = ?
-            ORDER BY d.id DESC
-        `;
-        const result = await query(sql, [project_id]);
-        res.json({ defects: result.rows });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
 
-app.get('/api/defects/jira-status', requireAuth, async (req, res) => {
-    try {
-        const { project_id } = req.query;
-        if (!project_id) return res.status(400).json({ error: 'project_id requerido' });
-
-        const defectsRes = await query(`
-            SELECT DISTINCT d.jira_key
-            FROM qa_defects d
-            JOIN qa_executions e ON d.execution_id = e.id
-            JOIN qa_test_cases tc ON e.tc_id = tc.id
-            JOIN qa_test_suites s ON tc.suite_id = s.id
-            JOIN qa_use_cases cu ON s.use_case_id = cu.id
-            WHERE cu.project_id = ? AND d.jira_key IS NOT NULL
-            UNION
-            SELECT d.jira_key
-            FROM qa_defects d
-            WHERE d.project_id = ? AND d.jira_key IS NOT NULL
-        `, [project_id, project_id]);
-
-        if (defectsRes.rows.length === 0) return res.json({ statuses: {} });
-
-        const configRes = await query(`
-            SELECT jira_domain, jira_project_key FROM qa_jira_configs WHERE project_id = ?
-        `, [project_id]);
-
-        if (configRes.rows.length === 0) return res.json({ statuses: {} });
-        const config = configRes.rows[0];
-
-        const userCreds = await getJiraUserCredentials(project_id, req.user.id);
-        if (userCreds.error) return res.json({ statuses: {} });
-
-        const keys = defectsRes.rows.map(d => d.jira_key);
-        const jql = `key in (${keys.map(k => `"${k}"`).join(',')})`;
-        const issues = await JiraService.searchIssues(
-            userCreds.userCredentials,
-            config.jira_domain,
-            jql,
-            null,
-            ['status', 'statusCategory']
-        );
-
-        const statuses = {};
-        for (const issue of issues) {
-            statuses[issue.key] = {
-                status: issue.fields.status?.name || 'Unknown',
-                statusCategory: issue.fields.statusCategory?.name || 'Unknown'
-            };
-        }
-
-        res.json({ statuses });
-    } catch (err) {
-        console.error('Error fetching JIRA statuses:', err.message);
-        res.json({ statuses: {} });
-    }
-});
-
-app.put('/api/defects/:id/assign', requireAuth, async (req, res) => {
-    try {
-        const { assigned_to } = req.body;
-        await query(`UPDATE qa_defects SET assigned_to = ? WHERE id = ?`, [assigned_to || null, req.params.id]);
-        res.json({ ok: true });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
 
 // ══════════════════════════════════════════════════════════════
 // ── HALLAZGOS QA ──
 // ══════════════════════════════════════════════════════════════
 
-app.get('/api/hallazgos', requireAuth, async (req, res) => {
-    try {
-        const { project_id } = req.query;
-        if (!project_id) return res.status(400).json({ error: 'project_id requerido' });
 
-        const sql = `
-            SELECT d.id, d.title, d.description, d.severity, d.status, d.steps_to_reproduce,
-                   d.expected_result, d.actual_result, d.frequency, d.business_impact,
-                   d.assigned_to, d.jira_key, d.jira_url, d.jira_epic_key, d.project_id,
-                   d.component,
-                   d.created_by, d.created_at,
-                   d.preconditions, d.observations,
-                   assignee.name as assignee_name,
-                   reporter.name as reporter_name,
-                   (SELECT COUNT(*) FROM qa_attachments WHERE defect_id = d.id) as evidence_count,
-                   ht.tc_id IS NOT NULL as converted_to_tc,
-                   ht.tc_id as converted_tc_id,
-                   hb.defect_id IS NOT NULL as converted_to_bug,
-                   hb.defect_id as converted_bug_id,
-                   origin_tc.id as origin_tc_id,
-                   origin_tc.key_id as origin_tc_key,
-                   origin_tc.title as origin_tc_title
-            FROM qa_defects d
-            LEFT JOIN qa_hallazgo_tc ht ON d.id = ht.hallazgo_id
-            LEFT JOIN qa_hallazgo_bug hb ON d.id = hb.hallazgo_id
-            LEFT JOIN qa_test_cases origin_tc ON ht.tc_id = origin_tc.id
-            LEFT JOIN qa_users assignee ON d.assigned_to = assignee.id
-            LEFT JOIN qa_users reporter ON d.created_by = reporter.id
-            WHERE d.project_id = ? AND d.execution_id IS NULL
-            ORDER BY d.id DESC
-            LIMIT 500
-        `;
-        const result = await query(sql, [project_id]);
-        res.json({ hallazgos: result.rows });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
 
-app.post('/api/hallazgos', requireAuth, async (req, res) => {
-    try {
-        if (!(await checkPermission(req.user.id, 'can_create_cu')) && req.user.role !== 'Admin' && req.user.role !== 'Analista QA') {
-            return res.status(403).json({ error: 'Permisos insuficientes' });
-        }
-        const { project_id, title, description, severity, steps_to_reproduce, expected_result, actual_result, frequency, business_impact, preconditions, observations, assigned_to, jira_epic_key, component } = req.body;
-        if (!project_id || !title) return res.status(400).json({ error: 'project_id y title son requeridos' });
 
-        const result = await query(
-            `INSERT INTO qa_defects (project_id, title, description, severity, steps_to_reproduce, expected_result, actual_result, frequency, business_impact, preconditions, observations, assigned_to, jira_epic_key, component, status, created_by)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?)`,
-            [project_id, title, description || '', severity || 'Media', steps_to_reproduce || '', expected_result || '', actual_result || '', frequency || 'Siempre', business_impact || '', preconditions || '', observations || '', assigned_to || null, jira_epic_key || '', component || '', req.user.id]
-        );
-        res.json({ ok: true, id: result.lastID });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
 
-app.put('/api/hallazgos/:id', requireAuth, async (req, res) => {
-    try {
-        const { title, description, severity, steps_to_reproduce, expected_result, actual_result, frequency, business_impact, preconditions, observations, assigned_to, jira_epic_key, component } = req.body;
-        const fields = [];
-        const params = [];
-        ['title', 'description', 'severity', 'steps_to_reproduce', 'expected_result', 'actual_result', 'frequency', 'business_impact', 'preconditions', 'observations', 'assigned_to', 'jira_epic_key', 'component'].forEach(f => {
-            if (req.body[f] !== undefined) {
-                fields.push(`${f} = ?`);
-                params.push(req.body[f]);
-            }
-        });
-        if (fields.length === 0) return res.status(400).json({ error: 'Sin campos para actualizar' });
-        params.push(req.params.id);
-        await query(`UPDATE qa_defects SET ${fields.join(', ')} WHERE id = ? AND execution_id IS NULL`, params);
-        res.json({ ok: true });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
 
-app.delete('/api/hallazgos/:id', requireAuth, requireAdmin, async (req, res) => {
-    try {
-        await query(`DELETE FROM qa_defects WHERE id = ? AND execution_id IS NULL`, [req.params.id]);
-        res.json({ ok: true });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-app.put('/api/hallazgos/:id/status', requireAuth, async (req, res) => {
-    try {
-        const { status } = req.body;
-        if (!status) return res.status(400).json({ error: 'status requerido' });
-        await query(`UPDATE qa_defects SET status = ? WHERE id = ? AND execution_id IS NULL`, [status, req.params.id]);
-        res.json({ ok: true });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-app.put('/api/hallazgos/:id/assign', requireAuth, async (req, res) => {
-    try {
-        const { assigned_to } = req.body;
-        await query(`UPDATE qa_defects SET assigned_to = ? WHERE id = ? AND execution_id IS NULL`, [assigned_to || null, req.params.id]);
-        res.json({ ok: true });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
 
 // Asigna o quita el TC origen (Test Case al que se asocia este hallazgo).
 // Body: { tc_id: number | null }
 // Si tc_id es null → elimina la asociación. Si es number → reemplaza la asociación.
 // Reusa la junction qa_hallazgo_tc (ya creada en el schema de campos transversales).
-app.put('/api/hallazgos/:id/tc', requireAuth, async (req, res) => {
-    try {
-        const hallazgoId = parseInt(req.params.id);
-        const { tc_id } = req.body;
 
-        const exists = await query(`SELECT id FROM qa_defects WHERE id = ? AND execution_id IS NULL`, [hallazgoId]);
-        if (exists.rows.length === 0) return res.status(404).json({ error: 'Hallazgo no encontrado' });
-
-        await query(`DELETE FROM qa_hallazgo_tc WHERE hallazgo_id = ?`, [hallazgoId]);
-
-        if (tc_id !== null && tc_id !== undefined && tc_id !== '') {
-            const tcIdInt = parseInt(tc_id);
-            const tcExists = await query(`SELECT id FROM qa_test_cases WHERE id = ?`, [tcIdInt]);
-            if (tcExists.rows.length === 0) return res.status(400).json({ error: 'Test Case no encontrado' });
-            // RETURNING hallazgo_id explícito porque qa_hallazgo_tc está en la blacklist de auto-RETURNING
-            // (junction table sin PK simple). Sin esto, exec_query de Supabase falla con "column id does not exist".
-            await query(`INSERT INTO qa_hallazgo_tc (hallazgo_id, tc_id) VALUES (?, ?) ON CONFLICT DO NOTHING RETURNING hallazgo_id`, [hallazgoId, tcIdInt]);
-        }
-
-        res.json({ ok: true });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-app.post('/api/hallazgos/:id/convert-to-tc', requireAuth, async (req, res) => {
-    try {
-        const { suite_id } = req.body;
-        if (!suite_id) return res.status(400).json({ error: 'suite_id requerido' });
-
-        // 1. Leer hallazgo
-        const hallazgoRes = await query(`SELECT * FROM qa_defects WHERE id = ? AND execution_id IS NULL`, [req.params.id]);
-        if (hallazgoRes.rows.length === 0) return res.status(404).json({ error: 'Hallazgo no encontrado' });
-        const h = hallazgoRes.rows[0];
-
-        // 2. Obtener proyecto y generar key
-        const projectRes = await query(`SELECT project_id FROM qa_use_cases WHERE id = (SELECT use_case_id FROM qa_test_suites WHERE id = ?)`, [suite_id]);
-        const projectId = projectRes.rows[0]?.project_id;
-        if (!projectId) return res.status(400).json({ error: 'Suite no encontrada' });
-
-        const finalKeyId = await generateKey(projectId, 'TC');
-
-        // 3. Crear Test Case con datos del hallazgo (heredando los 7 campos transversales + precondiciones)
-        const tcRes = await query(
-            `INSERT INTO qa_test_cases (suite_id, title, steps, preconditions, expected_result, severity, priority, jira_epic_key, component, assigned_to, project_id, observations, created_by, updated_by, key_id)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
-            [
-                suite_id,
-                h.title,
-                h.steps_to_reproduce || '',
-                h.preconditions || '',
-                h.expected_result || '',
-                h.severity || 'Media',
-                h.severity || 'Media',  // priority espejada de severity (compat histórica)
-                h.jira_epic_key || '',
-                h.component || '',
-                h.assigned_to || null,
-                h.project_id,
-                h.observations || '',
-                req.user.id,
-                req.user.id,
-                finalKeyId
-            ]
-        );
-        const tcId = tcRes.rows[0].id;
-
-        // 4. Registrar relación (RETURNING hallazgo_id explícito porque qa_hallazgo_tc no tiene columna id —
-        // está en noIdTables de db.js, pero el RETURNING explícito deja claro el contrato).
-        await query(`INSERT INTO qa_hallazgo_tc (hallazgo_id, tc_id) VALUES (?, ?) ON CONFLICT DO NOTHING RETURNING hallazgo_id`, [h.id, tcId]);
-
-        res.json({ ok: true, tc_id: tcId, key_id: finalKeyId });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
 
 // Promueve un Hallazgo (execution_id IS NULL) a un Bug (execution_id IS NOT NULL).
 // FUTURO: la estrategia acordada es "mover el row" via:
@@ -1709,37 +1398,6 @@ app.post('/api/hallazgos/:id/convert-to-tc', requireAuth, async (req, res) => {
 //   INSERT INTO qa_hallazgo_bug (hallazgo_id, defect_id) VALUES (?, ?)
 // Hoy se delega el trabajo: el endpoint responde 501 con la forma exacta que tendrá
 // cuando se implemente, para que la UI pueda ya cablear el botón y el contrato.
-app.post('/api/hallazgos/:id/promote-to-bug', requireAuth, async (req, res) => {
-    const { execution_id } = req.body;
-    if (!execution_id) {
-        return res.status(400).json({
-            error: 'execution_id requerido',
-            hint: 'Promover un hallazgo a bug requiere un execution_id que vincule el bug a la corrida que lo descubrió.'
-        });
-    }
-
-    try {
-        const exists = await query(
-            `SELECT id FROM qa_defects WHERE id = ? AND execution_id IS NULL`,
-            [req.params.id]
-        );
-        if (exists.rows.length === 0) {
-            return res.status(404).json({ error: 'Hallazgo no encontrado o ya promovido.' });
-        }
-        const execExists = await query(`SELECT id FROM qa_executions WHERE id = ?`, [execution_id]);
-        if (execExists.rows.length === 0) {
-            return res.status(404).json({ error: 'execution_id no existe.' });
-        }
-
-        return res.status(501).json({
-            error: 'promote-to-bug aún no implementado',
-            planned_sql: 'UPDATE qa_defects SET execution_id = $1 WHERE id = $2 AND execution_id IS NULL',
-            params: { execution_id, hallazgo_id: req.params.id }
-        });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
 
 // ══════════════════════════════════════════════════════════════
 // ── TOOLS: REQUEST BUILDER (proxy HTTP) ──
@@ -1749,121 +1407,12 @@ app.post('/api/hallazgos/:id/promote-to-bug', requireAuth, async (req, res) => {
 // Implementación en src/routes/tools.js.
 app.use('/api/tools', toolsRouter);
 
-app.get('/api/suggestions', requireAuth, async (req, res) => {
-    try {
-        const { project_id } = req.query;
-        if (!project_id) return res.status(400).json({ error: 'project_id requerido' });
 
-        const result = await query(`
-            SELECT s.*,
-                   assignee.name as assignee_name,
-                   creator.name as creator_name,
-                   (SELECT COUNT(*) FROM qa_attachments WHERE suggestion_id = s.id) as evidence_count
-            FROM qa_suggestions s
-            LEFT JOIN qa_users assignee ON s.assigned_to = assignee.id
-            LEFT JOIN qa_users creator  ON s.created_by  = creator.id
-            WHERE s.project_id = ?
-            ORDER BY s.id DESC
-            LIMIT 500
-        `, [project_id]);
-        res.json({ suggestions: result.rows });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
 
-app.post('/api/suggestions', requireAuth, async (req, res) => {
-    try {
-        if (!(await checkPermission(req.user.id, 'can_create_cu')) && req.user.role !== 'Admin' && req.user.role !== 'Analista QA') {
-            return res.status(403).json({ error: 'Permisos insuficientes' });
-        }
-        const { project_id, title, category, description, proposed_solution, priority, assigned_to } = req.body;
-        if (!project_id || !title) return res.status(400).json({ error: 'project_id y title son requeridos' });
 
-        const safeCategory = SUGGESTION_CATEGORIES.includes(category) ? category : 'UX';
-        const safePriority = SUGGESTION_PRIORITIES.includes(priority) ? priority : 'Media';
-        const safeAssignedTo = (assigned_to === null || assigned_to === undefined || assigned_to === '')
-            ? null
-            : parseInt(assigned_to, 10);
 
-        const result = await query(
-            `INSERT INTO qa_suggestions (project_id, title, category, description, proposed_solution, priority, assigned_to, status, created_by)
-             VALUES (?, ?, ?, ?, ?, ?, ?, 'OPEN', ?) RETURNING id`,
-            [project_id, title, safeCategory, description || '', proposed_solution || '', safePriority, safeAssignedTo, req.user.id]
-        );
-        res.json({ ok: true, id: result.rows[0].id });
-    } catch (err) {
-        console.error('Error creando sugerencia:', err);
-        console.error('Body era:', JSON.stringify(req.body));
-        res.status(500).json({ error: err.message });
-    }
-});
 
-app.put('/api/suggestions/:id', requireAuth, async (req, res) => {
-    try {
-        const { title, category, description, proposed_solution, priority, assigned_to } = req.body;
-        const fields = [];
-        const params = [];
-        const map = { title, category, description, proposed_solution, priority, assigned_to };
-        for (const f of Object.keys(map)) {
-            if (map[f] !== undefined) {
-                if (f === 'category' && !SUGGESTION_CATEGORIES.includes(map[f])) continue;
-                if (f === 'priority' && !SUGGESTION_PRIORITIES.includes(map[f])) continue;
-                fields.push(`${f} = ?`);
-                params.push(map[f] === '' ? null : map[f]);
-            }
-        }
-        if (fields.length === 0) return res.status(400).json({ error: 'Sin campos para actualizar' });
-        fields.push('updated_at = CURRENT_TIMESTAMP');
-        params.push(req.params.id);
-        await query(`UPDATE qa_suggestions SET ${fields.join(', ')} WHERE id = ?`, params);
-        res.json({ ok: true });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
 
-app.delete('/api/suggestions/:id', requireAuth, requireAdmin, async (req, res) => {
-    try {
-        await query(`DELETE FROM qa_suggestions WHERE id = ?`, [req.params.id]);
-        res.json({ ok: true });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-app.put('/api/suggestions/:id/status', requireAuth, async (req, res) => {
-    try {
-        const { status } = req.body;
-        if (!SUGGESTION_STATUSES.includes(status)) return res.status(400).json({ error: 'status inválido' });
-        await query(`UPDATE qa_suggestions SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [status, req.params.id]);
-        res.json({ ok: true });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-app.put('/api/suggestions/:id/assign', requireAuth, async (req, res) => {
-    try {
-        const { assigned_to } = req.body;
-        await query(`UPDATE qa_suggestions SET assigned_to = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [assigned_to || null, req.params.id]);
-        res.json({ ok: true });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-app.get('/api/suggestions/:id/evidence', requireAuth, async (req, res) => {
-    try {
-        const result = await query(`
-            SELECT id, file_name, mime_type, evidence_category, created_at
-            FROM qa_attachments WHERE suggestion_id = ? ORDER BY id
-        `, [req.params.id]);
-        res.json({ evidence: result.rows });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
 
 app.post('/api/jira/hallazgos/:id/create-ticket', requireAuth, async (req, res) => {
     try {
@@ -2399,17 +1948,6 @@ app.get('/api/reports/tester/projects', requireAuth, async (req, res) => {
 // ── EVIDENCIAS ──
 // Implementación en src/routes/evidence.js.
 app.use('/api/evidence', evidenceRouter);
-app.get('/api/hallazgos/:id/evidence', requireAuth, async (req, res) => {
-    try {
-        const result = await query(`
-            SELECT id, file_name, mime_type, evidence_category, created_at
-            FROM qa_attachments WHERE defect_id = ? ORDER BY id
-        `, [req.params.id]);
-        res.json({ evidence: result.rows });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
 
 // ══════════════════════════════════════════════════════════════
 // ── ISSUE SAVE (Legacy — Guardado Multipart Atómico) ──

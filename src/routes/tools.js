@@ -110,12 +110,4 @@ router.post('/request-builder/exec', requireAuth, express.json({ limit: REQUEST_
     }
 });
 
-// ══════════════════════════════════════════════════════════════
-// ── SUGERENCIAS DE MEJORA (subsección dentro de Hallazgos) ──
-// ══════════════════════════════════════════════════════════════
-
-const SUGGESTION_CATEGORIES = ['UX', 'Performance', 'Seguridad', 'Accesibilidad', 'Otro'];
-const SUGGESTION_STATUSES = ['OPEN', 'IN_REVIEW', 'ACCEPTED', 'REJECTED', 'DONE'];
-const SUGGESTION_PRIORITIES = ['Baja', 'Media', 'Alta'];
-
 module.exports = router;
