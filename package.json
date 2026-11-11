@@ -6,7 +6,10 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
-    "verify-index": "node scripts/verify-index.js"
+    "verify-index": "node scripts/verify-index.js",
+    "ui:dev": "npm --prefix frontend run dev",
+    "ui:build": "npm --prefix frontend run build",
+    "ui:typecheck": "npm --prefix frontend run typecheck"
   },
   "author": "",
   "license": "ISC",

@@ -241,3 +241,6 @@ metrics/config.json
 metrics/generate-dashboard.js
 PROJECT_INDEX.md
 KNOWLEDGE.md
+
+# TypeScript incremental build info (nueva UI)
+*.tsbuildinfo

@@ -1,0 +1,119 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+/* ─────────────────────────────────────────────────────────────
+   Fuente única de verdad del design system: los tokens Apple que
+   ya usa la UI legacy. NO duplicar valores acá.
+   ───────────────────────────────────────────────────────────── */
+@import '../../public/css/apple-design-tokens.css';
+
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+/* Mapeo tokens Apple -> utilidades Tailwind (bg-surface, text-fg, etc.) */
+@theme inline {
+  --font-sans: var(--apple-font-family);
+  --font-mono: var(--apple-font-mono);
+
+  /* Superficies */
+  --color-bg: var(--apple-bg);
+  --color-surface: var(--apple-bg-elevated);
+  --color-surface-2: var(--apple-bg-secondary);
+  --color-surface-3: var(--apple-bg-tertiary);
+  --color-fill: var(--apple-fill);
+  --color-fill-soft: var(--apple-fill-tertiary);
+  --color-material: var(--apple-material);
+
+  /* Texto */
+  --color-fg: var(--apple-label);
+  --color-fg-muted: var(--apple-label-secondary);
+  --color-fg-subtle: var(--apple-label-tertiary);
+  --color-fg-disabled: var(--apple-label-quaternary);
+
+  /* Bordes */
+  --color-border: var(--apple-separator);
+  --color-border-strong: var(--apple-separator-opaque);
+
+  /* Marca y estados */
+  --color-brand: var(--apple-blue);
+  --color-brand-hover: var(--apple-blue-hover);
+  --color-brand-soft: var(--apple-blue-soft);
+  --color-ok: var(--apple-green);
+  --color-ok-soft: var(--apple-green-soft);
+  --color-warn: var(--apple-orange);
+  --color-warn-soft: var(--apple-orange-soft);
+  --color-fail: var(--apple-red);
+  --color-fail-soft: var(--apple-red-soft);
+  --color-info: var(--apple-teal);
+  --color-accent: var(--apple-purple);
+
+  /* Radios y sombras */
+  --radius-xs: var(--apple-radius-xs);
+  --radius-sm: var(--apple-radius-sm);
+  --radius-md: var(--apple-radius-md);
+  --radius-lg: var(--apple-radius-lg);
+  --radius-xl: var(--apple-radius-xl);
+  --shadow-apple-sm: var(--apple-shadow-sm);
+  --shadow-apple-md: var(--apple-shadow-md);
+  --shadow-apple-lg: var(--apple-shadow-lg);
+
+  /* Tipografía */
+  --text-caption: var(--apple-text-caption);
+  --text-footnote: var(--apple-text-footnote);
+  --text-body: var(--apple-text-body);
+  --text-title3: var(--apple-text-title3);
+  --text-title2: var(--apple-text-title2);
+  --text-title1: var(--apple-text-title1);
+}
+
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+    border-color: var(--color-border);
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--color-bg);
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+    font-size: var(--apple-text-body);
+    line-height: 1.47;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Transición suave al cambiar de tema (mismo comportamiento que la legacy) */
+  .theme-transition,
+  .theme-transition * {
+    transition:
+      background-color 200ms ease,
+      border-color 200ms ease,
+      color 200ms ease !important;
+  }
+}
+
+@layer utilities {
+  /* Scrollbars macOS */
+  .scrollbar-apple {
+    scrollbar-width: thin;
+    scrollbar-color: var(--apple-fill) transparent;
+  }
+  .scrollbar-apple::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .scrollbar-apple::-webkit-scrollbar-thumb {
+    background-color: var(--apple-fill);
+    border-radius: 9999px;
+  }
+  .scrollbar-apple::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}

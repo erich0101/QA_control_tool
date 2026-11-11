@@ -387,6 +387,17 @@ app.use((req, res, next) => {
 });
 app.use(express.static(path.join(BASE_DIR, 'public')));
 
+// ── Nueva UI (React + Vite) montada en /app ──────────────────
+// Estrategia strangler: la UI legacy sigue en / y la nueva convive
+// en /app mientras se migran los módulos, sin romper nada.
+const UI_DIST_DIR = path.join(BASE_DIR, 'frontend', 'dist');
+if (fs.existsSync(UI_DIST_DIR)) {
+    console.log('🧩 Nueva UI disponible en /app');
+    app.use('/app', express.static(UI_DIST_DIR, { index: false }));
+    app.get('/app', (req, res) => res.sendFile(path.join(UI_DIST_DIR, 'index.html')));
+    app.get('/app/*', (req, res) => res.sendFile(path.join(UI_DIST_DIR, 'index.html')));
+}
+
 // ── Middlewares de Auth ──
 // ── HELPERS DE SEGURIDAD ──
 function sanitizeInput(val) {
