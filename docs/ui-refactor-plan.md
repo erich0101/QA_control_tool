@@ -29,7 +29,9 @@ todos estén migrados, `/` pasa a servir la nueva UI y se borra la legacy.
 | `test-suites-tab.js` (1.982 líneas) | `features/test-suites/*` | ✅ (núcleo) |
 | `test-suites-tab.js` → Gemini (679 líneas) | `features/test-suites/ai/*` | ⏳ pendiente |
 | `test-suites-tab.js` → Importar XLSX | — | ⏳ pendiente |
-| `execution-tab.js` (1.037) + `sbs.js` | `features/execution/*` | ⏳ |
+| `execution-tab.js` (1.037) + `sbs.js` | `features/execution/*` | ✅ (sin voz/reporte) |
+| `execution-tab.js` → VoiceInput | — | ⏳ pendiente |
+| `execution-tab.js` → Reporte personalizado del tester | — | ⏳ pendiente |
 | `history-tab.js` (1.153) | `features/history/*` | ⏳ |
 | `jira-tracking-tab.js` (397) | `features/jira-tracking/*` | ⏳ |
 | `dashboard-*.js` (1.160) | `features/dashboard/*` | ⏳ |
@@ -112,3 +114,22 @@ if (!isDirty) return;                      // el handler usa dirtyFields
 ```
 
 Además, el botón Guardar debe deshabilitarse con `!isDirty`.
+
+## Ejecución — alcance y decisiones
+
+Migrado: árbol de ciclos activos, cronómetro por ciclo (acumulado + delta
+desde `last_resume_at`), progreso, pausar/reanudar/finalizar, "Ejecutar CU"
+(regresión, solo asignados), filtro por caso de uso y por estado, sincronizar,
+detalle de test con pasos/esperado, evidencias (click, drag&drop y Ctrl+V),
+resultado real, justificación obligatoria de BLOCK/SKIP y borradores de bugs
+para FAIL (se envían en el mismo PUT como `bugs[]`).
+
+Decisiones que difieren del legacy a propósito:
+- **Se eliminó el botón "Ejecutar" por test** dentro del modo Ejecución. El
+  backend rechaza `start-execution` de un TC si la suite ya tiene ciclo activo
+  (`La suite ya tiene un ciclo activo`), y este tab solo lista suites con ciclo
+  activo: ese botón fallaba siempre. Se ejecuta eligiendo el resultado.
+- **Se permite corregir un resultado ya registrado** (el legacy bloqueaba los
+  botones). El backend lo soporta; se avisa con un texto "podés corregirlo".
+- No se migraron el dictado por voz (`VoiceInput`) ni el reporte personalizado
+  del tester: siguen en la UI legacy.

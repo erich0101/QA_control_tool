@@ -118,7 +118,7 @@ export interface TestSuite {
   test_cases?: TestCase[];
   test_cases_count?: number;
   inconsistencies?: Inconsistency[];
-  activeRun?: { id: number; status: string; run_type?: string } | null;
+  activeRun?: ExecutionRun | null;
   [key: string]: unknown;
 }
 
@@ -147,9 +147,50 @@ export interface TestCase {
   status?: string;
   execution_id?: number | null;
   last_execution_at?: string | null;
-  attachments?: unknown[];
-  defects?: unknown[];
+  observations?: string | null;
+  obtained_result?: string | null;
+  attachments?: Attachment[];
+  defects?: Defect[];
   [key: string]: unknown;
+}
+
+export interface ExecutionRun {
+  id: number;
+  status: 'RUNNING' | 'PAUSED' | 'ACTIVE' | string;
+  run_type?: string;
+  accumulated_seconds?: number;
+  last_resume_at?: string | null;
+  parent_run_id?: number | null;
+}
+
+export interface Attachment {
+  id: number;
+  category?: string;
+  src: string;
+}
+
+export interface Defect {
+  id: number;
+  title: string;
+  description?: string | null;
+  severity?: string;
+  status?: string;
+  jira_key?: string | null;
+  [key: string]: unknown;
+}
+
+export type ExecutionStatus = 'PENDING' | 'PASS' | 'FAIL' | 'BLOCK' | 'SKIP';
+
+export interface BugDraft {
+  title: string;
+  description: string;
+  severity: string;
+  steps_to_reproduce: string;
+  expected_result: string;
+  actual_result: string;
+  frequency: string;
+  business_impact: string;
+  observations: string;
 }
 
 export type TestCasePatch = Partial<

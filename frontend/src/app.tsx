@@ -21,6 +21,12 @@ const TestSuitesPage = lazy(() =>
   })),
 );
 
+const ExecutionPage = lazy(() =>
+  import('@/features/execution/execution-page').then((module) => ({
+    default: module.ExecutionPage,
+  })),
+);
+
 const PlaceholderPage = lazy(() =>
   import('@/pages/placeholder-page').then((module) => ({ default: module.PlaceholderPage })),
 );
@@ -53,6 +59,8 @@ export function AppRoutes() {
                 withSuspense(<UseCasesPage />)
               ) : item.id === 'test-suites' ? (
                 withSuspense(<TestSuitesPage />)
+              ) : item.id === 'execution' ? (
+                withSuspense(<ExecutionPage />)
               ) : item.requiresAdmin ? (
                 withSuspense(
                   <RequireAdmin>
