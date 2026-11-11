@@ -41,7 +41,7 @@ todos estén migrados, `/` pasa a servir la nueva UI y se borra la legacy.
 | `hallazgos-tab.js` → crear ticket Jira / promover a bug | — | ⏳ pendiente |
 | `exploratoria-tab.js` (1.778) | `features/exploratoria/*` | ✅ (sin import/voz) |
 | `exploratoria-tab.js` → importar flujos Excel | — | ⏳ pendiente |
-| `mi-jira-tab.js` (328) | `features/mi-jira/*` | ⏳ |
+| `mi-jira-tab.js` (328) | `features/mi-jira/*` | ✅ |
 | `team-tab.js` (245) | `features/team/*` | ✅ |
 | `tools-tab.js` (2.222) | `features/tools/*` | ⏳ |
 | `modals.js` (2.157) | `components/dialogs/*` (uno por caso de uso) | ⏳ |
@@ -205,3 +205,18 @@ formulario: no hay dos listas de permisos que puedan desincronizarse.
 `useTeam` se movió a `features/team/use-team.ts` y se reexporta desde
 `features/test-suites/use-test-suites` para no tocar los imports existentes.
 La ruta ya estaba protegida por `RequireAdmin`.
+
+## Mi JIRA — alcance
+
+Migrado: filtros Asignados / Creados / Menciones, tabla con clave, tipo,
+resumen y estado, contador con pluralización, refresco manual y panel de detalle
+con reporter/asignado/fechas, épica, comentarios ordenados desc con las
+menciones resaltadas, y acciones "Abrir en Jira" / "Copiar clave".
+
+El dominio de Jira se centraliza en `lib/api/jira.ts`
+(`JIRA_BASE_URL`, sobreescribible con `VITE_JIRA_BASE_URL`). En el legacy la URL
+estaba hardcodeada en el HTML del detalle, así que cualquier cambio de dominio
+implicaba tocar la vista.
+
+Si el usuario no tiene token configurado el backend responde 403 con el motivo:
+la vista lo muestra como estado vacío con ese mensaje en vez de una lista vacía.

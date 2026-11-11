@@ -371,6 +371,33 @@ export interface ExploratoryDetail {
 export const EXPLORATORY_STATUSES = ['OK', 'FAIL', 'WARNING', 'BLOCK', 'SKIP'] as const;
 export type ExploratoryStatus = (typeof EXPLORATORY_STATUSES)[number];
 
+// ── Jira ──────────────────────────────────────────────────────
+export interface JiraComment {
+  author?: string;
+  created?: string;
+  body?: string;
+  isMention?: boolean;
+}
+
+export interface JiraTicket {
+  key: string;
+  id?: string;
+  summary?: string;
+  status?: string;
+  statusCategory?: string;
+  priority?: string;
+  assignee?: string;
+  reporter?: string;
+  created?: string;
+  updated?: string;
+  issueType?: string;
+  parent?: string | null;
+  mentions?: JiraComment[] | null;
+  comments?: JiraComment[] | null;
+}
+
+export type MyJiraFilter = 'assigned' | 'created' | 'mentions';
+
 export interface BugDraft {
   title: string;
   description: string;

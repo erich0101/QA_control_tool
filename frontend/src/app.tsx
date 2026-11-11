@@ -51,6 +51,12 @@ const TeamPage = lazy(() =>
   })),
 );
 
+const MiJiraPage = lazy(() =>
+  import('@/features/mi-jira/mi-jira-page').then((module) => ({
+    default: module.MiJiraPage,
+  })),
+);
+
 const PlaceholderPage = lazy(() =>
   import('@/pages/placeholder-page').then((module) => ({ default: module.PlaceholderPage })),
 );
@@ -97,6 +103,8 @@ export function AppRoutes() {
                     <TeamPage />
                   </RequireAdmin>,
                 )
+              ) : item.id === 'mi-jira' ? (
+                withSuspense(<MiJiraPage />)
               ) : item.requiresAdmin ? (
                 withSuspense(
                   <RequireAdmin>
