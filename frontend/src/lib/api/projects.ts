@@ -22,4 +22,9 @@ export const projectsApi = {
     apiFetch<{ config: Record<string, unknown> | null; userHasToken: boolean }>(
       `/api/projects/${id}/jira-config`,
     ),
+
+  jiraContext: (id: number) =>
+    apiFetch<{ epics: Array<{ key: string; name: string }> } | { error: string }>(
+      `/api/jira/projects/${id}/context`,
+    ),
 };

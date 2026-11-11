@@ -108,10 +108,70 @@ export interface TestSuite {
   id: number;
   project_id: number;
   use_case_id?: number | null;
-  name: string;
+  key_id?: string;
+  title: string;
+  description?: string | null;
   is_active?: boolean;
+  jira_epic_key?: string | null;
+  active_run_id?: number | null;
+  assigned_to_name?: string | null;
+  test_cases?: TestCase[];
+  test_cases_count?: number;
+  inconsistencies?: Inconsistency[];
+  activeRun?: { id: number; status: string; run_type?: string } | null;
   [key: string]: unknown;
 }
+
+export interface TestCase {
+  id: number;
+  suite_id?: number;
+  us_id?: number | null;
+  scenario_id?: number | null;
+  assigned_to?: number | null;
+  key_id: string;
+  title: string;
+  steps?: string | null;
+  /** Alias legacy: algunas filas traen `description` en lugar de `steps`. */
+  description?: string | null;
+  expected_result?: string | null;
+  preconditions?: string | null;
+  test_data?: string | null;
+  assumptions?: string | null;
+  acceptance_criteria?: string | null;
+  priority?: StoryPriority | string;
+  jira_epic_key?: string | null;
+  is_smoke?: boolean;
+  is_regression?: boolean;
+  is_integration?: boolean;
+  is_exploratory?: boolean;
+  status?: string;
+  execution_id?: number | null;
+  last_execution_at?: string | null;
+  attachments?: unknown[];
+  defects?: unknown[];
+  [key: string]: unknown;
+}
+
+export type TestCasePatch = Partial<
+  Pick<
+    TestCase,
+    | 'us_id'
+    | 'scenario_id'
+    | 'title'
+    | 'steps'
+    | 'expected_result'
+    | 'assigned_to'
+    | 'priority'
+    | 'is_smoke'
+    | 'is_regression'
+    | 'is_integration'
+    | 'preconditions'
+    | 'jira_epic_key'
+    | 'assumptions'
+    | 'test_data'
+    | 'acceptance_criteria'
+  >
+>;
 
 export interface ApiListResponse<T> {
   rows?: T[];

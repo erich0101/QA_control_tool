@@ -26,7 +26,9 @@ todos estén migrados, `/` pasa a servir la nueva UI y se borra la legacy.
 | `Modals.render('new-project' / 'prompt')` | `features/projects/project-dialog.tsx` | ✅ |
 | `public/js/components/user-stories.js` (723 líneas) | `features/use-cases/*` | ✅ |
 | `modalManager.confirm` / `Modals.render('alert')` | `components/ui/confirm-provider.tsx` | ✅ |
-| `test-suites-tab.js` (1.982 líneas) | `features/test-suites/*` | ⏳ |
+| `test-suites-tab.js` (1.982 líneas) | `features/test-suites/*` | ✅ (núcleo) |
+| `test-suites-tab.js` → Gemini (679 líneas) | `features/test-suites/ai/*` | ⏳ pendiente |
+| `test-suites-tab.js` → Importar XLSX | — | ⏳ pendiente |
 | `execution-tab.js` (1.037) + `sbs.js` | `features/execution/*` | ⏳ |
 | `history-tab.js` (1.153) | `features/history/*` | ⏳ |
 | `jira-tracking-tab.js` (397) | `features/jira-tracking/*` | ⏳ |
@@ -82,3 +84,31 @@ Sirven de plantilla para los tabs que siguen:
    aparte (`documentation-tab`, ~50 kB gzip) solo al abrir esa pestaña.
 8. **Permisos** desde el store de sesión: `canManage()` (Admin / Analista QA)
    y `can('can_create_hu')` para el resto.
+
+## Test Suites — qué se migró y qué no
+
+Migrado: sidebar con filtro por CU y búsqueda, suite (crear/editar/eliminar),
+toggle activa/fuera del gap, épica Jira, panel de inconsistencias
+(expandible, alta y resolución), grid de test cases con detalle expandible
+(Pasos / Esperado / Metadata), edición por diff, asignación masiva y por test,
+mover TC entre suites, ejecutar suite o TC individual.
+
+Pendiente (deliberadamente fuera de alcance):
+- **AI Tool** (Gemini): 679 líneas con análisis de HU, generación de TCs,
+  deduplicación por similitud y modal de revisión. Hoy muestra un acceso a la
+  UI legacy.
+- **Importación XLSX** de suites/tests (`import-dual`).
+
+### Gotcha de React Hook Form (importante)
+
+`formState.dirtyFields` **solo se computa si se lee durante el render**.
+Leerlo únicamente dentro del handler de submit devuelve `{}` y el guardado por
+diff no envía nada. Patrón correcto:
+
+```tsx
+const { isDirty, dirtyFields } = formState; // lectura en render
+...
+if (!isDirty) return;                      // el handler usa dirtyFields
+```
+
+Además, el botón Guardar debe deshabilitarse con `!isDirty`.

@@ -15,6 +15,12 @@ const UseCasesPage = lazy(() =>
   })),
 );
 
+const TestSuitesPage = lazy(() =>
+  import('@/features/test-suites/test-suites-page').then((module) => ({
+    default: module.TestSuitesPage,
+  })),
+);
+
 const PlaceholderPage = lazy(() =>
   import('@/pages/placeholder-page').then((module) => ({ default: module.PlaceholderPage })),
 );
@@ -43,15 +49,19 @@ export function AppRoutes() {
             key={item.id}
             path={item.path}
             element={
-              item.id === 'use-cases'
-                ? withSuspense(<UseCasesPage />)
-                : item.requiresAdmin
-                  ? withSuspense(
-                      <RequireAdmin>
-                        <PlaceholderPage title={item.label} />
-                      </RequireAdmin>,
-                    )
-                  : withSuspense(<PlaceholderPage title={item.label} />)
+              item.id === 'use-cases' ? (
+                withSuspense(<UseCasesPage />)
+              ) : item.id === 'test-suites' ? (
+                withSuspense(<TestSuitesPage />)
+              ) : item.requiresAdmin ? (
+                withSuspense(
+                  <RequireAdmin>
+                    <PlaceholderPage title={item.label} />
+                  </RequireAdmin>,
+                )
+              ) : (
+                withSuspense(<PlaceholderPage title={item.label} />)
+              )
             }
           />
         ))}

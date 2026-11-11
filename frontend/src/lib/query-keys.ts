@@ -11,4 +11,5 @@ export const queryKeys = {
     ['test-suites', projectId, useCaseId ?? null] as const,
   users: ['users'] as const,
   jiraConfig: (projectId: number) => ['jira-config', projectId] as const,
+  jiraContext: (projectId: number | null) => ['jira-context', projectId] as const,
 };
