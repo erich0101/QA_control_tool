@@ -3,7 +3,9 @@ import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import path from 'node:path';
 
-const BACKEND = process.env.VITE_BACKEND_URL ?? 'http://localhost:3333';
+// El backend real toma el puerto de .env (PORT=3001 por defecto del repo).
+// Se puede forzar con VITE_BACKEND_URL al levantar el dev server.
+const BACKEND = process.env.VITE_BACKEND_URL ?? `http://localhost:${process.env.PORT ?? '3001'}`;
 
 // La app nueva se sirve bajo /app para convivir con la UI legacy (strangler).
 // En dev usamos la raíz del dev-server (5173) y proxeamos la API al Express.

@@ -19,6 +19,7 @@ const ExcelJS = require('exceljs');
 const fs = require('fs');
 
 // Migración de columnas (Auto-ejecución al iniciar con IF NOT EXISTS)
+const bootStartedAt = Date.now();
 (async () => {
     try {
         // Init local evidence store (SQLite + filesystem) BEFORE the schema
@@ -357,14 +358,20 @@ $fn$ LANGUAGE plpgsql`);
             console.log('✅ Perfil de Erich Petrocelli actualizado a admin.');
         }
 
-        console.log("✅ Esquema de base de datos verificado y actualizado.");
+        console.log(
+            `✅ Esquema de base de datos verificado y actualizado en ${((Date.now() - bootStartedAt) / 1000).toFixed(1)}s.`
+        );
     } catch (e) {
         console.error("⚠️ Error en verificación de esquema:", e.message);
     }
-    setupRealtime();
-    server.listen(PORT, () => {
-        console.log(`Manual QA Tool (JIRA Edition) -> http://localhost:${PORT}`);
-    });
+
+    // Realtime sí depende de la base: se inicializa al final y sin bloquear
+    // el arranque HTTP (que ya ocurrió antes de llegar acá).
+    try {
+        setupRealtime();
+    } catch (e) {
+        console.error("⚠️ Realtime no disponible:", e.message);
+    }
 })();
 
 const app = express();
@@ -5260,6 +5267,18 @@ function setupRealtime() {
     });
     console.log('📡 Realtime: Listening for database changes via Supabase Realtime...');
 }
+
+// ── Arranque HTTP ─────────────────────────────────────────────────────────────
+// El listen NO espera a las migraciones de esquema: con la base lenta o caída
+// la app abre el puerto igual (y las rutas devuelven el error que corresponda)
+// en vez de quedar minutos sin responder.
+server.listen(PORT, () => {
+    const uiBuilt = fs.existsSync(path.join(BASE_DIR, 'frontend', 'dist'));
+    console.log(`Manual QA Tool (JIRA Edition) -> http://localhost:${PORT}`);
+    if (uiBuilt) {
+        console.log(`Nueva UI (React)            -> http://localhost:${PORT}/app`);
+    }
+});
 
 // Cierre ordenado: cerrar el índice SQLite de evidencias antes de salir.
 function gracefulShutdown(signal) {

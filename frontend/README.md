@@ -5,7 +5,7 @@ Reescritura incremental de la UI de **Manual QA Tool**. Convive con la UI legacy
 
 | | Legacy (actual) | Nueva UI |
 |---|---|---|
-| URL dev | `http://localhost:3333` | `http://localhost:5173` |
+| URL dev | `http://localhost:3001` (`PORT` de `.env`) | `http://localhost:5173` |
 | URL prod | `/` | `/app` |
 | Código | `public/index.html` + `public/js/**` | `frontend/src/**` |
 | Estado | `Store` propio (227 líneas) | Zustand (UI) + TanStack Query (servidor) |
@@ -19,7 +19,7 @@ Reescritura incremental de la UI de **Manual QA Tool**. Convive con la UI legacy
 npm start
 
 # 2. Nueva UI con HMR — en otra terminal
-npm run ui:dev        # http://localhost:5173 (proxea /api a :3333)
+npm run ui:dev        # http://localhost:5173 (proxea /api al backend de .env: PORT=3001)
 ```
 
 El proxy de Vite evita problemas de CORS y reutiliza la cookie `token`
