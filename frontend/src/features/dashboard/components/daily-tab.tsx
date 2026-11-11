@@ -1,6 +1,7 @@
 import { CircleAlert, Ticket } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { DataTable } from '@/components/ui/data-table';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { JiraDailyIssue } from '@/lib/api/stats';
@@ -138,59 +139,80 @@ export function DailyTab({ projectId }: { projectId: number }) {
               No hay tickets abiertos. ¡Todo al día!
             </p>
           ) : (
-            <div className="overflow-hidden rounded-lg border border-border">
-              <table className="w-full border-collapse text-footnote">
-                <thead>
-                  <tr className="border-b border-border bg-fill-soft text-caption uppercase tracking-wide text-fg-subtle">
-                    <th className="w-28 px-3 py-2 text-left font-semibold">Ticket</th>
-                    <th className="w-32 px-3 py-2 text-left font-semibold">Estado</th>
-                    <th className="px-3 py-2 text-left font-semibold">Título</th>
-                    <th className="w-44 px-3 py-2 text-left font-semibold">Responsable</th>
-                    <th className="w-20 px-3 py-2 text-right font-semibold">Antig.</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {urgent.map((issue) => {
+            <DataTable
+              dense
+              containerClassName="rounded-lg"
+              columns={[
+                {
+                  id: 'ticket',
+                  header: 'Ticket',
+                  headerClassName: 'w-28',
+                  cell: (issue) => (
+                    <a
+                      href={
+                        data.jiraUrl
+                          ? `${data.jiraUrl.replace(/\/$/, '')}/browse/${issue.key}`
+                          : jiraIssueUrl(issue.key)
+                      }
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-mono text-caption font-bold text-brand hover:underline"
+                    >
+                      {issue.key}
+                    </a>
+                  ),
+                },
+                {
+                  id: 'status',
+                  header: 'Estado',
+                  headerClassName: 'w-32',
+                  cell: (issue) => <Badge tone={STATUS_TONE(issue)}>{issue.status ?? '—'}</Badge>,
+                },
+                {
+                  id: 'summary',
+                  header: 'Título',
+                  cellClassName: 'max-w-md',
+                  cell: (issue) => <p className="truncate text-fg">{issue.summary ?? '—'}</p>,
+                },
+                {
+                  id: 'assignee',
+                  header: 'Responsable',
+                  headerClassName: 'w-44',
+                  cell: (issue) => (
+                    <span className="flex items-center gap-1.5">
+                      {issue.avatar ? (
+                        <img src={issue.avatar} alt="" className="size-5 rounded-full" />
+                      ) : null}
+                      <span className="truncate text-caption text-fg-muted">
+                        {issue.assignee ?? 'Sin asignar'}
+                      </span>
+                    </span>
+                  ),
+                },
+                {
+                  id: 'age',
+                  header: 'Antig.',
+                  align: 'right',
+                  headerClassName: 'w-20',
+                  cell: (issue) => {
                     const age = ageInDays(issue);
                     return (
-                      <tr key={issue.key} className="border-b border-border last:border-0">
-                        <td className="px-3 py-2">
-                          <a
-                            href={data.jiraUrl ? `${data.jiraUrl.replace(/\/$/, '')}/browse/${issue.key}` : jiraIssueUrl(issue.key)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="font-mono text-caption font-bold text-brand hover:underline"
-                          >
-                            {issue.key}
-                          </a>
-                        </td>
-                        <td className="px-3 py-2">
-                          <Badge tone={STATUS_TONE(issue)}>{issue.status ?? '—'}</Badge>
-                        </td>
-                        <td className="max-w-md px-3 py-2">
-                          <p className="truncate text-fg">{issue.summary ?? '—'}</p>
-                        </td>
-                        <td className="px-3 py-2">
-                          <span className="flex items-center gap-1.5">
-                            {issue.avatar ? (
-                              <img src={issue.avatar} alt="" className="size-5 rounded-full" />
-                            ) : null}
-                            <span className="truncate text-caption text-fg-muted">
-                              {issue.assignee ?? 'Sin asignar'}
-                            </span>
-                          </span>
-                        </td>
-                        <td className="px-3 py-2 text-right">
-                          <span className={age > 7 ? 'text-caption font-bold text-fail' : 'text-caption text-fg-subtle'}>
-                            {age}d
-                          </span>
-                        </td>
-                      </tr>
+                      <span
+                        className={
+                          age > 7
+                            ? 'text-caption font-bold text-fail'
+                            : 'text-caption text-fg-subtle'
+                        }
+                      >
+                        {age}d
+                      </span>
                     );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                  },
+                },
+              ]}
+              rows={urgent}
+              getRowId={(issue) => issue.key}
+            />
           )}
         </CardContent>
       </Card>

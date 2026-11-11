@@ -302,3 +302,22 @@ el alfabeto antes de `atob`.
 aparecía. La versión React verifica HS256/384/512 comparando la firma calculada
 con la provista; validado en browser con el token de ejemplo (válida) y con un
 secret incorrecto (inválida).
+
+## Normalización posterior (deuda técnica saldada)
+
+Al cerrar la migración quedaban dos duplicaciones:
+
+1. **Tablas**: 6 pantallas repetían `thead/tbody/tr/td` con los mismos estilos.
+   Se extrajo `components/ui/data-table.tsx` con columnas tipadas, fila
+   expandible, fila activa, agrupación (`groups`) y opciones `dense` /
+   `stickyHeader` / `bare`. Ahora hay **una sola** etiqueta `<table>` en el
+   proyecto (dentro de `DataTable`).
+   Pantallas migradas: Test Suites (TCs), Exploratoria (flujos), Seguimiento
+   Jira (agrupado por épica), Mi JIRA, Dashboard › Jira & Daily y Token Decoder
+   (claims).
+2. **Textareas**: 3 usos sueltos de `<textarea>` con clases copiadas del
+   componente. Se reemplazaron por `<Textarea>`; hoy la única etiqueta
+   `<textarea>` vive en `components/ui/input.tsx`.
+
+Regla para nuevas pantallas: **no escribir `<table>` ni `<textarea>` a mano**;
+usar `DataTable` y `Textarea`.

@@ -3,6 +3,7 @@ import { ArrowLeftRight, Copy, Download, FileUp, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Textarea } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import {
   bytesToBase64,
@@ -176,7 +177,7 @@ export function Base64Tool() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <textarea
+            <Textarea
               value={text}
               onChange={(event) => setText(event.target.value)}
               placeholder={
@@ -185,7 +186,7 @@ export function Base64Tool() {
                   : 'Pegá el Base64 (por ejemplo eyJhbGciOi…)'
               }
               aria-label={mode === 'encode' ? 'Texto a codificar' : 'Base64 a decodificar'}
-              className="scrollbar-apple min-h-64 w-full resize-y rounded-md border border-border bg-surface p-3 font-mono text-footnote text-fg outline-none placeholder:text-fg-subtle focus-visible:border-brand"
+              className="min-h-64 resize-y p-3 font-mono text-footnote"
               disabled={Boolean(file)}
             />
             <p className="mt-1 text-caption text-fg-subtle">
@@ -235,12 +236,12 @@ export function Base64Tool() {
                 </Button>
               </div>
             ) : (
-              <textarea
+              <Textarea
                 readOnly
                 value={result.text}
                 aria-label="Resultado"
                 placeholder="El resultado aparece acá…"
-                className="scrollbar-apple min-h-64 w-full resize-y rounded-md border border-border bg-surface-2 p-3 font-mono text-footnote text-fg outline-none"
+                className="min-h-64 resize-y bg-surface-2 p-3 font-mono text-footnote"
               />
             )}
 

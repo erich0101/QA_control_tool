@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { ChevronRight, Eye, RefreshCw, Target } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { DataTable } from '@/components/ui/data-table';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ApiError } from '@/lib/api/client';
@@ -113,115 +114,103 @@ export function JiraTrackingPage() {
             description="Los bugs que exportes a Jira aparecen acá para seguimiento."
           />
         ) : (
-          <div className="overflow-hidden rounded-xl border border-border bg-surface">
-            <table className="w-full border-collapse text-footnote">
-              <thead>
-                <tr className="border-b border-border bg-fill-soft text-caption uppercase tracking-wide text-fg-subtle">
-                  <th className="px-4 py-2 text-left font-semibold">Épica / Ticket</th>
-                  <th className="w-48 px-4 py-2 text-left font-semibold">Asignado</th>
-                  <th className="w-32 px-4 py-2 text-left font-semibold">Creación</th>
-                  <th className="w-36 px-4 py-2 text-center font-semibold">Estado Jira</th>
-                  <th className="w-32 px-4 py-2 text-right font-semibold">Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {groups.map((group) => {
-                  const isOpen = !collapsed.has(group.key);
+          <DataTable
+            columns={[
+              {
+                id: 'ticket',
+                header: 'Épica / Ticket',
+                cellClassName: 'pl-10',
+                cell: (ticket) => (
+                  <div className="flex flex-col gap-0.5">
+                    <span className="font-mono text-caption font-bold text-brand">
+                      {ticket.jira_key}
+                    </span>
+                    <span className="text-footnote font-medium text-fg">{ticket.title}</span>
+                  </div>
+                ),
+              },
+              {
+                id: 'assignee',
+                header: 'Asignado',
+                headerClassName: 'w-48',
+                cell: (ticket) => (
+                  <span className="flex items-center gap-2">
+                    {ticket.jira_avatar ? (
+                      <img
+                        src={ticket.jira_avatar}
+                        alt=""
+                        className="size-6 rounded-full border border-border"
+                      />
+                    ) : (
+                      <span className="flex size-6 items-center justify-center rounded-full bg-brand text-[10px] font-bold text-white">
+                        {(ticket.jira_assignee ?? '?').charAt(0).toUpperCase()}
+                      </span>
+                    )}
+                    <span className="truncate text-caption text-fg-muted">
+                      {ticket.jira_assignee}
+                    </span>
+                  </span>
+                ),
+              },
+              {
+                id: 'created',
+                header: 'Creación',
+                headerClassName: 'w-32',
+                cellClassName: 'text-caption text-fg-subtle',
+                cell: (ticket) => formatDate(ticket.created_at),
+              },
+              {
+                id: 'status',
+                header: 'Estado Jira',
+                align: 'center',
+                headerClassName: 'w-36',
+                cell: (ticket) => (
+                  <Badge tone={STATUS_TONE(ticket.jira_status)}>{ticket.jira_status}</Badge>
+                ),
+              },
+              {
+                id: 'actions',
+                header: 'Acciones',
+                align: 'right',
+                headerClassName: 'w-32',
+                cell: (ticket) => (
+                  <Button variant="ghost" size="sm" onClick={() => setSelected(ticket)}>
+                    <Eye />
+                    Ver detalle
+                  </Button>
+                ),
+              },
+            ]}
+            groups={groups.map((group) => {
+              const isOpen = !collapsed.has(group.key);
 
-                  return [
-                    <tr
-                      key={`epic-${group.key}`}
-                      onClick={() => toggle(group.key)}
-                      className="cursor-pointer border-b border-border bg-surface-2 hover:bg-fill-soft"
-                    >
-                      <td colSpan={5} className="px-4 py-2.5">
-                        <div className="flex items-center gap-2">
-                          <ChevronRight
-                            className={`size-3.5 text-fg-subtle transition-transform ${
-                              isOpen ? 'rotate-90' : ''
-                            }`}
-                          />
-                          <Badge tone="brand" className="uppercase">
-                            Épica
-                          </Badge>
-                          <span className="font-semibold text-fg">
-                            {group.key} — {group.name}
-                          </span>
-                          <span className="text-caption text-fg-subtle">
-                            ({group.tickets.length}{' '}
-                            {group.tickets.length === 1 ? 'ticket' : 'tickets'})
-                          </span>
-                        </div>
-                      </td>
-                    </tr>,
-
-                    ...(isOpen
-                      ? group.tickets.map((ticket) => (
-                          <tr
-                            key={ticket.id}
-                            className="border-b border-l-[3px] border-border border-l-brand hover:bg-fill-soft"
-                          >
-                            <td className="px-4 py-2 pl-10">
-                              <div className="flex flex-col gap-0.5">
-                                <span className="font-mono text-caption font-bold text-brand">
-                                  {ticket.jira_key}
-                                </span>
-                                <span className="text-footnote font-medium text-fg">
-                                  {ticket.title}
-                                </span>
-                              </div>
-                            </td>
-
-                            <td className="px-4 py-2">
-                              <span className="flex items-center gap-2">
-                                {ticket.jira_avatar ? (
-                                  <img
-                                    src={ticket.jira_avatar}
-                                    alt=""
-                                    className="size-6 rounded-full border border-border"
-                                  />
-                                ) : (
-                                  <span className="flex size-6 items-center justify-center rounded-full bg-brand text-[10px] font-bold text-white">
-                                    {(ticket.jira_assignee ?? '?').charAt(0).toUpperCase()}
-                                  </span>
-                                )}
-                                <span className="truncate text-caption text-fg-muted">
-                                  {ticket.jira_assignee}
-                                </span>
-                              </span>
-                            </td>
-
-                            <td className="px-4 py-2 text-caption text-fg-subtle">
-                              {formatDate(ticket.created_at)}
-                            </td>
-
-                            <td className="px-4 py-2 text-center">
-                              <Badge tone={STATUS_TONE(ticket.jira_status)}>
-                                {ticket.jira_status}
-                              </Badge>
-                            </td>
-
-                            <td className="px-4 py-2 text-right">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  setSelected(ticket);
-                                }}
-                              >
-                                <Eye />
-                                Ver detalle
-                              </Button>
-                            </td>
-                          </tr>
-                        ))
-                      : []),
-                  ];
-                })}
-              </tbody>
-            </table>
-          </div>
+              return {
+                id: group.key,
+                header: (
+                  <div className="flex items-center gap-2">
+                    <ChevronRight
+                      className={`size-3.5 text-fg-subtle transition-transform ${
+                        isOpen ? 'rotate-90' : ''
+                      }`}
+                    />
+                    <Badge tone="brand" className="uppercase">
+                      Épica
+                    </Badge>
+                    <span className="font-semibold text-fg">
+                      {group.key} — {group.name}
+                    </span>
+                    <span className="text-caption text-fg-subtle">
+                      ({group.tickets.length} {group.tickets.length === 1 ? 'ticket' : 'tickets'})
+                    </span>
+                  </div>
+                ),
+                rows: isOpen ? group.tickets : [],
+              };
+            })}
+            getRowId={(ticket) => ticket.id}
+            onGroupClick={toggle}
+            rowClassName={() => 'border-l-brand'}
+          />
         )}
       </div>
 

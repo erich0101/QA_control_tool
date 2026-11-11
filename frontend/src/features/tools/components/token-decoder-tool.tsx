@@ -14,9 +14,11 @@ import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { DataTable } from '@/components/ui/data-table';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/input';
 import { ProgressBar } from '@/features/dashboard/components/charts';
 import { JsonView } from './json-view';
 import {
@@ -151,13 +153,13 @@ export function TokenDecoderTool() {
 
       <Card>
         <CardContent className="pt-4">
-          <textarea
+          <Textarea
             value={input}
             onChange={(event) => setInput(event.target.value)}
             placeholder="Pegá un JWT, hash, UUID, Base64 o token opaco…"
             aria-label="Token a decodificar"
             spellCheck={false}
-            className="scrollbar-apple min-h-28 w-full resize-y rounded-md border border-border bg-surface p-3 font-mono text-footnote text-fg outline-none placeholder:text-fg-subtle focus-visible:border-brand"
+            className="min-h-28 resize-y p-3 font-mono text-footnote"
           />
         </CardContent>
       </Card>
@@ -239,46 +241,55 @@ export function TokenDecoderTool() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="overflow-hidden rounded-lg border border-border">
-                    <table className="w-full border-collapse text-footnote">
-                      <thead>
-                        <tr className="border-b border-border bg-fill-soft text-caption uppercase tracking-wide text-fg-subtle">
-                          <th className="w-40 px-3 py-2 text-left font-semibold">Claim</th>
-                          <th className="px-3 py-2 text-left font-semibold">Valor</th>
-                          <th className="w-24 px-3 py-2 text-right font-semibold">Estado</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {claims.map((claim) => (
-                          <tr key={claim.key} className="border-b border-border last:border-0">
-                            <td className="px-3 py-1.5 align-top">
-                              <span className="font-mono text-caption font-semibold text-brand">
-                                {claim.key}
-                              </span>
-                              <p className="text-[10px] text-fg-subtle">{claim.label}</p>
-                            </td>
-                            <td className="px-3 py-1.5 align-top">
-                              <p className="break-all text-fg">{claim.display}</p>
-                              {claim.description ? (
-                                <p className="text-[10px] text-fg-subtle">{claim.description}</p>
-                              ) : null}
-                            </td>
-                            <td className="px-3 py-1.5 text-right align-top">
-                              {claim.status ? (
-                                <Badge tone={CLAIM_TONE[claim.status]}>
-                                  {claim.status === 'valid'
-                                    ? 'vigente'
-                                    : claim.status === 'expired'
-                                      ? 'vencido'
-                                      : 'no válido aún'}
-                                </Badge>
-                              ) : null}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  <DataTable
+                    dense
+                    columns={[
+                      {
+                        id: 'claim',
+                        header: 'Claim',
+                        headerClassName: 'w-40',
+                        cell: (claim) => (
+                          <>
+                            <span className="font-mono text-caption font-semibold text-brand">
+                              {claim.key}
+                            </span>
+                            <p className="text-[10px] text-fg-subtle">{claim.label}</p>
+                          </>
+                        ),
+                      },
+                      {
+                        id: 'value',
+                        header: 'Valor',
+                        cell: (claim) => (
+                          <>
+                            <p className="break-all text-fg">{claim.display}</p>
+                            {claim.description ? (
+                              <p className="text-[10px] text-fg-subtle">{claim.description}</p>
+                            ) : null}
+                          </>
+                        ),
+                      },
+                      {
+                        id: 'status',
+                        header: 'Estado',
+                        align: 'right',
+                        headerClassName: 'w-24',
+                        cell: (claim) =>
+                          claim.status ? (
+                            <Badge tone={CLAIM_TONE[claim.status]}>
+                              {claim.status === 'valid'
+                                ? 'vigente'
+                                : claim.status === 'expired'
+                                  ? 'vencido'
+                                  : 'no válido aún'}
+                            </Badge>
+                          ) : null,
+                      },
+                    ]}
+                    rows={claims}
+                    getRowId={(claim) => claim.key}
+                    containerClassName="rounded-lg"
+                  />
                 </CardContent>
               </Card>
 

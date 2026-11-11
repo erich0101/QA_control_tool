@@ -3,6 +3,7 @@ import { Copy, ExternalLink, RefreshCw, Ticket, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { DataTable } from '@/components/ui/data-table';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ApiError } from '@/lib/api/client';
@@ -141,55 +142,62 @@ export function MiJiraPage() {
             <EmptyState icon={<Ticket />} title="Sin tickets" description={activeFilter.empty} />
           </div>
         ) : (
-          <table className="w-full border-collapse text-footnote">
-            <thead className="sticky top-0 z-10 bg-surface-2">
-              <tr className="border-b border-border text-caption uppercase tracking-wide text-fg-subtle">
-                <th className="w-28 px-4 py-2 text-left font-semibold">Clave</th>
-                <th className="w-24 px-4 py-2 text-left font-semibold">Tipo</th>
-                <th className="px-4 py-2 text-left font-semibold">Resumen</th>
-                <th className="w-40 px-4 py-2 text-left font-semibold">Estado</th>
-              </tr>
-            </thead>
-            <tbody>
-              {tickets.map((ticket) => {
-                const isSelected = ticket.key === selectedKey;
-                return (
-                  <tr
-                    key={ticket.key}
-                    onClick={() => setSelectedKey(isSelected ? null : ticket.key)}
-                    className={cn(
-                      'cursor-pointer border-b border-border border-l-[3px] border-l-transparent transition-colors hover:bg-fill-soft',
-                      isSelected && 'border-l-brand bg-brand-soft hover:bg-brand-soft',
-                    )}
-                  >
-                    <td className="px-4 py-2 font-mono text-caption font-semibold text-brand">
-                      {ticket.key}
-                    </td>
-                    <td className="px-4 py-2">
-                      <Badge tone={TYPE_TONE[ticket.issueType ?? ''] ?? 'neutral'}>
-                        {ticket.issueType ?? '—'}
+          <DataTable
+            bare
+            stickyHeader
+            columns={[
+              {
+                id: 'key',
+                header: 'Clave',
+                headerClassName: 'w-28',
+                cell: (ticket) => (
+                  <span className="font-mono text-caption font-semibold text-brand">
+                    {ticket.key}
+                  </span>
+                ),
+              },
+              {
+                id: 'type',
+                header: 'Tipo',
+                headerClassName: 'w-24',
+                cell: (ticket) => (
+                  <Badge tone={TYPE_TONE[ticket.issueType ?? ''] ?? 'neutral'}>
+                    {ticket.issueType ?? '—'}
+                  </Badge>
+                ),
+              },
+              {
+                id: 'summary',
+                header: 'Resumen',
+                cell: (ticket) => (
+                  <>
+                    <span className="mr-1 text-fg-subtle">{ticket.parent ? '└' : ''}</span>
+                    <span className="text-fg">{ticket.summary ?? '—'}</span>
+                    {filter === 'mentions' && (ticket.mentions?.length ?? 0) > 0 ? (
+                      <Badge tone="brand" className="ml-2">
+                        {ticket.mentions?.length}{' '}
+                        {ticket.mentions?.length === 1 ? 'mención' : 'menciones'}
                       </Badge>
-                    </td>
-                    <td className="px-4 py-2">
-                      <span className="mr-1 text-fg-subtle">{ticket.parent ? '└' : ''}</span>
-                      <span className="text-fg">{ticket.summary ?? '—'}</span>
-                      {filter === 'mentions' && (ticket.mentions?.length ?? 0) > 0 ? (
-                        <Badge tone="brand" className="ml-2">
-                          {ticket.mentions?.length}{' '}
-                          {ticket.mentions?.length === 1 ? 'mención' : 'menciones'}
-                        </Badge>
-                      ) : null}
-                    </td>
-                    <td className="px-4 py-2">
-                      <Badge tone={STATUS_TONE[ticket.statusCategory ?? ''] ?? 'neutral'}>
-                        {ticket.status ?? '—'}
-                      </Badge>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                    ) : null}
+                  </>
+                ),
+              },
+              {
+                id: 'status',
+                header: 'Estado',
+                headerClassName: 'w-40',
+                cell: (ticket) => (
+                  <Badge tone={STATUS_TONE[ticket.statusCategory ?? ''] ?? 'neutral'}>
+                    {ticket.status ?? '—'}
+                  </Badge>
+                ),
+              },
+            ]}
+            rows={tickets}
+            getRowId={(ticket) => ticket.key}
+            onRowClick={(ticket) => setSelectedKey(ticket.key === selectedKey ? null : ticket.key)}
+            activeRowId={selectedKey}
+          />
         )}
       </div>
 

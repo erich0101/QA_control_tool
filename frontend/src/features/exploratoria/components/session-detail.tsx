@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ChevronRight, FileText, Plus, Square } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { DataTable } from '@/components/ui/data-table';
 import { EmptyState } from '@/components/ui/empty-state';
 import type {
   ExploratoryAttachment,
@@ -161,81 +162,86 @@ export function SessionDetail({
             }
           />
         ) : (
-          <div className="overflow-hidden rounded-xl border border-border bg-surface">
-            <table className="w-full border-collapse text-footnote">
-              <thead>
-                <tr className="border-b border-border bg-fill-soft text-caption uppercase tracking-wide text-fg-subtle">
-                  <th className="w-24 px-4 py-2 text-left font-semibold">Key</th>
-                  <th className="px-4 py-2 text-left font-semibold">Flujo</th>
-                  <th className="w-24 px-4 py-2 text-left font-semibold">Status</th>
-                  <th className="w-32 px-4 py-2 text-left font-semibold">Tester</th>
-                  <th className="w-36 px-4 py-2 text-left font-semibold">Última ejecución</th>
-                </tr>
-              </thead>
-              <tbody>
-                {flows.map((flow) => {
-                  const exec = execByTc.get(flow.id);
-                  const status = exec?.status ?? 'PENDING';
-                  const isExpanded = expandedFlowId === flow.id;
-
-                  return [
-                    <tr
-                      key={flow.id}
-                      onClick={() => setExpandedFlowId(isExpanded ? null : flow.id)}
+          <DataTable
+            columns={[
+              {
+                id: 'key',
+                header: 'Key',
+                headerClassName: 'w-24',
+                cell: (flow) => (
+                  <span className="flex items-center gap-1.5 font-mono text-caption font-bold text-brand">
+                    <ChevronRight
                       className={cn(
-                        'cursor-pointer border-b border-border border-l-[3px] border-l-transparent transition-colors hover:bg-fill-soft',
-                        isExpanded && 'border-l-brand bg-brand-soft hover:bg-brand-soft',
+                        'size-3 transition-transform',
+                        expandedFlowId === flow.id && 'rotate-90',
                       )}
-                    >
-                      <td className="px-4 py-2.5 font-mono text-caption font-bold text-brand">
-                        <span className="flex items-center gap-1.5">
-                          <ChevronRight
-                            className={cn('size-3 transition-transform', isExpanded && 'rotate-90')}
-                          />
-                          {flow.key_id ?? `#${flow.id}`}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2.5 font-medium text-fg">{flow.title}</td>
-                      <td className="px-4 py-2.5">
-                        <Badge tone={STATUS_TONE[status] ?? 'neutral'}>
-                          {STATUS_LABEL[status] ?? status}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-2.5 text-caption text-fg-muted">
-                        {exec?.tester ?? '—'}
-                      </td>
-                      <td className="px-4 py-2.5 text-caption text-fg-subtle">
-                        {exec?.executed_at
-                          ? new Date(exec.executed_at).toLocaleString('es-AR', {
-                              day: '2-digit',
-                              month: '2-digit',
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })
-                          : '—'}
-                      </td>
-                    </tr>,
-
-                    isExpanded ? (
-                      <tr key={`detail-${flow.id}`} className="border-b border-border bg-surface-2">
-                        <td colSpan={5} className="p-0">
-                          <FlowDetail
-                            flow={flow}
-                            execution={exec}
-                            defects={defectsFor(flow)}
-                            attachments={attachments as ExploratoryAttachment[]}
-                            runId={run.id}
-                            isFinished={isFinished}
-                            projectId={projectId}
-                          />
-                        </td>
-                      </tr>
-                    ) : null,
-                  ];
-                })}
-              </tbody>
-            </table>
-          </div>
+                    />
+                    {flow.key_id ?? `#${flow.id}`}
+                  </span>
+                ),
+              },
+              {
+                id: 'title',
+                header: 'Flujo',
+                cell: (flow) => <span className="font-medium text-fg">{flow.title}</span>,
+              },
+              {
+                id: 'status',
+                header: 'Status',
+                headerClassName: 'w-24',
+                cell: (flow) => {
+                  const status = execByTc.get(flow.id)?.status ?? 'PENDING';
+                  return (
+                    <Badge tone={STATUS_TONE[status] ?? 'neutral'}>
+                      {STATUS_LABEL[status] ?? status}
+                    </Badge>
+                  );
+                },
+              },
+              {
+                id: 'tester',
+                header: 'Tester',
+                headerClassName: 'w-32',
+                cellClassName: 'text-caption text-fg-muted',
+                cell: (flow) => execByTc.get(flow.id)?.tester ?? '—',
+              },
+              {
+                id: 'executed',
+                header: 'Última ejecución',
+                headerClassName: 'w-36',
+                cellClassName: 'text-caption text-fg-subtle',
+                cell: (flow) => {
+                  const exec = execByTc.get(flow.id);
+                  return exec?.executed_at
+                    ? new Date(exec.executed_at).toLocaleString('es-AR', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })
+                    : '—';
+                },
+              },
+            ]}
+            rows={flows}
+            getRowId={(flow) => flow.id}
+            onRowClick={(flow) =>
+              setExpandedFlowId((current) => (current === flow.id ? null : flow.id))
+            }
+            activeRowId={expandedFlowId}
+            expandedRowId={expandedFlowId}
+            renderExpanded={(flow) => (
+              <FlowDetail
+                flow={flow}
+                execution={execByTc.get(flow.id)}
+                defects={defectsFor(flow)}
+                attachments={attachments as ExploratoryAttachment[]}
+                runId={run.id}
+                isFinished={isFinished}
+                projectId={projectId}
+              />
+            )}
+          />
         )}
       </div>
     </div>
