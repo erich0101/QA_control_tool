@@ -28,6 +28,9 @@ const authRouter = require('./src/routes/auth');
 const usersRouter = require('./src/routes/users');
 const projectsRouter = require('./src/routes/projects');
 const statsRouter = require('./src/routes/stats');
+const toolsRouter = require('./src/routes/tools');
+const evidenceRouter = require('./src/routes/evidence');
+const { upload } = require('./src/lib/upload');
 
 const { runSchemaMigrations } = require('./src/bootstrap/schema');
 
@@ -48,7 +51,6 @@ const PORT = process.env.PORT || 3333;
 const BASE_DIR = __dirname;
 
 // Configuración de Multer en memoria
-const upload = multer({ storage: multer.memoryStorage() });
 
 app.use(express.json());
 app.use(cookieParser());
@@ -3066,120 +3068,9 @@ app.post('/api/hallazgos/:id/promote-to-bug', requireAuth, async (req, res) => {
 // ── TOOLS: REQUEST BUILDER (proxy HTTP) ──
 // ══════════════════════════════════════════════════════════════
 
-const REQUEST_BUILDER_TIMEOUT_MS = 30_000;
-const REQUEST_BUILDER_MAX_RESPONSE_BYTES = 5 * 1024 * 1024;
-const REQUEST_BUILDER_BODY_LIMIT = '20mb';
-
-app.post('/api/tools/request-builder/exec', requireAuth, express.json({ limit: REQUEST_BUILDER_BODY_LIMIT }), async (req, res) => {
-    try {
-        const { method, url, headers = {}, body = null, bodyType = 'none', files = [] } = req.body;
-
-        const ALLOWED_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
-        const ALLOWED_BODY_TYPES = ['none', 'json', 'form-data', 'x-www-form-urlencoded', 'raw', 'binary'];
-
-        const m = String(method || '').toUpperCase();
-        if (!ALLOWED_METHODS.includes(m)) {
-            return res.status(400).json({ error: 'Método inválido' });
-        }
-        if (typeof url !== 'string' || !/^https?:\/\//i.test(url)) {
-            return res.status(400).json({ error: 'URL inválida (debe empezar con http:// o https://)' });
-        }
-        if (!ALLOWED_BODY_TYPES.includes(bodyType)) {
-            return res.status(400).json({ error: 'bodyType inválido' });
-        }
-
-        console.info('[req-builder]', { userId: req.user.id, method: m, url, bodyType, ts: new Date().toISOString() });
-
-        const outHeaders = { ...headers };
-        let outBody;
-
-        if (bodyType === 'json') {
-            if (!outHeaders['Content-Type'] && !outHeaders['content-type']) {
-                outHeaders['Content-Type'] = 'application/json';
-            }
-            outBody = typeof body === 'string' ? body : JSON.stringify(body);
-        } else if (bodyType === 'x-www-form-urlencoded') {
-            if (!outHeaders['Content-Type'] && !outHeaders['content-type']) {
-                outHeaders['Content-Type'] = 'application/x-www-form-urlencoded';
-            }
-            const params = new URLSearchParams();
-            if (body && typeof body === 'object') {
-                for (const [k, v] of Object.entries(body)) {
-                    if (v != null) params.append(k, String(v));
-                }
-            }
-            outBody = params.toString();
-        } else if (bodyType === 'form-data') {
-            const form = new FormData();
-            if (body && typeof body === 'object') {
-                for (const [k, v] of Object.entries(body)) {
-                    if (v != null) form.append(k, String(v));
-                }
-            }
-            for (const f of (Array.isArray(files) ? files : [])) {
-                if (!f || !f.base64 || !f.fieldName) continue;
-                const bytes = Buffer.from(f.base64, 'base64');
-                form.append(f.fieldName, new Blob([bytes], { type: f.type || 'application/octet-stream' }), f.filename || 'file');
-            }
-            outBody = form;
-        } else if (bodyType === 'raw') {
-            outBody = typeof body === 'string' ? body : (body == null ? '' : String(body));
-            if (!outHeaders['Content-Type'] && !outHeaders['content-type']) {
-                outHeaders['Content-Type'] = 'text/plain';
-            }
-        } else if (bodyType === 'binary') {
-            outBody = (typeof body === 'string' && body.length > 0) ? Buffer.from(body, 'base64') : Buffer.alloc(0);
-            if (!outHeaders['Content-Type'] && !outHeaders['content-type']) {
-                outHeaders['Content-Type'] = 'application/octet-stream';
-            }
-        } else {
-            outBody = undefined;
-        }
-
-        const t0 = Date.now();
-        const fetchRes = await fetch(url, {
-            method: m,
-            headers: outHeaders,
-            body: outBody,
-            signal: AbortSignal.timeout(REQUEST_BUILDER_TIMEOUT_MS)
-        });
-        const t1 = Date.now();
-
-        let respBody = await fetchRes.text();
-        let truncated = false;
-        if (respBody.length > REQUEST_BUILDER_MAX_RESPONSE_BYTES) {
-            respBody = respBody.slice(0, REQUEST_BUILDER_MAX_RESPONSE_BYTES) + '\n… [truncated at 5MB]';
-            truncated = true;
-        }
-
-        res.json({
-            ok: true,
-            status: fetchRes.status,
-            statusText: fetchRes.statusText,
-            headers: Object.fromEntries(fetchRes.headers.entries()),
-            body: respBody,
-            timeMs: t1 - t0,
-            sizeBytes: Buffer.byteLength(respBody, 'utf8'),
-            truncated
-        });
-    } catch (err) {
-        const isTimeout = err && (err.name === 'TimeoutError' || err.name === 'AbortError');
-        res.json({
-            ok: false,
-            error: isTimeout
-                ? `La petición excedió el tiempo máximo de ${REQUEST_BUILDER_TIMEOUT_MS / 1000}s`
-                : (err.message || 'Error desconocido al ejecutar la petición')
-        });
-    }
-});
-
-// ══════════════════════════════════════════════════════════════
-// ── SUGERENCIAS DE MEJORA (subsección dentro de Hallazgos) ──
-// ══════════════════════════════════════════════════════════════
-
-const SUGGESTION_CATEGORIES = ['UX', 'Performance', 'Seguridad', 'Accesibilidad', 'Otro'];
-const SUGGESTION_STATUSES = ['OPEN', 'IN_REVIEW', 'ACCEPTED', 'REJECTED', 'DONE'];
-const SUGGESTION_PRIORITIES = ['Baja', 'Media', 'Alta'];
+// ── TOOLS ──
+// Implementación en src/routes/tools.js.
+app.use('/api/tools', toolsRouter);
 
 app.get('/api/suggestions', requireAuth, async (req, res) => {
     try {
@@ -3828,167 +3719,9 @@ app.get('/api/reports/tester/projects', requireAuth, async (req, res) => {
 // ── EVIDENCIAS (Streaming) ──
 // ══════════════════════════════════════════════════════════════
 
-app.get('/api/evidence/:id', requireAuth, async (req, res) => {
-    try {
-        const result = await query(
-            `SELECT id, mime_type, storage_kind, storage_path, sha256, size_bytes
-               FROM qa_attachments WHERE id = ?`,
-            [req.params.id]
-        );
-        if (result.rows.length === 0) return res.status(404).json({ error: 'Evidencia no encontrada' });
-        const r = result.rows[0];
-
-        // Fallback legacy: el binario sigue en BYTEA (transición pre-migration).
-        if (r.storage_kind === 'legacy_pg' || !r.storage_kind || !r.storage_path) {
-            const legacy = await query(
-                `SELECT mime_type, encode(file_data, 'base64') as file_b64
-                   FROM qa_attachments WHERE id = ?`,
-                [req.params.id]
-            );
-            if (legacy.rows.length === 0) return res.status(404).json({ error: 'Evidencia no encontrada' });
-            const lr = legacy.rows[0];
-            res.setHeader('Content-Type', lr.mime_type);
-            res.setHeader('Cache-Control', 'no-store');
-            return res.send(Buffer.from(lr.file_b64, 'base64'));
-        }
-
-        // Local: stream desde disco con headers de caché inmutables.
-        const abs = evidenceStore.absolutePath(r.storage_path);
-        if (!fs.existsSync(abs)) {
-            return res.status(410).json({ error: 'Archivo no disponible localmente' });
-        }
-        const stat = fs.statSync(abs);
-        res.setHeader('Content-Type', r.mime_type);
-        res.setHeader('Content-Length', stat.size);
-        res.setHeader('ETag', `"${r.sha256}"`);
-        res.setHeader('Cache-Control', 'private, max-age=31536000, immutable');
-        res.setHeader('Last-Modified', stat.mtime.toUTCString());
-        if (req.method === 'HEAD') return res.end();
-        fs.createReadStream(abs).pipe(res);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-app.post('/api/evidence', requireAuth, upload.single('evidence'), async (req, res) => {
-    try {
-        const { tc_id, defect_id, suggestion_id, execution_id, category } = req.body;
-        const file = req.file;
-        if (!file) return res.status(400).json({ error: 'Archivo no recibido' });
-
-        // Resolver parentType / parentId / projectId antes de almacenar.
-        let projectId = null;
-        let parentType = 'unknown';
-        let parentId = null;
-        let resolvedExecutionId = null;
-
-        if (defect_id) {
-            const r = await query(`SELECT d.project_id, d.execution_id FROM qa_defects d WHERE d.id = ?`, [defect_id]);
-            if (r.rows.length > 0) {
-                projectId = r.rows[0].project_id;
-                parentType = 'defect';
-                parentId = parseInt(defect_id, 10);
-                resolvedExecutionId = r.rows[0].execution_id;
-            }
-        } else if (suggestion_id) {
-            const r = await query(`SELECT project_id FROM qa_suggestions WHERE id = ?`, [suggestion_id]);
-            if (r.rows.length > 0) {
-                projectId = r.rows[0].project_id;
-                parentType = 'suggestion';
-                parentId = parseInt(suggestion_id, 10);
-            }
-        } else if (execution_id) {
-            const r = await query(`
-                SELECT uc.project_id
-                  FROM qa_executions e
-                  JOIN qa_test_cases tc ON e.tc_id = tc.id
-                  JOIN qa_test_suites s  ON tc.suite_id = s.id
-                  JOIN qa_use_cases uc    ON s.use_case_id = uc.id
-                 WHERE e.id = ?
-            `, [parseInt(execution_id, 10)]);
-            if (r.rows.length > 0) projectId = r.rows[0].project_id;
-            parentType = 'execution';
-            parentId = parseInt(execution_id, 10);
-            resolvedExecutionId = parentId;
-        } else {
-            const execRes = await query(`SELECT id FROM qa_executions WHERE tc_id = ? ORDER BY id DESC LIMIT 1`, [tc_id]);
-            if (execRes.rows.length === 0) return res.status(400).json({ error: 'No hay una ejecución reciente para este Test Case' });
-            resolvedExecutionId = execRes.rows[0].id;
-            const r = await query(`
-                SELECT uc.project_id
-                  FROM qa_executions e
-                  JOIN qa_test_cases tc ON e.tc_id = tc.id
-                  JOIN qa_test_suites s  ON tc.suite_id = s.id
-                  JOIN qa_use_cases uc    ON s.use_case_id = uc.id
-                 WHERE e.id = ?
-            `, [resolvedExecutionId]);
-            if (r.rows.length > 0) projectId = r.rows[0].project_id;
-            parentType = 'execution';
-            parentId = resolvedExecutionId;
-        }
-
-        // 1) Escribir binario al store local y obtener storagePath + sha256.
-        const stored = evidenceStore.store({
-            buffer: file.buffer,
-            mime: file.mimetype,
-            fileName: file.originalname,
-            projectId,
-            parentType,
-            parentId,
-            category: category || 'GENERAL',
-            pgAttachmentId: null
-        });
-
-        // 2) Insertar fila en PG SIN file_data. lastID viene del RETURNING id que
-        //    añade buildSql (db.js:67) automáticamente.
-        let insertSql, insertParams;
-        if (defect_id) {
-            insertSql = `INSERT INTO qa_attachments
-                (defect_id, file_name, mime_type, evidence_category, project_id,
-                 storage_path, sha256, size_bytes, storage_kind)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'local')`;
-            insertParams = [defect_id, file.originalname, file.mimetype, category || 'GENERAL',
-                            projectId, stored.storagePath, stored.sha256, stored.size];
-        } else if (suggestion_id) {
-            insertSql = `INSERT INTO qa_attachments
-                (suggestion_id, file_name, mime_type, evidence_category, project_id,
-                 storage_path, sha256, size_bytes, storage_kind)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'local')`;
-            insertParams = [suggestion_id, file.originalname, file.mimetype, category || 'GENERAL',
-                            projectId, stored.storagePath, stored.sha256, stored.size];
-        } else {
-            insertSql = `INSERT INTO qa_attachments
-                (execution_id, file_name, mime_type, evidence_category, project_id,
-                 storage_path, sha256, size_bytes, storage_kind)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'local')`;
-            insertParams = [resolvedExecutionId, file.originalname, file.mimetype, category || 'GENERAL',
-                            projectId, stored.storagePath, stored.sha256, stored.size];
-        }
-        const ins = await query(insertSql, insertParams);
-        const newId = ins.lastID;
-
-        // 3) Asociar el row SQLite con el id de PG.
-        if (newId && stored.indexId) {
-            evidenceStore.setPgAttachmentId(stored.indexId, newId);
-        }
-
-        res.json({ ok: true, id: newId, storage: { path: stored.storagePath, sha256: stored.sha256, size: stored.size } });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-app.delete('/api/evidence/:id', requireAuth, async (req, res) => {
-    try {
-        const result = await query(`DELETE FROM qa_attachments WHERE id = ?`, [req.params.id]);
-        if (result.changes === 0) return res.status(404).json({ error: 'Evidencia no encontrada' });
-        try { evidenceStore.deleteIndex(parseInt(req.params.id, 10)); } catch (_) { /* best-effort */ }
-        res.json({ ok: true });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
+// ── EVIDENCIAS ──
+// Implementación en src/routes/evidence.js.
+app.use('/api/evidence', evidenceRouter);
 app.get('/api/hallazgos/:id/evidence', requireAuth, async (req, res) => {
     try {
         const result = await query(`
