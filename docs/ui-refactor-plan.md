@@ -24,7 +24,8 @@ todos estén migrados, `/` pasa a servir la nueva UI y se borra la legacy.
 | `public/js/components/topbar.js` | `components/layout/topbar.tsx` | ✅ |
 | Login inline en `app.js` | `features/auth/login-page.tsx` | ✅ |
 | `Modals.render('new-project' / 'prompt')` | `features/projects/project-dialog.tsx` | ✅ |
-| `public/js/components/user-stories.js` | `features/use-cases/*` | ⏳ |
+| `public/js/components/user-stories.js` (723 líneas) | `features/use-cases/*` | ✅ |
+| `modalManager.confirm` / `Modals.render('alert')` | `components/ui/confirm-provider.tsx` | ✅ |
 | `test-suites-tab.js` (1.982 líneas) | `features/test-suites/*` | ⏳ |
 | `execution-tab.js` (1.037) + `sbs.js` | `features/execution/*` | ⏳ |
 | `history-tab.js` (1.153) | `features/history/*` | ⏳ |
@@ -61,3 +62,23 @@ todos estén migrados, `/` pasa a servir la nueva UI y se borra la legacy.
 - Los placeholders actuales (`pages/placeholder-page.tsx`) se reemplazan tab por tab
   en `app.tsx` sin tocar el resto.
 - Al terminar un tab: `npm run ui:typecheck` y `npm run ui:build`.
+
+## Patrones establecidos en el tab Casos de Uso
+
+Sirven de plantilla para los tabs que siguen:
+
+1. **Selección en la URL**, no en un store: `/use-cases?cu=1&hu=11`.
+   Ver `features/use-cases/lib/params.ts`. Deep links y botón atrás funcionan.
+2. **Master-detail**: sidebar (`user-story-list`) + detalle (`user-story-detail`).
+   El detalle se monta con `key={story.id}` para resetear el formulario por HU.
+3. **Guardado por diff**: `buildStoryPatch(values, dirtyFields)` manda solo los
+   campos modificados. Nunca reenviar el objeto completo scrapeado del DOM.
+4. **Formularios** con `react-hook-form`; los `Select` de Radix van con
+   `Controller` + `SelectField`.
+5. **Confirmaciones** con `useConfirm()` (un único diálogo en toda la app).
+6. **Escrituras** siempre por hooks de mutación que invalidan las query keys
+   afectadas (lista de HUs + contadores de CU).
+7. **Code splitting**: la página es `lazy()` y el render de Markdown se carga
+   aparte (`documentation-tab`, ~50 kB gzip) solo al abrir esa pestaña.
+8. **Permisos** desde el store de sesión: `canManage()` (Admin / Analista QA)
+   y `can('can_create_hu')` para el resto.

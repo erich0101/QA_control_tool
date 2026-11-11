@@ -5,6 +5,7 @@ import { BrowserRouter } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { AppRoutes } from './app';
 import { SessionGate } from './features/auth/session-gate';
+import { ConfirmProvider } from './components/ui/confirm-provider';
 import { TooltipProvider } from './components/ui/tooltip';
 import { ApiError } from './lib/api/client';
 import { useUiStore } from './stores/ui';
@@ -45,12 +46,14 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <TooltipProvider delayDuration={300}>
-        <BrowserRouter basename={basename}>
-          <SessionGate>
-            <AppRoutes />
-          </SessionGate>
-          <ThemedToaster />
-        </BrowserRouter>
+        <ConfirmProvider>
+          <BrowserRouter basename={basename}>
+            <SessionGate>
+              <AppRoutes />
+            </SessionGate>
+            <ThemedToaster />
+          </BrowserRouter>
+        </ConfirmProvider>
       </TooltipProvider>
     </QueryClientProvider>
   </StrictMode>,

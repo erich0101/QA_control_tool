@@ -13,6 +13,8 @@ interface SessionState {
   setUser: (user: User) => void;
   clear: () => void;
   isAdmin: () => boolean;
+  /** Roles con permisos de gestión (equivalente a `requireAdmin` del backend). */
+  canManage: () => boolean;
   can: (permission: keyof NonNullable<User['permissions']>) => boolean;
 }
 
@@ -26,6 +28,11 @@ export const useSessionStore = create<SessionState>()((set, get) => ({
 
   // El backend marca admin con el campo `perfil` (no con `role`).
   isAdmin: () => get().user?.perfil === 'admin',
+
+  canManage: () => {
+    const role = get().user?.role;
+    return role === 'Admin' || role === 'Analista QA';
+  },
 
   can: (permission) => {
     const user = get().user;
