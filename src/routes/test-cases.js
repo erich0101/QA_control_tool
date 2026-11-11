@@ -272,4 +272,35 @@ router.delete('/:id', requireAuth, requireAdmin, async (req, res) => {
     }
 });
 
+router.post('/:id/start-execution', requireAuth, async (req, res) => {
+    try {
+        const tcId = req.params.id;
+        const tcRes = await query(`SELECT suite_id FROM qa_test_cases WHERE id = ?`, [tcId]);
+        if (tcRes.rows.length === 0) return res.status(404).json({ error: 'Test case no encontrado' });
+        const suiteId = tcRes.rows[0].suite_id;
+
+        const suiteRes = await query(`SELECT active_run_id FROM qa_test_suites WHERE id = ?`, [suiteId]);
+        if (suiteRes.rows[0]?.active_run_id) {
+            return res.status(400).json({ error: 'La suite ya tiene un ciclo activo.' });
+        }
+
+        const runRes = await query(`
+            INSERT INTO qa_test_runs (suite_id, status, created_by, run_type, last_resume_at, accumulated_seconds) 
+            VALUES (?, 'RUNNING', ?, ?, CURRENT_TIMESTAMP, 0)
+        `, [suiteId, req.user.id, 'INDIVIDUAL']);
+        const runId = runRes.lastID;
+
+        await query(`UPDATE qa_test_suites SET active_run_id = ? WHERE id = ?`, [runId, suiteId]);
+
+        await query(`
+            INSERT INTO qa_executions (tc_id, run_id, tester, tester_id, status) 
+            VALUES (?, ?, ?, ?, 'PENDING')
+        `, [tcId, runId, req.user.name, req.user.id]);
+
+        res.json({ ok: true, runId });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;

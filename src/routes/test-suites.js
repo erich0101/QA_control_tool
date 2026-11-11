@@ -360,4 +360,108 @@ router.put('/:id/assign-all', requireAuth, async (req, res) => {
 // ── DEFECTOS & BUGS (Avanzado) ──
 // ══════════════════════════════════════════════════════════════
 
+router.post('/:id/start-execution', requireAuth, async (req, res) => {
+    try {
+        const suiteId = req.params.id;
+        const { execution_type, filters } = req.body; // execution_type: 'SMOKE', 'REGRESSION', 'CUSTOM'
+
+        // 1. Construir query de filtrado de tests
+        let filterSql = `SELECT id, assigned_to FROM qa_test_cases WHERE suite_id = ?`;
+        let params = [suiteId];
+
+        if (execution_type === 'SMOKE') {
+            filterSql += ` AND is_smoke = true`;
+        } else if (execution_type === 'REGRESSION') {
+            filterSql += ` AND is_regression = true`;
+        } else if (execution_type === 'INTEGRATION') {
+            filterSql += ` AND is_integration = true`;
+        } else if (execution_type === 'EXPLORATORY') {
+            filterSql += ` AND is_exploratory = true`;
+        } else if (execution_type === 'CUSTOM' && filters) {
+            if (filters.priority) { filterSql += ` AND priority = ?`; params.push(filters.priority); }
+            if (filters.is_smoke !== undefined) { filterSql += ` AND is_smoke = ?`; params.push(filters.is_smoke); }
+            if (filters.is_regression !== undefined) { filterSql += ` AND is_regression = ?`; params.push(filters.is_regression); }
+            if (filters.is_integration !== undefined) { filterSql += ` AND is_integration = ?`; params.push(filters.is_integration); }
+            if (filters.is_exploratory !== undefined) { filterSql += ` AND is_exploratory = ?`; params.push(filters.is_exploratory); }
+        }
+
+        const eligibleTests = await query(filterSql, params);
+
+        // Filtro adicional: Solo asignados al usuario si se solicita
+        let finalEligible = eligibleTests.rows;
+        if (req.body.only_assigned) {
+            finalEligible = finalEligible.filter(tc => tc.assigned_to === req.user.id);
+        }
+
+        if (finalEligible.length === 0) {
+            return res.status(400).json({ error: 'No hay tests asignados a tu usuario en esta suite o no coinciden con los filtros.' });
+        }
+
+        // 2. Crear el run en estado RUNNING
+        const runRes = await query(`
+            INSERT INTO qa_test_runs (suite_id, status, created_by, run_type, last_resume_at, accumulated_seconds) 
+            VALUES (?, 'RUNNING', ?, ?, CURRENT_TIMESTAMP, 0)
+        `, [suiteId, req.user.id, execution_type || 'FULL']);
+        const runId = runRes.lastID;
+
+        // 3. Actualizar la suite
+        await query(`UPDATE qa_test_suites SET active_run_id = ? WHERE id = ?`, [runId, suiteId]);
+
+        // 4. Crear ejecuciones PENDING solo para los tests filtrados
+        for (const tc of finalEligible) {
+            await query(`
+                INSERT INTO qa_executions (tc_id, run_id, tester, tester_id, status) 
+                VALUES (?, ?, ?, ?, 'PENDING')
+            `, [tc.id, runId, req.user.name, req.user.id]);
+        }
+        
+        res.json({ ok: true, runId, testCount: finalEligible.length });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.post('/:id/finish-execution', requireAuth, async (req, res) => {
+    try {
+        const suiteId = req.params.id;
+        const suiteRes = await query(`SELECT active_run_id, assigned_to FROM qa_test_suites WHERE id = ?`, [suiteId]);
+        const suite = suiteRes.rows[0];
+        
+        if (!suite) return res.status(404).json({ error: 'Suite no encontrada' });
+
+        const runId = suite.active_run_id;
+        if (!runId) return res.status(400).json({ error: 'No hay un ciclo activo para esta suite' });
+
+        // Calcular estadísticas finales del run
+        const execs = await query(`SELECT status FROM qa_executions WHERE run_id = ?`, [runId]);
+        const stats = {
+            total: execs.rows.length,
+            pass: execs.rows.filter(e => e.status === 'PASS' || e.status === 'OK').length,
+            fail: execs.rows.filter(e => e.status === 'FAIL').length,
+            warn: execs.rows.filter(e => e.status === 'WARNING').length,
+            block: execs.rows.filter(e => e.status === 'BLOCK').length,
+            skipped: execs.rows.filter(e => e.status === 'SKIPPED' || e.status === 'SKIP').length
+        };
+
+        // Consolidar tiempo si estaba RUNNING antes de finalizar
+        const runInfo = await query(`SELECT status, last_resume_at, accumulated_seconds FROM qa_test_runs WHERE id = ?`, [runId]);
+        const run = runInfo.rows[0];
+        let finalSeconds = run.accumulated_seconds || 0;
+        
+        if (run.status === 'RUNNING') {
+            const lastResume = new Date(run.last_resume_at);
+            finalSeconds += Math.floor((new Date() - lastResume) / 1000);
+        }
+
+        await query(`UPDATE qa_test_runs SET status = 'FINISHED', finished_at = CURRENT_TIMESTAMP, accumulated_seconds = ? WHERE id = ?`, [finalSeconds, runId]);
+        await query(`UPDATE qa_test_suites SET active_run_id = NULL WHERE id = ?`, [suiteId]);
+        
+        res.json({ ok: true, stats });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// --- HISTORIAL & BUGS ---
+
 module.exports = router;
