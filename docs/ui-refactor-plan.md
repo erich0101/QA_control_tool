@@ -44,7 +44,9 @@ todos estén migrados, `/` pasa a servir la nueva UI y se borra la legacy.
 | `exploratoria-tab.js` → importar flujos Excel | — | ⏳ pendiente |
 | `mi-jira-tab.js` (328) | `features/mi-jira/*` | ✅ |
 | `team-tab.js` (245) | `features/team/*` | ✅ |
-| `tools-tab.js` (2.222) | `features/tools/*` | ⏳ |
+| `tools-tab.js` (2.222) | `features/tools/*` | 🟡 Base64 + CUIT |
+| `tools-tab.js` → Token Decoder (628) | — | ⏳ slice B |
+| `tools-tab.js` → Request Builder (696) | — | ⏳ slice C |
 | `modals.js` (2.157) | `components/dialogs/*` (uno por caso de uso) | ⏳ |
 | `main.css` (3.591) + `macos-components.css` | Tailwind + tokens Apple | ✅ base |
 
@@ -268,3 +270,23 @@ backlog, antigüedad por bucket, edad promedio por estado y cumplimiento de SLA.
 La exportación se hace con **"Exportar PDF"** vía `window.print()` + estilos
 `print:` (topbar, tabbar y filtros se ocultan al imprimir). El legacy usaba
 html2canvas; se evitó agregar una dependencia de ~200 kB para lo mismo.
+
+## Tools — Slice A (Base64 + CUIT)
+
+Tools se migra en 3 cortes porque son 4 herramientas independientes:
+
+- **A (hecho)**: shell con sidebar + `TOOLS` como registro único, **Base64**
+  (texto y archivos hasta 10 MB, URL-safe, descarga de binario) y **CUIT
+  Generator** (módulo 11, prefijos 20/24/27/30/34, copiar/CSV).
+- **B (pendiente)**: Token Decoder (JWT, hashes, UUID, base64 opaco, entropía
+  y verificación de firma con Web Crypto).
+- **C (pendiente)**: Request Builder (parser de curl, editor KV, files,
+  ejecución vía `POST /api/tools/request-builder/exec`, visor de respuesta).
+
+Detalle: `lib/base64.ts` procesa en chunks de 8 KB para no romper con
+`String.fromCharCode(...bytes)` en archivos grandes, y `base64ToBytes` valida
+el alfabeto antes de `atob`.
+
+**Bug corregido respecto del legacy**: `_verifyHs256` (Token Decoder) tenía una
+guarda sobre `headerB64` que siempre daba error, por lo que "Signature Verified"
+nunca aparecía. Se arregla en el slice B.
