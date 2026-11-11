@@ -14,6 +14,7 @@ import { LEGACY_APP_URL } from '@/lib/env';
 import { cn } from '@/lib/utils';
 import { Base64Tool } from './components/base64-tool';
 import { CuitTool } from './components/cuit-tool';
+import { RequestBuilderTool } from './components/request-builder-tool';
 import { TokenDecoderTool } from './components/token-decoder-tool';
 
 interface ToolDefinition {
@@ -43,7 +44,7 @@ const TOOLS: ToolDefinition[] = [
     label: 'Request Builder',
     description: 'HTTP requests',
     icon: Rocket,
-    ready: false,
+    ready: true,
   },
 ];
 
@@ -128,6 +129,7 @@ export function ToolsPage() {
         {active.id === 'base64' ? <Base64Tool /> : null}
         {active.id === 'cuit-generator' ? <CuitTool /> : null}
         {active.id === 'token-decoder' ? <TokenDecoderTool /> : null}
+        {active.id === 'request-builder' ? <RequestBuilderTool /> : null}
         {!active.ready ? (
           <EmptyState
             icon={<Construction />}

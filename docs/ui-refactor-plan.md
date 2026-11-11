@@ -44,9 +44,9 @@ todos estén migrados, `/` pasa a servir la nueva UI y se borra la legacy.
 | `exploratoria-tab.js` → importar flujos Excel | — | ⏳ pendiente |
 | `mi-jira-tab.js` (328) | `features/mi-jira/*` | ✅ |
 | `team-tab.js` (245) | `features/team/*` | ✅ |
-| `tools-tab.js` (2.222) | `features/tools/*` | 🟡 Base64 + CUIT + Token |
+| `tools-tab.js` (2.222) | `features/tools/*` | ✅ |
 | `tools-tab.js` → Token Decoder (628) | `features/tools/components/token-decoder-tool.tsx` | ✅ |
-| `tools-tab.js` → Request Builder (696) | — | ⏳ slice C |
+| `tools-tab.js` → Request Builder (696) | `features/tools/components/request-builder-tool.tsx` | ✅ |
 | `modals.js` (2.157) | `components/dialogs/*` (uno por caso de uso) | ⏳ |
 | `main.css` (3.591) + `macos-components.css` | Tailwind + tokens Apple | ✅ base |
 
@@ -283,8 +283,15 @@ Tools se migra en 3 cortes porque son 4 herramientas independientes:
   JSON coloreado, tabla de claims con descripción y estado (vigente/vencido/no
   válido aún), entropía de Shannon + composición de caracteres y **verificación
   de firma HS256/384/512** con Web Crypto. Incluye token de ejemplo firmado.
-- **C (pendiente)**: Request Builder (parser de curl, editor KV, files,
-  ejecución vía `POST /api/tools/request-builder/exec`, visor de respuesta).
+- **C (hecho)**: **Request Builder** — método + URL, query params y headers
+  editables, body JSON / form-data (con archivos) / URL-encoded / raw / binary,
+  importación de cURL, ejecución vía `POST /api/tools/request-builder/exec`,
+  visor de respuesta con headers, JSON coloreado, descarga de binarios y copia
+  como body/URL/meta/cURL/todo.
+
+**Bug corregido respecto del legacy**: el legacy tenía la sección "Query Params"
+pero **nunca la aplicaba** al enviar la request. Ahora se anexan a la URL (y al
+cURL generado), con `URLSearchParams` para no romper valores con espacios/acentos.
 
 Detalle: `lib/base64.ts` procesa en chunks de 8 KB para no romper con
 `String.fromCharCode(...bytes)` en archivos grandes, y `base64ToBytes` valida
