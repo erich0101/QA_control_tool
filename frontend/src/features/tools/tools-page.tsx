@@ -14,6 +14,7 @@ import { LEGACY_APP_URL } from '@/lib/env';
 import { cn } from '@/lib/utils';
 import { Base64Tool } from './components/base64-tool';
 import { CuitTool } from './components/cuit-tool';
+import { TokenDecoderTool } from './components/token-decoder-tool';
 
 interface ToolDefinition {
   id: string;
@@ -35,7 +36,7 @@ const TOOLS: ToolDefinition[] = [
     label: 'Token Decoder',
     description: 'JWT y tokens opacos',
     icon: KeyRound,
-    ready: false,
+    ready: true,
   },
   {
     id: 'request-builder',
@@ -126,6 +127,7 @@ export function ToolsPage() {
       <section className="scrollbar-apple min-w-0 flex-1 overflow-y-auto p-5">
         {active.id === 'base64' ? <Base64Tool /> : null}
         {active.id === 'cuit-generator' ? <CuitTool /> : null}
+        {active.id === 'token-decoder' ? <TokenDecoderTool /> : null}
         {!active.ready ? (
           <EmptyState
             icon={<Construction />}

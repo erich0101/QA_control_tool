@@ -44,8 +44,8 @@ todos estén migrados, `/` pasa a servir la nueva UI y se borra la legacy.
 | `exploratoria-tab.js` → importar flujos Excel | — | ⏳ pendiente |
 | `mi-jira-tab.js` (328) | `features/mi-jira/*` | ✅ |
 | `team-tab.js` (245) | `features/team/*` | ✅ |
-| `tools-tab.js` (2.222) | `features/tools/*` | 🟡 Base64 + CUIT |
-| `tools-tab.js` → Token Decoder (628) | — | ⏳ slice B |
+| `tools-tab.js` (2.222) | `features/tools/*` | 🟡 Base64 + CUIT + Token |
+| `tools-tab.js` → Token Decoder (628) | `features/tools/components/token-decoder-tool.tsx` | ✅ |
 | `tools-tab.js` → Request Builder (696) | — | ⏳ slice C |
 | `modals.js` (2.157) | `components/dialogs/*` (uno por caso de uso) | ⏳ |
 | `main.css` (3.591) + `macos-components.css` | Tailwind + tokens Apple | ✅ base |
@@ -278,8 +278,11 @@ Tools se migra en 3 cortes porque son 4 herramientas independientes:
 - **A (hecho)**: shell con sidebar + `TOOLS` como registro único, **Base64**
   (texto y archivos hasta 10 MB, URL-safe, descarga de binario) y **CUIT
   Generator** (módulo 11, prefijos 20/24/27/30/34, copiar/CSV).
-- **B (pendiente)**: Token Decoder (JWT, hashes, UUID, base64 opaco, entropía
-  y verificación de firma con Web Crypto).
+- **B (hecho)**: **Token Decoder** — detecta JWT / hash (MD5, SHA-1, SHA-256,
+  SHA-512) / UUID / Base64 legible / hex / opaco; parsea header y payload con
+  JSON coloreado, tabla de claims con descripción y estado (vigente/vencido/no
+  válido aún), entropía de Shannon + composición de caracteres y **verificación
+  de firma HS256/384/512** con Web Crypto. Incluye token de ejemplo firmado.
 - **C (pendiente)**: Request Builder (parser de curl, editor KV, files,
   ejecución vía `POST /api/tools/request-builder/exec`, visor de respuesta).
 
@@ -287,6 +290,8 @@ Detalle: `lib/base64.ts` procesa en chunks de 8 KB para no romper con
 `String.fromCharCode(...bytes)` en archivos grandes, y `base64ToBytes` valida
 el alfabeto antes de `atob`.
 
-**Bug corregido respecto del legacy**: `_verifyHs256` (Token Decoder) tenía una
-guarda sobre `headerB64` que siempre daba error, por lo que "Signature Verified"
-nunca aparecía. Se arregla en el slice B.
+**Bug corregido respecto del legacy**: `_verifyHs256` tenía una guarda sobre
+`headerB64` que siempre daba error, por lo que "Signature Verified" nunca
+aparecía. La versión React verifica HS256/384/512 comparando la firma calculada
+con la provista; validado en browser con el token de ejemplo (válida) y con un
+secret incorrecto (inválida).
