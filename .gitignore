@@ -244,3 +244,16 @@ KNOWLEDGE.md
 
 # TypeScript incremental build info (nueva UI)
 *.tsbuildinfo
+
+# ============================================================
+# ARTEFACTOS DE DESARROLLO / VALIDACIÓN (no son parte de la app)
+# Capturas, videos y salidas temporales generadas al probar la UI.
+# Solo aplican a la raíz; los assets de public/ no se ven afectados.
+# ============================================================
+/*.png
+/*.jpg
+/*.jpeg
+/*.webp
+/*.gif
+frontend/.vite/
+frontend/coverage/
