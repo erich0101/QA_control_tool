@@ -176,7 +176,51 @@ export interface Defect {
   severity?: string;
   status?: string;
   jira_key?: string | null;
+  jira_url?: string | null;
+  jira_status?: string | null;
+  created_at?: string;
+  tc_key?: string | null;
+  tc_title?: string | null;
+  tester_name?: string | null;
+  run_id?: number | null;
+  execution_id?: number | null;
+  steps_to_reproduce?: string | null;
+  expected_result?: string | null;
+  actual_result?: string | null;
+  frequency?: string | null;
+  business_impact?: string | null;
+  observations?: string | null;
   [key: string]: unknown;
+}
+
+export interface RunStats {
+  total: number;
+  pass: number;
+  fail: number;
+  warn: number;
+  block: number;
+  skipped: number;
+}
+
+export interface TestRun {
+  id: number;
+  suite_id: number;
+  suite_title: string;
+  tester_name?: string | null;
+  run_type?: string;
+  status?: string;
+  started_at?: string | null;
+  finished_at?: string | null;
+  stats: RunStats;
+  [key: string]: unknown;
+}
+
+export interface HistoryPage {
+  runs: TestRun[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
 }
 
 export type ExecutionStatus = 'PENDING' | 'PASS' | 'FAIL' | 'BLOCK' | 'SKIP';

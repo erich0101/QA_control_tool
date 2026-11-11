@@ -27,6 +27,12 @@ const ExecutionPage = lazy(() =>
   })),
 );
 
+const HistoryPage = lazy(() =>
+  import('@/features/history/history-page').then((module) => ({
+    default: module.HistoryPage,
+  })),
+);
+
 const PlaceholderPage = lazy(() =>
   import('@/pages/placeholder-page').then((module) => ({ default: module.PlaceholderPage })),
 );
@@ -61,6 +67,8 @@ export function AppRoutes() {
                 withSuspense(<TestSuitesPage />)
               ) : item.id === 'execution' ? (
                 withSuspense(<ExecutionPage />)
+              ) : item.id === 'history' ? (
+                withSuspense(<HistoryPage />)
               ) : item.requiresAdmin ? (
                 withSuspense(
                   <RequireAdmin>

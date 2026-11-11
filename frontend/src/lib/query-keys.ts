@@ -12,4 +12,7 @@ export const queryKeys = {
   users: ['users'] as const,
   jiraConfig: (projectId: number) => ['jira-config', projectId] as const,
   jiraContext: (projectId: number | null) => ['jira-context', projectId] as const,
+  history: (projectId: number | null, page: number) => ['history', projectId, page] as const,
+  defects: (projectId: number | null) => ['defects', projectId] as const,
+  runBugs: (runId: number | null) => ['run-bugs', runId] as const,
 };

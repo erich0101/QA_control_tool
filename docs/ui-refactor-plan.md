@@ -32,7 +32,9 @@ todos estén migrados, `/` pasa a servir la nueva UI y se borra la legacy.
 | `execution-tab.js` (1.037) + `sbs.js` | `features/execution/*` | ✅ (sin voz/reporte) |
 | `execution-tab.js` → VoiceInput | — | ⏳ pendiente |
 | `execution-tab.js` → Reporte personalizado del tester | — | ⏳ pendiente |
-| `history-tab.js` (1.153) | `features/history/*` | ⏳ |
+| `history-tab.js` (1.153) | `features/history/*` | ✅ (sin batch Jira) |
+| `history-tab.js` → reporte consolidado / tester report | — | ⏳ pendiente |
+| `history-tab.js` → batch Jira tickets | — | ⏳ pendiente |
 | `jira-tracking-tab.js` (397) | `features/jira-tracking/*` | ⏳ |
 | `dashboard-*.js` (1.160) | `features/dashboard/*` | ⏳ |
 | `hallazgos-tab.js` (1.538) | `features/hallazgos/*` | ⏳ |
@@ -133,3 +135,19 @@ Decisiones que difieren del legacy a propósito:
   botones). El backend lo soporta; se avisa con un texto "podés corregirlo".
 - No se migraron el dictado por voz (`VoiceInput`) ni el reporte personalizado
   del tester: siguen en la UI legacy.
+
+## Historial — alcance
+
+Migrado: sub-tabs Ejecuciones / Bugs, filtro por rango de fechas, árbol
+colapsable año › mes › día (componente `GroupHeader` compartido por ambas
+vistas), fila de ciclo con barra de stats y acciones (ver reporte, ver defectos,
+retest), paginación server-side de ciclos, y bugs con severidad, link/estado de
+Jira, descarte/reapertura y detalle técnico expandible.
+
+Detalle encontrado: el backend devuelve `stats.skipped`, pero el legacy leía
+`stats.skip` → la barra de SKIP quedaba en `NaN` y no se pintaba. En la versión
+React se usa `skipped`.
+
+Pendiente respecto del legacy: reporte consolidado multi-ciclo, creación masiva
+de tickets en Jira desde la vista de bugs, reporte personalizado del tester y
+la integración Jira dentro del detalle del defecto.
