@@ -28,6 +28,20 @@ export interface User {
   role: string;
   perfil: Perfil;
   permissions?: UserPermissions | null;
+  /** Proyectos asignados (ids). */
+  projects?: number[];
+  /** Permisos aplanados tal como los devuelve GET /api/users. */
+  can_create_cu?: boolean;
+  can_create_hu?: boolean;
+  can_create_suite?: boolean;
+  can_create_test?: boolean;
+  can_assign_cu?: boolean;
+  can_assign_hu?: boolean;
+  can_assign_suite?: boolean;
+  can_execute_test?: boolean;
+  can_manage_projects?: boolean;
+  can_manage_users?: boolean;
+  can_configure_jira?: boolean;
 }
 
 export interface Project {

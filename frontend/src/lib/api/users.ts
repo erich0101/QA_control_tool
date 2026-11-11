@@ -1,13 +1,22 @@
 import { apiFetch } from './client';
-import type { TestSuite, User } from './types';
+import type { User, UserPermissions } from './types';
+
+export interface UserInput {
+  name: string;
+  email: string;
+  role: string;
+  perfil: 'admin' | 'user';
+  password?: string;
+  permissions: Required<Omit<UserPermissions, 'user_id'>>;
+  projects: number[];
+}
 
 export const usersApi = {
   list: () => apiFetch<{ users: User[] }>('/api/users'),
-};
 
-export const testSuitesApi = {
-  list: (projectId: number, useCaseId?: number) =>
-    apiFetch<{ testSuites: TestSuite[] }>('/api/test-suites', {
-      query: useCaseId ? { use_case_id: useCaseId } : { project_id: projectId },
-    }),
+  create: (input: UserInput) =>
+    apiFetch<{ ok: true; id: number }>('/api/users', { method: 'POST', body: input }),
+
+  update: (id: number, input: UserInput) =>
+    apiFetch<{ ok: true }>(`/api/users/${id}`, { method: 'PUT', body: input }),
 };

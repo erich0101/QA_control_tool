@@ -42,7 +42,7 @@ todos estén migrados, `/` pasa a servir la nueva UI y se borra la legacy.
 | `exploratoria-tab.js` (1.778) | `features/exploratoria/*` | ✅ (sin import/voz) |
 | `exploratoria-tab.js` → importar flujos Excel | — | ⏳ pendiente |
 | `mi-jira-tab.js` (328) | `features/mi-jira/*` | ⏳ |
-| `team-tab.js` (245) | `features/team/*` | ⏳ |
+| `team-tab.js` (245) | `features/team/*` | ✅ |
 | `tools-tab.js` (2.222) | `features/tools/*` | ⏳ |
 | `modals.js` (2.157) | `components/dialogs/*` (uno por caso de uso) | ⏳ |
 | `main.css` (3.591) + `macos-components.css` | Tailwind + tokens Apple | ✅ base |
@@ -190,3 +190,18 @@ Decisiones:
 
 Pendiente: importación de flujos desde Excel, dictado por voz, "Mi Reporte de QA"
 y la conversión de un defecto de flujo a test case.
+
+## Equipo — alcance
+
+Migrado: grilla de usuarios con avatar, badges de perfil/rol, chips de proyectos
+y los 11 permisos por usuario (los admin muestran "Todos"); búsqueda por
+nombre/email/rol; alta y edición en un único diálogo con contraseña opcional al
+editar, permisos agrupados (Crear / Asignar / Gestión) y selección de proyectos.
+
+Los permisos se definen una sola vez en `features/team/lib/permissions.ts`
+(`PERMISSION_GROUPS`) y de ahí salen tanto las tarjetas como los checkboxes del
+formulario: no hay dos listas de permisos que puedan desincronizarse.
+
+`useTeam` se movió a `features/team/use-team.ts` y se reexporta desde
+`features/test-suites/use-test-suites` para no tocar los imports existentes.
+La ruta ya estaba protegida por `RequireAdmin`.

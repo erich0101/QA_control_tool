@@ -45,6 +45,12 @@ const ExploratoriaPage = lazy(() =>
   })),
 );
 
+const TeamPage = lazy(() =>
+  import('@/features/team/team-page').then((module) => ({
+    default: module.TeamPage,
+  })),
+);
+
 const PlaceholderPage = lazy(() =>
   import('@/pages/placeholder-page').then((module) => ({ default: module.PlaceholderPage })),
 );
@@ -85,6 +91,12 @@ export function AppRoutes() {
                 withSuspense(<HallazgosPage />)
               ) : item.id === 'exploratoria' ? (
                 withSuspense(<ExploratoriaPage />)
+              ) : item.id === 'team' ? (
+                withSuspense(
+                  <RequireAdmin>
+                    <TeamPage />
+                  </RequireAdmin>,
+                )
               ) : item.requiresAdmin ? (
                 withSuspense(
                   <RequireAdmin>

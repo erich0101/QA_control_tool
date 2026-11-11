@@ -8,16 +8,9 @@ import {
 } from '@/lib/api/test-suites';
 import type { TestCasePatch } from '@/lib/api/types';
 import { queryKeys } from '@/lib/query-keys';
-import { usersApi } from '@/lib/api/users';
 
-export function useTeam() {
-  return useQuery({
-    queryKey: queryKeys.users,
-    queryFn: usersApi.list,
-    select: (data) => data.users ?? [],
-    staleTime: 5 * 60_000,
-  });
-}
+// El equipo vive en features/team; se reexporta para no romper imports.
+export { useTeam } from '@/features/team/use-team';
 
 export function useTestSuites(projectId: number | null) {
   return useQuery({
