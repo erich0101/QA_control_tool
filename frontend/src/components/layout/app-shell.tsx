@@ -41,7 +41,7 @@ export function AppShell() {
       <Topbar />
       <Tabbar />
 
-      <main className="scrollbar-apple flex-1 overflow-y-auto">
+      <main className="scrollbar-apple flex-1 overflow-y-auto print:overflow-visible">
         {hasNoProject ? (
           <div className="mx-auto max-w-xl p-10">
             <EmptyState

@@ -36,8 +36,8 @@ todos estén migrados, `/` pasa a servir la nueva UI y se borra la legacy.
 | `history-tab.js` → reporte consolidado / tester report | — | ⏳ pendiente |
 | `history-tab.js` → batch Jira tickets | — | ⏳ pendiente |
 | `jira-tracking-tab.js` (397) | `features/jira-tracking/*` | ✅ |
-| `dashboard-*.js` (1.160) | `features/dashboard/*` | ✅ (sin reporte cliente) |
-| `dashboard-epic-report.js` (547) → Reporte cliente | — | ⏳ pendiente |
+| `dashboard-*.js` (1.160) | `features/dashboard/*` | ✅ |
+| `dashboard-epic-report.js` (547) → Reporte cliente | `features/dashboard/components/epic-report-tab.tsx` | ✅ |
 | `hallazgos-tab.js` (1.538) | `features/hallazgos/*` | ✅ (sin Jira/promote) |
 | `hallazgos-tab.js` → crear ticket Jira / promover a bug | — | ⏳ pendiente |
 | `exploratoria-tab.js` (1.778) | `features/exploratoria/*` | ✅ (sin import/voz) |
@@ -255,3 +255,16 @@ exportación, 547 líneas). La sub-tab existe y muestra el acceso a la UI legacy
 
 Mejoras: el desglose de estados ahora muestra también BLOCK y SKIPPED (el legacy
 los ignoraba) y las barras se calculan con el total real de tests activos.
+
+### Reporte cliente (épica)
+
+Migrado: filtros épica + rango de fechas con botón "Generar" (las fechas no
+disparan queries al tipear), insights automáticos, gauge de salud, riesgo de
+entrega, KPIs (total, % resueltos, variación de pendientes, abiertos), métricas
+del testing local (casos, pass rate, densidad de defectos, ciclos, tiempo),
+desglose por estado y prioridad, tendencia semanal creados vs. resueltos con
+backlog, antigüedad por bucket, edad promedio por estado y cumplimiento de SLA.
+
+La exportación se hace con **"Exportar PDF"** vía `window.print()` + estilos
+`print:` (topbar, tabbar y filtros se ocultan al imprimir). El legacy usaba
+html2canvas; se evitó agregar una dependencia de ~200 kB para lo mismo.

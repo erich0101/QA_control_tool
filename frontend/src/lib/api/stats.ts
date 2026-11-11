@@ -52,6 +52,58 @@ export interface TeamProductivity {
   totalWork: number;
 }
 
+export interface EpicReport {
+  summary: {
+    total: number;
+    created: number;
+    resolved: number;
+    open: number;
+    openAtStart: number;
+    avgResolutionDays: number;
+    medianResolution: number;
+    p90Resolution: number;
+    slaCompliance: number;
+    bugResolutionRate: number;
+    backlogDelta: number;
+    backlogDeltaPercent: number;
+  };
+  healthScore: number;
+  riskScore: number;
+  riskLabel: 'low' | 'moderate' | 'high';
+  statusBreakdown: Record<string, number>;
+  priorityBreakdown: Record<string, number>;
+  trend: Array<{
+    label: string;
+    created: number;
+    resolved: number;
+    backlogStart: number;
+    backlogEnd: number;
+    delta: number;
+  }>;
+  avgAgeByStatus: Record<string, number>;
+  agingBuckets: Record<string, number>;
+  insights: Array<{ type: 'success' | 'warning' | 'critical'; text: string }>;
+  sla: {
+    target: number;
+    median: number;
+    p90: number;
+    compliance: number;
+    withinSLA: number;
+    total: number;
+  };
+  qaMetrics: {
+    totalTestCases: number;
+    executionsByStatus: Record<string, number>;
+    passRate: number;
+    defectDensity: number;
+    totalExecutions: number;
+    executionTime: { totalMinutes: number; avgMinutes: number; runCount: number };
+    defectsFound: number;
+    defectsBySeverity: Record<string, number>;
+  };
+  error?: string;
+}
+
 export const statsApi = {
   overview: (projectId: number) =>
     apiFetch<OverviewStats>('/api/stats/overview', { query: { project_id: projectId } }),
@@ -67,5 +119,11 @@ export const statsApi = {
   jiraProductivity: (projectId: number) =>
     apiFetch<TeamProductivity[] | { error: string }>('/api/stats/jira-productivity', {
       query: { project_id: projectId },
+    }),
+
+  /** Reporte de la épica para el cliente (Jira + métricas locales de QA). */
+  epicReport: (projectId: number, epicKey: string, from: string, to: string) =>
+    apiFetch<EpicReport>(`/api/jira/projects/${projectId}/epic-stats`, {
+      query: { epicKey, from, to },
     }),
 };

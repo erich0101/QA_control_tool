@@ -1,11 +1,10 @@
 import { useSearchParams } from 'react-router-dom';
-import { BarChart3, FileText } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { BarChart3 } from 'lucide-react';
 import { EmptyState } from '@/components/ui/empty-state';
-import { LEGACY_APP_URL } from '@/lib/env';
 import { cn } from '@/lib/utils';
 import { useUiStore } from '@/stores/ui';
 import { DailyTab } from './components/daily-tab';
+import { EpicReportTab } from './components/epic-report-tab';
 import { OverviewTab } from './components/overview-tab';
 import { PerformanceTab } from './components/performance-tab';
 import { ProductivityTab } from './components/productivity-tab';
@@ -53,7 +52,7 @@ export function DashboardPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <header className="shrink-0 border-b border-border bg-surface px-5">
+      <header className="shrink-0 border-b border-border bg-surface px-5 print:hidden">
         <div className="flex items-center gap-3 pt-2.5">
           <span className="text-caption font-bold uppercase tracking-wide text-fg-subtle">
             Dashboard del proyecto
@@ -85,18 +84,7 @@ export function DashboardPage() {
         {active === 'performance' ? <PerformanceTab projectId={projectId} /> : null}
         {active === 'daily' ? <DailyTab projectId={projectId} /> : null}
         {active === 'team' ? <ProductivityTab projectId={projectId} /> : null}
-        {active === 'epic' ? (
-          <EmptyState
-            icon={<FileText />}
-            title="Reporte cliente · en migración"
-            description="El generador de reporte por épica (con selección de fechas y exportación) todavía vive en la versión anterior de la app."
-            action={
-              <Button variant="secondary" asChild>
-                <a href={LEGACY_APP_URL}>Abrir en la versión anterior</a>
-              </Button>
-            }
-          />
-        ) : null}
+        {active === 'epic' ? <EpicReportTab projectId={projectId} /> : null}
       </div>
     </div>
   );

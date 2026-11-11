@@ -27,7 +27,7 @@ export function Tabbar() {
 
   return (
     <nav
-      className="scrollbar-apple flex shrink-0 items-center gap-1 overflow-x-auto border-b border-border bg-surface px-2"
+      className="scrollbar-apple flex shrink-0 items-center gap-1 overflow-x-auto border-b border-border bg-surface px-2 print:hidden"
       aria-label="Secciones"
     >
       {items.map((item) => {

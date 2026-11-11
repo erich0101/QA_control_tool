@@ -22,7 +22,7 @@ export function Topbar() {
   const activeProject = projects?.find((p) => p.id === activeProjectId) ?? null;
 
   return (
-    <header className="flex h-14 shrink-0 items-center justify-between gap-4 border-b border-border bg-surface px-4">
+    <header className="flex h-14 shrink-0 items-center justify-between gap-4 border-b border-border bg-surface px-4 print:hidden">
       <div className="flex min-w-0 items-center gap-3">
         <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-brand-soft text-brand">
           <FlaskConical className="size-5" />

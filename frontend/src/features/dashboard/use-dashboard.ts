@@ -42,3 +42,18 @@ export function useJiraProductivity(projectId: number | null) {
     retry: false,
   });
 }
+
+export function useEpicReport(
+  projectId: number | null,
+  epicKey: string | null,
+  from: string,
+  to: string,
+) {
+  return useQuery({
+    queryKey: queryKeys.epicReport(projectId, epicKey, from, to),
+    queryFn: () => statsApi.epicReport(projectId as number, epicKey as string, from, to),
+    enabled: projectId != null && Boolean(epicKey) && Boolean(from) && Boolean(to),
+    staleTime: 60_000,
+    retry: false,
+  });
+}

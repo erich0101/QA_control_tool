@@ -32,4 +32,6 @@ export const queryKeys = {
     ['stats-suites', projectId, from, to] as const,
   jiraDaily: (projectId: number | null) => ['stats-jira-daily', projectId] as const,
   jiraProductivity: (projectId: number | null) => ['stats-jira-productivity', projectId] as const,
+  epicReport: (projectId: number | null, epicKey: string | null, from: string, to: string) =>
+    ['epic-report', projectId, epicKey, from, to] as const,
 };
