@@ -36,7 +36,8 @@ todos estén migrados, `/` pasa a servir la nueva UI y se borra la legacy.
 | `history-tab.js` → reporte consolidado / tester report | — | ⏳ pendiente |
 | `history-tab.js` → batch Jira tickets | — | ⏳ pendiente |
 | `jira-tracking-tab.js` (397) | `features/jira-tracking/*` | ✅ |
-| `dashboard-*.js` (1.160) | `features/dashboard/*` | ⏳ |
+| `dashboard-*.js` (1.160) | `features/dashboard/*` | ✅ (sin reporte cliente) |
+| `dashboard-epic-report.js` (547) → Reporte cliente | — | ⏳ pendiente |
 | `hallazgos-tab.js` (1.538) | `features/hallazgos/*` | ✅ (sin Jira/promote) |
 | `hallazgos-tab.js` → crear ticket Jira / promover a bug | — | ⏳ pendiente |
 | `exploratoria-tab.js` (1.778) | `features/exploratoria/*` | ✅ (sin import/voz) |
@@ -236,3 +237,21 @@ La mención solo se envía como `mentionId` si el texto sigue empiezándose por
 `@[Nombre]`; si el usuario la borra, se manda el comentario sin mención.
 
 Pendiente: adjuntar archivos a comentarios y editar/borrar comentarios.
+
+## Dashboard — alcance
+
+Migrado (4 de 5 sub-tabs):
+- **Vista general**: KPIs (CU, TC, cobertura OK, riesgo), desglose por estado con
+  índice de salud e cobertura por caso de uso.
+- **Control & Tiempos**: rango de fechas, totales de ejecuciones/tiempo/promedio
+  y árbol año › mes › día con agregado por suite (corridas, promedio y total).
+- **Jira & Daily**: lead time, abiertos, cerrados hoy, antigüedad crítica, carga
+  por responsable, tabla "foco de la daily" y distribución por severidad/épica.
+- **Productividad**: leaderboard por tester con resueltos, ciclo medio, aging y
+  ratio de finalización.
+
+Pendiente: **Reporte cliente** (generador por épica con selección de fechas y
+exportación, 547 líneas). La sub-tab existe y muestra el acceso a la UI legacy.
+
+Mejoras: el desglose de estados ahora muestra también BLOCK y SKIPPED (el legacy
+los ignoraba) y las barras se calculan con el total real de tests activos.

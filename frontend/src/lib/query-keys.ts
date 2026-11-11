@@ -27,4 +27,9 @@ export const queryKeys = {
   jiraTracking: (projectId: number | null) => ['jira-tracking', projectId] as const,
   jiraComments: (projectId: number | null, issueKey: string | null) =>
     ['jira-comments', projectId, issueKey] as const,
+  overviewStats: (projectId: number | null) => ['stats-overview', projectId] as const,
+  suiteStats: (projectId: number | null, from: string, to: string) =>
+    ['stats-suites', projectId, from, to] as const,
+  jiraDaily: (projectId: number | null) => ['stats-jira-daily', projectId] as const,
+  jiraProductivity: (projectId: number | null) => ['stats-jira-productivity', projectId] as const,
 };
