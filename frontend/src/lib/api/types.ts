@@ -292,6 +292,71 @@ export interface EvidenceItem {
 
 export type ExecutionStatus = 'PENDING' | 'PASS' | 'FAIL' | 'BLOCK' | 'SKIP';
 
+// ── Testing exploratorio ──────────────────────────────────────
+export interface ExploratorySession {
+  id: number;
+  name?: string | null;
+  charter?: string | null;
+  timebox_minutes?: number | null;
+  status: string;
+  started_at?: string | null;
+  finished_at?: string | null;
+  creator_name?: string | null;
+  flow_count?: number;
+  ok_count?: number;
+  fail_count?: number;
+  warning_count?: number;
+  block_count?: number;
+  skip_count?: number;
+  pending_count?: number;
+  total_flows?: number;
+  suite_id?: number;
+  project_id?: number;
+  accumulated_seconds?: number;
+  last_resume_at?: string | null;
+}
+
+export interface ExploratoryFlow {
+  id: number;
+  title: string;
+  steps?: string | null;
+  expected_result?: string | null;
+  key_id?: string | null;
+  assigned_to?: number | null;
+  created_at?: string;
+}
+
+export interface ExploratoryExecution {
+  id: number;
+  tc_id: number;
+  status: string;
+  observations?: string | null;
+  obtained_result?: string | null;
+  executed_at?: string | null;
+  tester?: string | null;
+}
+
+export interface ExploratoryAttachment {
+  id: number;
+  execution_id?: number | null;
+  defect_id?: number | null;
+  file_name?: string;
+  mime_type?: string;
+  evidence_category?: string;
+  created_at?: string;
+}
+
+export interface ExploratoryDetail {
+  run: ExploratorySession;
+  flows: ExploratoryFlow[];
+  executions: ExploratoryExecution[];
+  defects: Defect[];
+  attachments: ExploratoryAttachment[];
+}
+
+export const EXPLORATORY_STATUSES = ['OK', 'FAIL', 'WARNING', 'BLOCK', 'SKIP'] as const;
+export type ExploratoryStatus = (typeof EXPLORATORY_STATUSES)[number];
+
 export interface BugDraft {
   title: string;
   description: string;

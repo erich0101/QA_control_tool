@@ -39,6 +39,12 @@ const HallazgosPage = lazy(() =>
   })),
 );
 
+const ExploratoriaPage = lazy(() =>
+  import('@/features/exploratoria/exploratoria-page').then((module) => ({
+    default: module.ExploratoriaPage,
+  })),
+);
+
 const PlaceholderPage = lazy(() =>
   import('@/pages/placeholder-page').then((module) => ({ default: module.PlaceholderPage })),
 );
@@ -77,6 +83,8 @@ export function AppRoutes() {
                 withSuspense(<HistoryPage />)
               ) : item.id === 'hallazgos' ? (
                 withSuspense(<HallazgosPage />)
+              ) : item.id === 'exploratoria' ? (
+                withSuspense(<ExploratoriaPage />)
               ) : item.requiresAdmin ? (
                 withSuspense(
                   <RequireAdmin>

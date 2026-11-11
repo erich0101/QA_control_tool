@@ -39,7 +39,8 @@ todos estén migrados, `/` pasa a servir la nueva UI y se borra la legacy.
 | `dashboard-*.js` (1.160) | `features/dashboard/*` | ⏳ |
 | `hallazgos-tab.js` (1.538) | `features/hallazgos/*` | ✅ (sin Jira/promote) |
 | `hallazgos-tab.js` → crear ticket Jira / promover a bug | — | ⏳ pendiente |
-| `exploratoria-tab.js` (1.778) | `features/exploratoria/*` | ⏳ |
+| `exploratoria-tab.js` (1.778) | `features/exploratoria/*` | ✅ (sin import/voz) |
+| `exploratoria-tab.js` → importar flujos Excel | — | ⏳ pendiente |
 | `mi-jira-tab.js` (328) | `features/mi-jira/*` | ⏳ |
 | `team-tab.js` (245) | `features/team/*` | ⏳ |
 | `tools-tab.js` (2.222) | `features/tools/*` | ⏳ |
@@ -168,3 +169,24 @@ para que no haya dos maquetas que se desincronicen.
 Pendiente: crear ticket en Jira desde el hallazgo, promover hallazgo a bug
 (requiere `execution_id`), vincular el TC de origen (`PUT /api/hallazgos/:id/tc`),
 reportes (Mi Reporte de QA / Reporte de Hallazgos) y dictado por voz.
+
+## Exploratoria — alcance
+
+Migrado: listado de sesiones con sub-tabs Activas / Finalizadas, búsqueda, alta
+de sesión (nombre, charter, timebox), detalle con cabecera + barra de métricas
+calculada desde las ejecuciones, tabla de flujos expandible y guardado por flujo:
+status (OK/FAIL/WARN/BLOCK/SKIP), justificación obligatoria en BLOCK/SKIP,
+resultado obtenido, reporte de defecto (solo FAIL/WARNING) y evidencias con
+carga diferida (se suben contra el `execution_id` recién creado al guardar).
+También: finalizar sesión, reporte de bugs en pestaña nueva y alta de flujos.
+
+Decisiones:
+- El guardado es **por flujo** con estado local, no un `flowDrafts` global con
+  botón "guardar todo": menos estado compartido y menos formas de perder cambios.
+- Las evidencias pendientes viven en memoria hasta que existe `execution_id`;
+  luego se suben y se limpia la cola, igual que el comportamiento legacy.
+- Se quitó el botón "Ejecutar" individual (no aplica acá) y el timer de sesión
+  del legacy no se replicó: la barra muestra progreso y conteos.
+
+Pendiente: importación de flujos desde Excel, dictado por voz, "Mi Reporte de QA"
+y la conversión de un defecto de flujo a test case.

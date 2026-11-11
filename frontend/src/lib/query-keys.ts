@@ -19,4 +19,7 @@ export const queryKeys = {
   suggestions: (projectId: number | null) => ['suggestions', projectId] as const,
   hallazgoEvidence: (id: number | null) => ['hallazgo-evidence', id] as const,
   suggestionEvidence: (id: number | null) => ['suggestion-evidence', id] as const,
+  exploratorySessions: (projectId: number | null, status: string) =>
+    ['exploratory-sessions', projectId, status] as const,
+  exploratorySession: (runId: number | null) => ['exploratory-session', runId] as const,
 };
