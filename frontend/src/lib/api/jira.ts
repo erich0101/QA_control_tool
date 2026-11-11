@@ -1,5 +1,10 @@
 import { apiFetch } from './client';
-import type { JiraTicket, MyJiraFilter } from './types';
+import type {
+  JiraIssueComment,
+  JiraTicket,
+  JiraTrackingItem,
+  MyJiraFilter,
+} from './types';
 
 /**
  * Dominio de Jira para los links "Abrir en Jira".
@@ -25,4 +30,19 @@ export const jiraApi = {
       epics?: Array<{ key: string; name: string }>;
       error?: string;
     }>(`/api/jira/projects/${projectId}/context`),
+
+  /** Defectos del proyecto con su estado actual en Jira, agrupables por épica. */
+  tracking: (projectId: number) =>
+    apiFetch<{ tracking: JiraTrackingItem[] }>(`/api/jira/projects/${projectId}/tracking`),
+
+  comments: (projectId: number, issueKey: string) =>
+    apiFetch<{ comments: JiraIssueComment[] }>(`/api/jira/issues/${issueKey}/comments`, {
+      query: { project_id: projectId },
+    }),
+
+  addComment: (projectId: number, issueKey: string, text: string, mentionId?: string | null) =>
+    apiFetch<{ ok: true }>(`/api/jira/issues/${issueKey}/comments`, {
+      method: 'POST',
+      body: { project_id: projectId, text, mentionId: mentionId ?? null },
+    }),
 };

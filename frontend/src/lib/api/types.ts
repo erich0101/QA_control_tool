@@ -398,6 +398,32 @@ export interface JiraTicket {
 
 export type MyJiraFilter = 'assigned' | 'created' | 'mentions';
 
+export interface JiraTrackingItem {
+  id: number;
+  title: string;
+  jira_key: string;
+  jira_url?: string | null;
+  created_at?: string;
+  jira_status: string;
+  jira_assignee: string;
+  jira_avatar?: string | null;
+  jira_priority?: string;
+  jira_epic_key: string;
+  jira_epic_name: string;
+}
+
+export interface JiraIssueComment {
+  id?: string;
+  author: {
+    displayName: string;
+    accountId?: string;
+    avatarUrls?: Record<string, string>;
+  };
+  created: string;
+  /** Cuerpo en formato ADF (Atlassian Document Format). */
+  body: unknown;
+}
+
 export interface BugDraft {
   title: string;
   description: string;

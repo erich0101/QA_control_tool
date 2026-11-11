@@ -57,6 +57,12 @@ const MiJiraPage = lazy(() =>
   })),
 );
 
+const JiraTrackingPage = lazy(() =>
+  import('@/features/jira-tracking/jira-tracking-page').then((module) => ({
+    default: module.JiraTrackingPage,
+  })),
+);
+
 const PlaceholderPage = lazy(() =>
   import('@/pages/placeholder-page').then((module) => ({ default: module.PlaceholderPage })),
 );
@@ -105,6 +111,8 @@ export function AppRoutes() {
                 )
               ) : item.id === 'mi-jira' ? (
                 withSuspense(<MiJiraPage />)
+              ) : item.id === 'jira-tracking' ? (
+                withSuspense(<JiraTrackingPage />)
               ) : item.requiresAdmin ? (
                 withSuspense(
                   <RequireAdmin>

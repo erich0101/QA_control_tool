@@ -35,7 +35,7 @@ todos estén migrados, `/` pasa a servir la nueva UI y se borra la legacy.
 | `history-tab.js` (1.153) | `features/history/*` | ✅ (sin batch Jira) |
 | `history-tab.js` → reporte consolidado / tester report | — | ⏳ pendiente |
 | `history-tab.js` → batch Jira tickets | — | ⏳ pendiente |
-| `jira-tracking-tab.js` (397) | `features/jira-tracking/*` | ⏳ |
+| `jira-tracking-tab.js` (397) | `features/jira-tracking/*` | ✅ |
 | `dashboard-*.js` (1.160) | `features/dashboard/*` | ⏳ |
 | `hallazgos-tab.js` (1.538) | `features/hallazgos/*` | ✅ (sin Jira/promote) |
 | `hallazgos-tab.js` → crear ticket Jira / promover a bug | — | ⏳ pendiente |
@@ -220,3 +220,19 @@ implicaba tocar la vista.
 
 Si el usuario no tiene token configurado el backend responde 403 con el motivo:
 la vista lo muestra como estado vacío con ese mensaje en vez de una lista vacía.
+
+## Seguimiento Jira — alcance
+
+Migrado: tabla agrupada por épica (colapsable, con contador por grupo), columnas
+asignado con avatar, fecha de creación, estado en Jira y acción "Ver detalle";
+drawer lateral con épica, asignado, prioridad, link a Jira, hilo de comentarios
+(ADF → texto) con botón "Responder" que pre-carga la mención, y envío de
+comentarios nuevos a Jira.
+
+El parser de ADF vive en `features/jira-tracking/lib/adf.ts` y agrega los saltos
+de línea entre párrafos, que el legacy perdía al concatenar nodos de texto.
+
+La mención solo se envía como `mentionId` si el texto sigue empiezándose por
+`@[Nombre]`; si el usuario la borra, se manda el comentario sin mención.
+
+Pendiente: adjuntar archivos a comentarios y editar/borrar comentarios.

@@ -24,4 +24,7 @@ export const queryKeys = {
   exploratorySession: (runId: number | null) => ['exploratory-session', runId] as const,
   myJiraTickets: (projectId: number | null, filter: string) =>
     ['my-jira-tickets', projectId, filter] as const,
+  jiraTracking: (projectId: number | null) => ['jira-tracking', projectId] as const,
+  jiraComments: (projectId: number | null, issueKey: string | null) =>
+    ['jira-comments', projectId, issueKey] as const,
 };
