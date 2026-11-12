@@ -16,6 +16,8 @@ export interface HallazgoInput {
   assigned_to?: number | null;
   jira_epic_key?: string;
   component?: string;
+  /** Sesión exploratoria donde se creó el hallazgo (opcional). */
+  exploratory_run_id?: number | null;
 }
 
 export type HallazgoPatch = Omit<HallazgoInput, 'project_id' | 'title'> & { title?: string };

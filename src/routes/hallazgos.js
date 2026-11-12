@@ -14,7 +14,7 @@ router.get('/', requireAuth, async (req, res) => {
             SELECT d.id, d.title, d.description, d.severity, d.status, d.steps_to_reproduce,
                    d.expected_result, d.actual_result, d.frequency, d.business_impact,
                    d.assigned_to, d.jira_key, d.jira_url, d.jira_epic_key, d.project_id,
-                   d.component,
+                   d.component, d.exploratory_run_id,
                    d.created_by, d.created_at,
                    d.preconditions, d.observations,
                    assignee.name as assignee_name,
@@ -49,13 +49,36 @@ router.post('/', requireAuth, async (req, res) => {
         if (!(await checkPermission(req.user.id, 'can_create_cu')) && req.user.role !== 'Admin' && req.user.role !== 'Analista QA') {
             return res.status(403).json({ error: 'Permisos insuficientes' });
         }
-        const { project_id, title, description, severity, steps_to_reproduce, expected_result, actual_result, frequency, business_impact, preconditions, observations, assigned_to, jira_epic_key, component } = req.body;
+        const { project_id, title, description, severity, steps_to_reproduce, expected_result, actual_result, frequency, business_impact, preconditions, observations, assigned_to, jira_epic_key, component, exploratory_run_id } = req.body;
         if (!project_id || !title) return res.status(400).json({ error: 'project_id y title son requeridos' });
 
+        // Hallazgo creado desde una sesión exploratoria: se valida que el run
+        // exista, sea exploratorio, esté en curso y sea del mismo proyecto.
+        let runId = null;
+        if (exploratory_run_id !== undefined && exploratory_run_id !== null && exploratory_run_id !== '') {
+            const runRes = await query(`
+                SELECT r.id, r.status, cu.project_id
+                  FROM qa_test_runs r
+                  JOIN qa_test_suites s ON r.suite_id = s.id
+                  JOIN qa_use_cases cu ON s.use_case_id = cu.id
+                 WHERE r.id = ? AND r.run_type = 'EXPLORATORY'
+            `, [exploratory_run_id]);
+            if (runRes.rows.length === 0) {
+                return res.status(400).json({ error: 'Sesión exploratoria no encontrada' });
+            }
+            if (Number(runRes.rows[0].project_id) !== Number(project_id)) {
+                return res.status(400).json({ error: 'La sesión no pertenece al proyecto' });
+            }
+            if (runRes.rows[0].status !== 'RUNNING') {
+                return res.status(400).json({ error: 'La sesión exploratoria está finalizada' });
+            }
+            runId = runRes.rows[0].id;
+        }
+
         const result = await query(
-            `INSERT INTO qa_defects (project_id, title, description, severity, steps_to_reproduce, expected_result, actual_result, frequency, business_impact, preconditions, observations, assigned_to, jira_epic_key, component, status, created_by)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?)`,
-            [project_id, title, description || '', severity || 'Media', steps_to_reproduce || '', expected_result || '', actual_result || '', frequency || 'Siempre', business_impact || '', preconditions || '', observations || '', assigned_to || null, jira_epic_key || '', component || '', req.user.id]
+            `INSERT INTO qa_defects (project_id, title, description, severity, steps_to_reproduce, expected_result, actual_result, frequency, business_impact, preconditions, observations, assigned_to, jira_epic_key, component, status, created_by, exploratory_run_id)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?, ?)`,
+            [project_id, title, description || '', severity || 'Media', steps_to_reproduce || '', expected_result || '', actual_result || '', frequency || 'Siempre', business_impact || '', preconditions || '', observations || '', assigned_to || null, jira_epic_key || '', component || '', req.user.id, runId]
         );
         res.json({ ok: true, id: result.lastID });
     } catch (err) {

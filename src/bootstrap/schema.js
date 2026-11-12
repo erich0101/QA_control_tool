@@ -61,6 +61,8 @@ await query(`ALTER TABLE qa_defects ADD COLUMN IF NOT EXISTS observations TEXT`)
         // ── Exploratory Testing (módulo Exploratoria) ──
         await query(`ALTER TABLE qa_test_runs ADD COLUMN IF NOT EXISTS charter TEXT`);
         await query(`ALTER TABLE qa_test_runs ADD COLUMN IF NOT EXISTS timebox_minutes INTEGER`);
+        // Hallazgos creados dentro de una sesión exploratoria (sin ejecución).
+        await query(`ALTER TABLE qa_defects ADD COLUMN IF NOT EXISTS exploratory_run_id INTEGER REFERENCES qa_test_runs(id) ON DELETE CASCADE`);
         // Métricas de sesiones exploratorias (persistidas en PG, no SQLite)
         await query(`ALTER TABLE qa_test_runs ADD COLUMN IF NOT EXISTS total_flows INTEGER DEFAULT 0`);
         await query(`ALTER TABLE qa_test_runs ADD COLUMN IF NOT EXISTS ok_count INTEGER DEFAULT 0`);

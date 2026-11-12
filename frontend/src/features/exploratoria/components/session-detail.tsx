@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { ChevronRight, FileText, Plus, Square } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Bug, ChevronRight, ExternalLink, FileText, Plus, Square } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DataTable } from '@/components/ui/data-table';
@@ -8,6 +9,7 @@ import type {
   ExploratoryAttachment,
   ExploratoryDetail,
   ExploratoryFlow,
+  ExploratoryHallazgo,
   User,
 } from '@/lib/api/types';
 import { cn } from '@/lib/utils';
@@ -21,8 +23,10 @@ interface SessionDetailProps {
   team: User[];
   isFinishing: boolean;
   isAssigning: boolean;
+  canAddHallazgo: boolean;
   onBack: () => void;
   onAddFlow: () => void;
+  onAddHallazgo: () => void;
   onFinish: () => void;
   onAssignTester: (tcId: number, userId: number | null) => void;
 }
@@ -51,13 +55,15 @@ export function SessionDetail({
   team,
   isFinishing,
   isAssigning,
+  canAddHallazgo,
   onBack,
   onAddFlow,
+  onAddHallazgo,
   onFinish,
   onAssignTester,
 }: SessionDetailProps) {
-  const [expandedFlowId, setExpandedFlowId] = useState<number | null>(null);
-  const { run, flows, executions, defects, attachments } = detail;
+  const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
+  const { run, flows, executions, defects, attachments, hallazgos = [] } = detail;
   const isFinished = run.status === 'FINISHED';
 
   const execByTc = new Map(executions.map((exec) => [exec.tc_id, exec]));
@@ -76,6 +82,29 @@ export function SessionDetail({
   const defectsFor = (flow: ExploratoryFlow) => {
     const exec = execByTc.get(flow.id);
     return exec ? defects.filter((defect) => defect.execution_id === exec.id) : [];
+  };
+
+  type Row =
+    | { kind: 'flow'; rowId: string; flow: ExploratoryFlow }
+    | { kind: 'hallazgo'; rowId: string; hallazgo: ExploratoryHallazgo };
+
+  // Hallazgos y flujos conviven en la misma grilla: el hallazgo se identifica
+  // con un badge y no participa de las métricas de ejecución.
+  const rows: Row[] = [
+    ...flows.map((flow) => ({ kind: 'flow' as const, rowId: `flow-${flow.id}`, flow })),
+    ...hallazgos.map((hallazgo) => ({
+      kind: 'hallazgo' as const,
+      rowId: `hallazgo-${hallazgo.id}`,
+      hallazgo,
+    })),
+  ];
+
+  const HALLZGO_STATUS_TONE: Record<string, 'ok' | 'warn' | 'fail' | 'neutral' | 'brand'> = {
+    OPEN: 'warn',
+    IN_PROGRESS: 'brand',
+    FIXED: 'ok',
+    CLOSED: 'neutral',
+    WONT_FIX: 'neutral',
   };
 
   return (
@@ -111,6 +140,12 @@ export function SessionDetail({
                 <Plus />
                 Agregar flujo
               </Button>
+              {canAddHallazgo ? (
+                <Button variant="secondary" size="sm" onClick={onAddHallazgo}>
+                  <Bug />
+                  Agregar hallazgo
+                </Button>
+              ) : null}
               <Button variant="ghost" size="sm" className="text-fail" onClick={onFinish} loading={isFinishing}>
                 <Square />
                 Finalizar sesión
@@ -130,19 +165,21 @@ export function SessionDetail({
         </div>
       </header>
 
-      {total > 0 ? (
+      {total > 0 || hallazgos.length > 0 ? (
         <div className="flex shrink-0 flex-wrap items-center gap-4 border-b border-border bg-surface-2 px-5 py-2">
-          <div className="flex items-center gap-2">
-            <div className="h-1.5 w-32 overflow-hidden rounded-full bg-fill">
-              <div
-                className={cn('h-full rounded-full', progress === 100 ? 'bg-ok' : 'bg-brand')}
-                style={{ width: `${progress}%` }}
-              />
+          {total > 0 ? (
+            <div className="flex items-center gap-2">
+              <div className="h-1.5 w-32 overflow-hidden rounded-full bg-fill">
+                <div
+                  className={cn('h-full rounded-full', progress === 100 ? 'bg-ok' : 'bg-brand')}
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+              <span className="text-caption tabular-nums text-fg-muted">
+                {progress}% ({tested}/{total})
+              </span>
             </div>
-            <span className="text-caption tabular-nums text-fg-muted">
-              {progress}% ({tested}/{total})
-            </span>
-          </div>
+          ) : null}
 
           {(['OK', 'FAIL', 'WARNING', 'BLOCK', 'SKIP', 'PENDING'] as const).map((status) =>
             counts[status] > 0 ? (
@@ -151,54 +188,89 @@ export function SessionDetail({
               </Badge>
             ) : null,
           )}
+
+          {hallazgos.length > 0 ? (
+            <Badge tone="brand">
+              <Bug className="size-3" />
+              {hallazgos.length} hallazgo{hallazgos.length === 1 ? '' : 's'}
+            </Badge>
+          ) : null}
         </div>
       ) : null}
 
       <div className="scrollbar-apple min-h-0 flex-1 overflow-y-auto p-5">
-        {flows.length === 0 ? (
+        {rows.length === 0 ? (
           <EmptyState
             icon={<ChevronRight />}
             title="Sesión sin flujos"
-            description="Agregá el primer flujo para empezar a explorar."
+            description="Agregá el primer flujo para empezar a explorar, o cargá un hallazgo."
             action={
               !isFinished ? (
-                <Button variant="primary" onClick={onAddFlow}>
-                  <Plus />
-                  Agregar flujo
-                </Button>
+                <div className="flex gap-2">
+                  <Button variant="primary" onClick={onAddFlow}>
+                    <Plus />
+                    Agregar flujo
+                  </Button>
+                  {canAddHallazgo ? (
+                    <Button variant="secondary" onClick={onAddHallazgo}>
+                      <Bug />
+                      Agregar hallazgo
+                    </Button>
+                  ) : null}
+                </div>
               ) : undefined
             }
           />
         ) : (
-          <DataTable
+          <DataTable<Row>
             columns={[
               {
                 id: 'key',
                 header: 'Key',
-                headerClassName: 'w-24',
-                cell: (flow) => (
+                headerClassName: 'w-28',
+                cell: (row) => (
                   <span className="flex items-center gap-1.5 font-mono text-caption font-bold text-brand">
                     <ChevronRight
                       className={cn(
                         'size-3 transition-transform',
-                        expandedFlowId === flow.id && 'rotate-90',
+                        expandedRowId === row.rowId && 'rotate-90',
                       )}
                     />
-                    {flow.key_id ?? `#${flow.id}`}
+                    {row.kind === 'flow'
+                      ? (row.flow.key_id ?? `#${row.flow.id}`)
+                      : `H-${row.hallazgo.id}`}
                   </span>
                 ),
               },
               {
                 id: 'title',
-                header: 'Flujo',
-                cell: (flow) => <span className="font-medium text-fg">{flow.title}</span>,
+                header: 'Flujo / Hallazgo',
+                cell: (row) => (
+                  <span className="flex items-center gap-2 font-medium text-fg">
+                    {row.kind === 'hallazgo' ? (
+                      <Badge tone="brand" className="shrink-0">
+                        HALLAZGO
+                      </Badge>
+                    ) : null}
+                    <span className="truncate">
+                      {row.kind === 'flow' ? row.flow.title : row.hallazgo.title}
+                    </span>
+                  </span>
+                ),
               },
               {
                 id: 'status',
                 header: 'Status',
                 headerClassName: 'w-24',
-                cell: (flow) => {
-                  const status = execByTc.get(flow.id)?.status ?? 'PENDING';
+                cell: (row) => {
+                  if (row.kind === 'hallazgo') {
+                    return (
+                      <Badge tone={HALLZGO_STATUS_TONE[row.hallazgo.status] ?? 'neutral'}>
+                        {row.hallazgo.status}
+                      </Badge>
+                    );
+                  }
+                  const status = execByTc.get(row.flow.id)?.status ?? 'PENDING';
                   return (
                     <Badge tone={STATUS_TONE[status] ?? 'neutral'}>
                       {STATUS_LABEL[status] ?? status}
@@ -211,7 +283,16 @@ export function SessionDetail({
                 header: 'Tester',
                 headerClassName: 'w-40',
                 cellClassName: 'text-caption text-fg-muted',
-                cell: (flow) => {
+                cell: (row) => {
+                  if (row.kind === 'hallazgo') {
+                    return (
+                      row.hallazgo.assignee_name ??
+                      row.hallazgo.reporter_name ??
+                      '—'
+                    );
+                  }
+
+                  const flow = row.flow;
                   const exec = execByTc.get(flow.id);
                   const isPending = !exec || exec.status === 'PENDING';
                   const assignee = team.find((user) => user.id === flow.assigned_to);
@@ -245,13 +326,16 @@ export function SessionDetail({
               },
               {
                 id: 'executed',
-                header: 'Última ejecución',
+                header: 'Fecha',
                 headerClassName: 'w-36',
                 cellClassName: 'text-caption text-fg-subtle',
-                cell: (flow) => {
-                  const exec = execByTc.get(flow.id);
-                  return exec?.executed_at
-                    ? new Date(exec.executed_at).toLocaleString('es-AR', {
+                cell: (row) => {
+                  const raw =
+                    row.kind === 'flow'
+                      ? execByTc.get(row.flow.id)?.executed_at
+                      : row.hallazgo.created_at;
+                  return raw
+                    ? new Date(raw).toLocaleString('es-AR', {
                         day: '2-digit',
                         month: '2-digit',
                         hour: '2-digit',
@@ -261,24 +345,54 @@ export function SessionDetail({
                 },
               },
             ]}
-            rows={flows}
-            getRowId={(flow) => flow.id}
-            onRowClick={(flow) =>
-              setExpandedFlowId((current) => (current === flow.id ? null : flow.id))
+            rows={rows}
+            getRowId={(row) => row.rowId}
+            onRowClick={(row) =>
+              setExpandedRowId((current) => (current === row.rowId ? null : row.rowId))
             }
-            activeRowId={expandedFlowId}
-            expandedRowId={expandedFlowId}
-            renderExpanded={(flow) => (
-              <FlowDetail
-                flow={flow}
-                execution={execByTc.get(flow.id)}
-                defects={defectsFor(flow)}
-                attachments={attachments as ExploratoryAttachment[]}
-                runId={run.id}
-                isFinished={isFinished}
-                projectId={projectId}
-              />
-            )}
+            activeRowId={expandedRowId}
+            expandedRowId={expandedRowId}
+            renderExpanded={(row) =>
+              row.kind === 'flow' ? (
+                <FlowDetail
+                  flow={row.flow}
+                  execution={execByTc.get(row.flow.id)}
+                  defects={defectsFor(row.flow)}
+                  attachments={attachments as ExploratoryAttachment[]}
+                  runId={run.id}
+                  isFinished={isFinished}
+                  projectId={projectId}
+                />
+              ) : (
+                <div className="space-y-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge
+                      tone={
+                        row.hallazgo.severity === 'Crítica' || row.hallazgo.severity === 'Alta'
+                          ? 'fail'
+                          : row.hallazgo.severity === 'Baja'
+                            ? 'ok'
+                            : 'warn'
+                      }
+                    >
+                      {row.hallazgo.severity ?? 'Media'}
+                    </Badge>
+                    <span className="text-caption text-fg-subtle">
+                      Reportado por {row.hallazgo.reporter_name ?? '—'}
+                    </span>
+                  </div>
+                  <p className="whitespace-pre-wrap text-footnote text-fg-muted">
+                    {row.hallazgo.description?.trim() || 'Sin descripción.'}
+                  </p>
+                  <Button variant="secondary" size="sm" asChild>
+                    <Link to={`/hallazgos?id=${row.hallazgo.id}`}>
+                      Abrir en Hallazgos
+                      <ExternalLink />
+                    </Link>
+                  </Button>
+                </div>
+              )
+            }
           />
         )}
       </div>

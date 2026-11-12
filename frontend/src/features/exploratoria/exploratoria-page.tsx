@@ -10,8 +10,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import type { ExploratorySession } from '@/lib/api/types';
 import { cn } from '@/lib/utils';
 import { useUiStore } from '@/stores/ui';
+import { useSessionStore } from '@/stores/session';
 import { useTeam } from '@/features/team/use-team';
-import { AddFlowDialog, StartSessionDialog } from './components/session-dialogs';
+import { AddFlowDialog, AddHallazgoDialog, StartSessionDialog } from './components/session-dialogs';
 import { SessionDetail } from './components/session-detail';
 import { useExploratoriaMutations, useExploratorySession, useExploratorySessions } from './use-exploratoria';
 
@@ -28,8 +29,11 @@ export function ExploratoriaPage() {
   const [search, setSearch] = useState('');
   const [startOpen, setStartOpen] = useState(false);
   const [flowOpen, setFlowOpen] = useState(false);
+  const [hallazgoOpen, setHallazgoOpen] = useState(false);
 
   const status = subTab === 'active' ? 'RUNNING' : 'FINISHED';
+  // Mismo criterio que la pantalla de Hallazgos (POST /api/hallazgos).
+  const canAddHallazgo = useSessionStore((s) => s.canManage() || s.can('can_create_cu'));
   const { data: sessions = [], isLoading } = useExploratorySessions(projectId, status);
   const { data: detail, isLoading: detailLoading } = useExploratorySession(runId);
   const { data: team = [] } = useTeam();
@@ -192,6 +196,8 @@ export function ExploratoriaPage() {
               isAssigning={mutations.assignTester.isPending}
               onBack={() => patchParams({ run: null })}
               onAddFlow={() => setFlowOpen(true)}
+              onAddHallazgo={() => setHallazgoOpen(true)}
+              canAddHallazgo={canAddHallazgo}
               onFinish={() => handleFinish(detail.run.id)}
               onAssignTester={(tcId, userId) =>
                 mutations.assignTester.mutate({ tcId, userId })
@@ -246,6 +252,17 @@ export function ExploratoriaPage() {
           }}
         />
       ) : null}
+
+      {runId ? (
+        <AddHallazgoDialog
+          open={hallazgoOpen}
+          onOpenChange={setHallazgoOpen}
+          isPending={mutations.addHallazgo.isPending}
+          onSubmit={async (values) => {
+            await mutations.addHallazgo.mutateAsync(values);
+          }}
+        />
+      ) : null}
     </div>
   );
 }
@@ -287,6 +304,11 @@ function SessionRow({
 
         <p className="mt-1 flex flex-wrap items-center gap-2 text-caption text-fg-subtle">
           <span className="text-brand">{session.flow_count ?? 0} flujos</span>
+          {(session.hallazgo_count ?? 0) > 0 ? (
+            <span className="text-warn">
+              {session.hallazgo_count} hallazgo{session.hallazgo_count === 1 ? '' : 's'}
+            </span>
+          ) : null}
           {(session.fail_count ?? 0) > 0 ? (
             <span className="text-fail">{session.fail_count} FAIL</span>
           ) : null}

@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { exploratoriaApi, type StartSessionInput } from '@/lib/api/exploratoria';
+import { hallazgosApi } from '@/lib/api/hallazgos';
 import { testSuitesApi } from '@/lib/api/test-suites';
 import { queryKeys } from '@/lib/query-keys';
 
@@ -103,6 +104,33 @@ export function useExploratoriaMutations(projectId: number | null, runId: number
     onError: (error: Error) => toast.error(error.message),
   });
 
+  /**
+   * Crea un hallazgo dentro de la sesión reutilizando POST /api/hallazgos.
+   * Queda vinculado por `exploratory_run_id` y aparece como hallazgo de la
+   * sesión (no como flujo ejecutable).
+   */
+  const addHallazgo = useMutation({
+    mutationFn: (input: {
+      title: string;
+      description?: string;
+      severity?: string;
+      steps_to_reproduce?: string;
+      expected_result?: string;
+      actual_result?: string;
+    }) =>
+      hallazgosApi.create({
+        project_id: projectId as number,
+        exploratory_run_id: runId,
+        ...input,
+      }),
+    onSuccess: async () => {
+      await invalidateAll();
+      await queryClient.invalidateQueries({ queryKey: queryKeys.hallazgos(projectId) });
+      toast.success('Hallazgo creado');
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
   return {
     startSession,
     addFlow,
@@ -111,5 +139,6 @@ export function useExploratoriaMutations(projectId: number | null, runId: number
     uploadEvidence,
     deleteEvidence,
     assignTester,
+    addHallazgo,
   };
 }

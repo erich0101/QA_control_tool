@@ -93,7 +93,9 @@ router.get('/sessions', async (req, res) => {
                     u.name AS creator_name,
                     r.total_flows AS flow_count,
                     r.ok_count, r.fail_count, r.warning_count, r.block_count,
-                    r.skip_count, r.pending_count
+                    r.skip_count, r.pending_count,
+                    (SELECT COUNT(*) FROM qa_defects d
+                      WHERE d.exploratory_run_id = r.id AND d.execution_id IS NULL) AS hallazgo_count
                FROM qa_test_runs r
                LEFT JOIN qa_users u ON u.id = r.created_by
               WHERE r.project_id = ? AND r.run_type = 'EXPLORATORY' ${statusFilter}
@@ -158,8 +160,24 @@ router.get('/sessions/:runId', async (req, res) => {
         );
         const flows = flowsRes.rows;
 
+        // Hallazgos creados dentro de la sesión (qa_defects sin ejecución,
+        // vinculados por exploratory_run_id). Se listan aparte de los flujos.
+        const hallazgosRes = await query(
+            `SELECT d.id, d.title, d.description, d.severity, d.status, d.created_at,
+                    d.assigned_to, d.created_by,
+                    reporter.name AS reporter_name,
+                    assignee.name AS assignee_name
+               FROM qa_defects d
+               LEFT JOIN qa_users reporter ON reporter.id = d.created_by
+               LEFT JOIN qa_users assignee ON assignee.id = d.assigned_to
+              WHERE d.exploratory_run_id = ? AND d.execution_id IS NULL
+              ORDER BY d.id ASC`,
+            [runId]
+        );
+        const hallazgos = hallazgosRes.rows;
+
         if (flows.length === 0) {
-            return res.json({ run, flows: [], executions: [], defects: [], attachments: [] });
+            return res.json({ run, flows: [], executions: [], defects: [], attachments: [], hallazgos });
         }
 
         const flowIds = flows.map(f => f.id);
@@ -196,7 +214,7 @@ router.get('/sessions/:runId', async (req, res) => {
             attachments = attRes.rows;
         }
 
-        res.json({ run, flows, executions, defects, attachments });
+        res.json({ run, flows, executions, defects, attachments, hallazgos });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

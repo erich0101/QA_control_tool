@@ -324,6 +324,8 @@ export interface ExploratorySession {
   skip_count?: number;
   pending_count?: number;
   total_flows?: number;
+  /** Hallazgos creados dentro de la sesión. */
+  hallazgo_count?: number;
   suite_id?: number;
   project_id?: number;
   accumulated_seconds?: number;
@@ -366,6 +368,21 @@ export interface ExploratoryDetail {
   executions: ExploratoryExecution[];
   defects: Defect[];
   attachments: ExploratoryAttachment[];
+  /** Hallazgos (qa_defects sin ejecución) creados en la sesión. */
+  hallazgos: ExploratoryHallazgo[];
+}
+
+export interface ExploratoryHallazgo {
+  id: number;
+  title: string;
+  description?: string | null;
+  severity?: string | null;
+  status: string;
+  created_at?: string;
+  assigned_to?: number | null;
+  created_by?: number | null;
+  reporter_name?: string | null;
+  assignee_name?: string | null;
 }
 
 export const EXPLORATORY_STATUSES = ['OK', 'FAIL', 'WARNING', 'BLOCK', 'SKIP'] as const;
