@@ -183,10 +183,10 @@ export function StatusReportDialog({ open, onOpenChange, projectId }: StatusRepo
         </div>
 
         <p className="text-caption text-fg-subtle">
-          La aceptación se calcula como <strong>OK / (OK + FAIL + WARNING)</strong>; BLOCK, SKIP y
-          pendientes no cuentan. Los pendientes sí afectan el <strong>avance</strong> (ejecutados /
-          total). Las evidencias se incluyen sólo si están disponibles en esta máquina (o en la
-          copia de Postgres); las ausentes se omiten sin bloquear el reporte.
+          Se informan dos aceptaciones: <strong>evaluada</strong> (OK / OK+FAIL+WARNING, calidad de
+          lo probado) y <strong>total</strong> (OK / total de TC, donde pendientes, BLOCK y SKIP
+          cuentan como no aceptados). Las evidencias se incluyen sólo si están disponibles en esta
+          máquina (o en la copia de Postgres); las ausentes se omiten sin bloquear el reporte.
         </p>
 
         <DialogFooter>

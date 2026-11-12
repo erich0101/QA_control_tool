@@ -1024,14 +1024,37 @@ router.get('/reports/status', async (req, res) => {
         const runTotalsRes = runIds.length === 0 ? { rows: [] } : await query(`
             SELECT run_id,
                    count(*)::int AS total,
-                   count(*) FILTER (WHERE status <> 'PENDING')::int AS executed,
-                   count(*) FILTER (WHERE status = 'PENDING')::int AS pending
+                   count(*) FILTER (WHERE status = 'OK')::int AS ok,
+                   count(*) FILTER (WHERE status = 'FAIL')::int AS fail,
+                   count(*) FILTER (WHERE status = 'WARNING')::int AS warning,
+                   count(*) FILTER (WHERE status = 'BLOCK')::int AS block,
+                   count(*) FILTER (WHERE status = 'SKIP')::int AS skip,
+                   count(*) FILTER (WHERE status = 'PENDING')::int AS pending,
+                   count(*) FILTER (WHERE status <> 'PENDING')::int AS executed
               FROM qa_executions
              WHERE run_id IN (${runIds.map(() => '?').join(',')})
              GROUP BY run_id
         `, runIds);
         const totalsByRun = new Map(runTotalsRes.rows.map(r => [r.run_id, r]));
         const totalPending = runTotalsRes.rows.reduce((acc, row) => acc + row.pending, 0);
+        const sessionTotals = runTotalsRes.rows.reduce(
+            (acc, row) => ({
+                total: acc.total + row.total,
+                ok: acc.ok + row.ok,
+                fail: acc.fail + row.fail,
+                warning: acc.warning + row.warning,
+                block: acc.block + row.block,
+                skip: acc.skip + row.skip,
+                pending: acc.pending + row.pending,
+                executed: acc.executed + row.executed,
+            }),
+            { total: 0, ok: 0, fail: 0, warning: 0, block: 0, skip: 0, pending: 0, executed: 0 }
+        );
+        const sessionEvaluables = sessionTotals.ok + sessionTotals.fail + sessionTotals.warning;
+        const acceptanceEvaluatedPct = sessionEvaluables > 0
+            ? Math.round((sessionTotals.ok / sessionEvaluables) * 100) : null;
+        const acceptanceTotalPct = sessionTotals.total > 0
+            ? Math.round((sessionTotals.ok / sessionTotals.total) * 100) : null;
 
         const uncoveredRuns = [...runsById.values()].filter(r => !r.coverage_ready);
         const coveredCount = runsById.size - uncoveredRuns.length;
@@ -1083,10 +1106,7 @@ router.get('/reports/status', async (req, res) => {
             if (counts[e.status] !== undefined) counts[e.status] += 1;
         }
         const totalTests = execs.rows.length;
-        // Aceptación estricta: OK / (OK + FAIL + WARNING). BLOCK y SKIP no se
-        // evaluaron y quedan fuera del denominador (igual que PENDIENTE).
-        const evaluables = counts.OK + counts.FAIL + counts.WARNING;
-        const acceptancePct = evaluables > 0 ? Math.round((counts.OK / evaluables) * 100) : null;
+
 
         const execByRun = new Map();
         for (const e of execs.rows) {
@@ -1236,9 +1256,13 @@ router.get('/reports/status', async (req, res) => {
                     <div style="font-size:.68rem;color:#4b5563;margin-top:2px;">Avance sesión ${(() => {
                         const t = totalsByRun.get(run.id);
                         return t && t.total > 0 ? Math.round((t.executed / t.total) * 100) + '% (' + t.executed + '/' + t.total + ')' : '—';
-                    })()} · Pendientes ${totalsByRun.get(run.id)?.pending ?? 0} · Aceptación en el rango ${(() => {
-                        const ev = runExecs.filter(e => ['OK', 'FAIL', 'WARNING'].includes(e.status)).length;
-                        return ev > 0 ? Math.round((runExecs.filter(e => e.status === 'OK').length / ev) * 100) + '%' : '—';
+                    })()} · Pendientes ${totalsByRun.get(run.id)?.pending ?? 0} · Aceptación evaluada ${(() => {
+                        const t = totalsByRun.get(run.id);
+                        const ev = t ? t.ok + t.fail + t.warning : 0;
+                        return ev > 0 ? Math.round((t.ok / ev) * 100) + '%' : '—';
+                    })()} · Aceptación total ${(() => {
+                        const t = totalsByRun.get(run.id);
+                        return t && t.total > 0 ? Math.round((t.ok / t.total) * 100) + '%' : '—';
                     })()}</div>
                     <div style="margin-top:4px;">${run.coverage_ready
                         ? '<span style="font-size:.62rem;font-weight:700;background:#dcfce7;color:#15803d;padding:2px 8px;border-radius:10px;">✓ TC de cobertura declarados</span>'
@@ -1271,7 +1295,8 @@ router.get('/reports/status', async (req, res) => {
             <div class="kpi"><div class="kpi-val">${runIds.length}</div><div class="kpi-lab">Sesiones</div></div>
             <div class="kpi"><div class="kpi-val">${coveredCount}/${runsById.size}</div><div class="kpi-lab">Cobertura TC</div></div>
             <div class="kpi"><div class="kpi-val">${execs.rows.length}</div><div class="kpi-lab">Tests ejecutados</div></div>
-            <div class="kpi" title="OK / (OK + FAIL + WARNING). BLOCK, SKIP y PENDIENTE no cuentan."><div class="kpi-val">${acceptancePct === null ? '—' : `${acceptancePct}%`}</div><div class="kpi-lab">Aceptación</div></div>
+            <div class="kpi" title="OK / (OK + FAIL + WARNING) en las sesiones incluidas. Calidad de lo probado."><div class="kpi-val">${acceptanceEvaluatedPct === null ? '—' : `${acceptanceEvaluatedPct}%`}</div><div class="kpi-lab">Aceptación evaluada</div></div>
+            <div class="kpi" title="OK / total de TC de las sesiones incluidas. Pendientes, BLOCK y SKIP cuentan como no aceptados."><div class="kpi-val">${acceptanceTotalPct === null ? '—' : `${acceptanceTotalPct}%`}</div><div class="kpi-lab">Aceptación total</div></div>
             <div class="kpi"><div class="kpi-val">${counts.OK}</div><div class="kpi-lab">OK</div></div>
             <div class="kpi"><div class="kpi-val">${counts.FAIL}</div><div class="kpi-lab">FAIL</div></div>
             <div class="kpi"><div class="kpi-val">${counts.WARNING}</div><div class="kpi-lab">WARNING</div></div>
@@ -1282,9 +1307,9 @@ router.get('/reports/status', async (req, res) => {
             <div class="kpi"><div class="kpi-val">${defects.rows.length}</div><div class="kpi-lab">Defectos</div></div>
         </div>
         <div style="font-size:.68rem;color:#6b7280;margin:-8px 0 14px 2px;">
-            Aceptación = <strong>OK / (OK + FAIL + WARNING)</strong>. BLOCK, SKIP y PENDIENTE no cuentan
-            porque no representan una validación aprobada ni fallida. Los pendientes sí cuentan en el
-            <strong>Avance</strong> (ejecutados / total de la sesión) y se informan aparte.
+            <strong>Aceptación evaluada</strong> = OK / (OK + FAIL + WARNING): calidad de lo ya probado.
+            <strong>Aceptación total</strong> = OK / total de TC: los pendientes, BLOCK y SKIP cuentan
+            como no aceptados, para no declarar 100% con el regresivo incompleto.
         </div>
         ${coverageAlertHTML}
         ${chartsHTML}

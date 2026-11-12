@@ -124,12 +124,14 @@ export function SessionDetail({
   const tested = total - counts.PENDING;
   const progress = total > 0 ? Math.round((tested / total) * 100) : 0;
   /**
-   * Aceptación estricta: sólo OK sobre los tests que pudieron evaluarse.
-   * FAIL y WARNING no aceptan; BLOCK/SKIP no se evaluaron y PENDING tampoco,
-   * así que quedan fuera del denominador (no inflan ni castigan el %).
+   * Dos lecturas de aceptación:
+   *  - Evaluada: OK / (OK + FAIL + WARNING). Calidad de lo que ya se probó.
+   *  - Total: OK / total de flujos. Los pendientes (y BLOCK/SKIP) cuentan como
+   *    no aceptados, para no declarar 100% con el regresivo incompleto.
    */
   const evaluables = counts.OK + counts.FAIL + counts.WARNING;
-  const acceptance = evaluables > 0 ? Math.round((counts.OK / evaluables) * 100) : null;
+  const acceptanceEvaluated = evaluables > 0 ? Math.round((counts.OK / evaluables) * 100) : null;
+  const acceptanceTotal = total > 0 ? Math.round((counts.OK / total) * 100) : null;
   const coverageReady = Boolean(run.coverage_ready);
 
   const defectsFor = (flow: ExploratoryFlow) => {
@@ -349,15 +351,15 @@ export function SessionDetail({
             <div
               className="flex items-center gap-1.5"
               title={
-                'Aceptación = OK / (OK + FAIL + WARNING). ' +
-                'BLOCK y SKIP no se evalúan; PENDIENTE tampoco. ' +
+                'Aceptación evaluada = OK / (OK + FAIL + WARNING). ' +
+                'Mide la calidad de lo que ya se probó; BLOCK y SKIP no se evalúan. ' +
                 (coverageReady
                   ? ''
                   : 'Cobertura de TC sin declarar: no representa al regresivo completo.')
               }
             >
               <span className="text-caption font-semibold uppercase tracking-wide text-fg-subtle">
-                Aceptación
+                Aceptación evaluada
               </span>
               <span
                 className={cn(
@@ -365,10 +367,31 @@ export function SessionDetail({
                   coverageReady ? 'text-ok' : 'text-warn',
                 )}
               >
-                {acceptance === null ? '—' : `${acceptance}%`}
+                {acceptanceEvaluated === null ? '—' : `${acceptanceEvaluated}%`}
               </span>
               <span className="text-caption text-fg-subtle">
                 ({counts.OK}/{evaluables})
+              </span>
+            </div>
+          ) : null}
+
+          {total > 0 ? (
+            <div
+              className="flex items-center gap-1.5"
+              title={
+                'Aceptación total = OK / total de flujos. ' +
+                'Los pendientes, BLOCK y SKIP cuentan como no aceptados: ' +
+                'mide qué tan lista está la entrega, no sólo lo probado.'
+              }
+            >
+              <span className="text-caption font-semibold uppercase tracking-wide text-fg-subtle">
+                Aceptación total
+              </span>
+              <span className="text-caption font-bold tabular-nums text-fg">
+                {acceptanceTotal === null ? '—' : `${acceptanceTotal}%`}
+              </span>
+              <span className="text-caption text-fg-subtle">
+                ({counts.OK}/{total})
               </span>
             </div>
           ) : null}
