@@ -1018,6 +1018,21 @@ router.get('/reports/status', async (req, res) => {
               FROM qa_test_runs WHERE id IN (${runIds.map(() => '?').join(',')})
         `, runIds);
         const runsById = new Map(runsRes.rows.map(r => [r.id, r]));
+
+        // Totales de la sesión (independientes del rango): permiten mostrar
+        // avance real y cuántos flujos siguen pendientes.
+        const runTotalsRes = runIds.length === 0 ? { rows: [] } : await query(`
+            SELECT run_id,
+                   count(*)::int AS total,
+                   count(*) FILTER (WHERE status <> 'PENDING')::int AS executed,
+                   count(*) FILTER (WHERE status = 'PENDING')::int AS pending
+              FROM qa_executions
+             WHERE run_id IN (${runIds.map(() => '?').join(',')})
+             GROUP BY run_id
+        `, runIds);
+        const totalsByRun = new Map(runTotalsRes.rows.map(r => [r.run_id, r]));
+        const totalPending = runTotalsRes.rows.reduce((acc, row) => acc + row.pending, 0);
+
         const uncoveredRuns = [...runsById.values()].filter(r => !r.coverage_ready);
         const coveredCount = runsById.size - uncoveredRuns.length;
         const coverageAlertHTML = uncoveredRuns.length === 0 ? '' : `
@@ -1217,7 +1232,11 @@ router.get('/reports/status', async (req, res) => {
                 <div style="background:#eef2ff;border-radius:8px;padding:12px 14px;margin-bottom:8px;border-left:4px solid #4f46e5;">
                     <div style="font-weight:800;font-size:.9rem;">#${run.id} · ${htmlEscape(run.name || 'Sesión exploratoria')}</div>
                     <div style="font-size:.72rem;color:#4b5563;margin-top:2px;">${htmlEscape(run.charter || '')}</div>
-                    <div style="font-size:.68rem;color:#6b7280;margin-top:2px;">${fmtReportDate(run.started_at)} → ${run.finished_at ? fmtReportDate(run.finished_at) : 'en curso'} · ${runExecs.length} tests · ${runHallazgos.length} hallazgos · Aceptación ${(() => {
+                    <div style="font-size:.68rem;color:#6b7280;margin-top:2px;">${fmtReportDate(run.started_at)} → ${run.finished_at ? fmtReportDate(run.finished_at) : 'en curso'} · ${runExecs.length} tests en el rango · ${runHallazgos.length} hallazgos</div>
+                    <div style="font-size:.68rem;color:#4b5563;margin-top:2px;">Avance sesión ${(() => {
+                        const t = totalsByRun.get(run.id);
+                        return t && t.total > 0 ? Math.round((t.executed / t.total) * 100) + '% (' + t.executed + '/' + t.total + ')' : '—';
+                    })()} · Pendientes ${totalsByRun.get(run.id)?.pending ?? 0} · Aceptación en el rango ${(() => {
                         const ev = runExecs.filter(e => ['OK', 'FAIL', 'WARNING'].includes(e.status)).length;
                         return ev > 0 ? Math.round((runExecs.filter(e => e.status === 'OK').length / ev) * 100) + '%' : '—';
                     })()}</div>
@@ -1258,12 +1277,14 @@ router.get('/reports/status', async (req, res) => {
             <div class="kpi"><div class="kpi-val">${counts.WARNING}</div><div class="kpi-lab">WARNING</div></div>
             <div class="kpi"><div class="kpi-val">${counts.BLOCK}</div><div class="kpi-lab">BLOCK</div></div>
             <div class="kpi"><div class="kpi-val">${counts.SKIP}</div><div class="kpi-lab">SKIP</div></div>
+            <div class="kpi" title="Flujos sin ejecutar en las sesiones del reporte"><div class="kpi-val">${totalPending}</div><div class="kpi-lab">Pendientes</div></div>
             <div class="kpi"><div class="kpi-val">${hallazgos.rows.length}</div><div class="kpi-lab">Hallazgos</div></div>
             <div class="kpi"><div class="kpi-val">${defects.rows.length}</div><div class="kpi-lab">Defectos</div></div>
         </div>
         <div style="font-size:.68rem;color:#6b7280;margin:-8px 0 14px 2px;">
-            Aceptación = <strong>OK / (OK + FAIL + WARNING)</strong>. BLOCK, SKIP y PENDIENTE no cuentan:
-            no representan una validación aprobada ni fallida.
+            Aceptación = <strong>OK / (OK + FAIL + WARNING)</strong>. BLOCK, SKIP y PENDIENTE no cuentan
+            porque no representan una validación aprobada ni fallida. Los pendientes sí cuentan en el
+            <strong>Avance</strong> (ejecutados / total de la sesión) y se informan aparte.
         </div>
         ${coverageAlertHTML}
         ${chartsHTML}
