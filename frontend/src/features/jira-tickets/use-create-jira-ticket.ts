@@ -29,7 +29,15 @@ export function useCreateJiraTicket(projectId: number | null, kind: JiraTicketKi
         ? jiraApi.createDefectTicket(id, payload)
         : jiraApi.createHallazgoTicket(id, payload),
     onSuccess: () => {
-      const prefixes = ['defects', 'hallazgos', 'run-bugs', 'jira-tracking', 'my-jira-tickets'];
+      const prefixes = [
+        'defects',
+        'hallazgos',
+        'run-bugs',
+        'jira-tracking',
+        'my-jira-tickets',
+        'exploratory-session',
+        'exploratory-sessions',
+      ];
       queryClient.invalidateQueries({
         predicate: (query) => prefixes.includes(String(query.queryKey[0])),
       });

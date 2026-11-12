@@ -379,6 +379,11 @@ export interface ExploratoryHallazgo {
   severity?: string | null;
   status: string;
   created_at?: string;
+  steps_to_reproduce?: string | null;
+  expected_result?: string | null;
+  actual_result?: string | null;
+  jira_key?: string | null;
+  jira_url?: string | null;
   assigned_to?: number | null;
   created_by?: number | null;
   reporter_name?: string | null;

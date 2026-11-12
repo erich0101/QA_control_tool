@@ -164,7 +164,8 @@ router.get('/sessions/:runId', async (req, res) => {
         // vinculados por exploratory_run_id). Se listan aparte de los flujos.
         const hallazgosRes = await query(
             `SELECT d.id, d.title, d.description, d.severity, d.status, d.created_at,
-                    d.assigned_to, d.created_by,
+                    d.steps_to_reproduce, d.expected_result, d.actual_result,
+                    d.jira_key, d.jira_url, d.assigned_to, d.created_by,
                     reporter.name AS reporter_name,
                     assignee.name AS assignee_name
                FROM qa_defects d

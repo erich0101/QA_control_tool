@@ -194,6 +194,9 @@ export function ExploratoriaPage() {
               team={team}
               isFinishing={mutations.finishSession.isPending}
               isAssigning={mutations.assignTester.isPending}
+              isHallazgoPending={
+                mutations.setHallazgoStatus.isPending || mutations.assignHallazgo.isPending
+              }
               onBack={() => patchParams({ run: null })}
               onAddFlow={() => setFlowOpen(true)}
               onAddHallazgo={() => setHallazgoOpen(true)}
@@ -201,6 +204,12 @@ export function ExploratoriaPage() {
               onFinish={() => handleFinish(detail.run.id)}
               onAssignTester={(tcId, userId) =>
                 mutations.assignTester.mutate({ tcId, userId })
+              }
+              onHallazgoStatus={(id, status) =>
+                mutations.setHallazgoStatus.mutate({ id, status })
+              }
+              onHallazgoAssign={(id, userId) =>
+                mutations.assignHallazgo.mutate({ id, userId })
               }
             />
           )

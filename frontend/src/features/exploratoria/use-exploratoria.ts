@@ -131,6 +131,30 @@ export function useExploratoriaMutations(projectId: number | null, runId: number
     onError: (error: Error) => toast.error(error.message),
   });
 
+  /**
+   * Estado y asignación del hallazgo desde el detalle de la sesión,
+   * reutilizando PUT /api/hallazgos/:id/{status,assign}.
+   */
+  const setHallazgoStatus = useMutation({
+    mutationFn: ({ id, status }: { id: number; status: string }) =>
+      hallazgosApi.setStatus(id, status),
+    onSuccess: async () => {
+      await invalidateAll();
+      await queryClient.invalidateQueries({ queryKey: queryKeys.hallazgos(projectId) });
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  const assignHallazgo = useMutation({
+    mutationFn: ({ id, userId }: { id: number; userId: number | null }) =>
+      hallazgosApi.assign(id, userId),
+    onSuccess: async () => {
+      await invalidateAll();
+      await queryClient.invalidateQueries({ queryKey: queryKeys.hallazgos(projectId) });
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
   return {
     startSession,
     addFlow,
@@ -140,5 +164,7 @@ export function useExploratoriaMutations(projectId: number | null, runId: number
     deleteEvidence,
     assignTester,
     addHallazgo,
+    setHallazgoStatus,
+    assignHallazgo,
   };
 }

@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { Bug, ChevronRight, ExternalLink, FileText, Plus, Square } from 'lucide-react';
+import { Bug, ChevronRight, ExternalLink, FileText, Plus, Square, Ticket } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DataTable } from '@/components/ui/data-table';
 import { EmptyState } from '@/components/ui/empty-state';
+import { Label } from '@/components/ui/label';
 import type {
   ExploratoryAttachment,
   ExploratoryDetail,
@@ -12,9 +12,11 @@ import type {
   ExploratoryHallazgo,
   User,
 } from '@/lib/api/types';
+import { HALLZGO_STATUSES } from '@/lib/api/types';
 import { cn } from '@/lib/utils';
 import { exploratoriaApi } from '@/lib/api/exploratoria';
 import { SelectField } from '@/components/ui/select-field';
+import { JiraTicketDialog } from '@/features/jira-tickets/jira-ticket-dialog';
 import { FlowDetail } from './flow-detail';
 
 interface SessionDetailProps {
@@ -23,12 +25,15 @@ interface SessionDetailProps {
   team: User[];
   isFinishing: boolean;
   isAssigning: boolean;
+  isHallazgoPending: boolean;
   canAddHallazgo: boolean;
   onBack: () => void;
   onAddFlow: () => void;
   onAddHallazgo: () => void;
   onFinish: () => void;
   onAssignTester: (tcId: number, userId: number | null) => void;
+  onHallazgoStatus: (id: number, status: string) => void;
+  onHallazgoAssign: (id: number, userId: number | null) => void;
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -55,16 +60,21 @@ export function SessionDetail({
   team,
   isFinishing,
   isAssigning,
+  isHallazgoPending,
   canAddHallazgo,
   onBack,
   onAddFlow,
   onAddHallazgo,
   onFinish,
   onAssignTester,
+  onHallazgoStatus,
+  onHallazgoAssign,
 }: SessionDetailProps) {
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
+  const [jiraHallazgoId, setJiraHallazgoId] = useState<number | null>(null);
   const { run, flows, executions, defects, attachments, hallazgos = [] } = detail;
   const isFinished = run.status === 'FINISHED';
+  const jiraHallazgo = hallazgos.find((hallazgo) => hallazgo.id === jiraHallazgoId) ?? null;
 
   const execByTc = new Map(executions.map((exec) => [exec.tc_id, exec]));
   const total = flows.length;
@@ -364,7 +374,7 @@ export function SessionDetail({
                   projectId={projectId}
                 />
               ) : (
-                <div className="space-y-2">
+                <div className="space-y-3">
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge
                       tone={
@@ -380,22 +390,118 @@ export function SessionDetail({
                     <span className="text-caption text-fg-subtle">
                       Reportado por {row.hallazgo.reporter_name ?? '—'}
                     </span>
+                    {row.hallazgo.jira_key ? (
+                      <Button variant="ghost" size="sm" asChild className="text-brand">
+                        <a
+                          href={row.hallazgo.jira_url ?? '#'}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          {row.hallazgo.jira_key}
+                          <ExternalLink />
+                        </a>
+                      </Button>
+                    ) : null}
                   </div>
-                  <p className="whitespace-pre-wrap text-footnote text-fg-muted">
-                    {row.hallazgo.description?.trim() || 'Sin descripción.'}
-                  </p>
-                  <Button variant="secondary" size="sm" asChild>
-                    <Link to={`/hallazgos?id=${row.hallazgo.id}`}>
-                      Abrir en Hallazgos
-                      <ExternalLink />
-                    </Link>
-                  </Button>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <Label>Estado</Label>
+                      <SelectField
+                        value={row.hallazgo.status}
+                        onValueChange={(status) => onHallazgoStatus(row.hallazgo.id, status)}
+                        options={HALLZGO_STATUSES.map((value) => ({ value, label: value }))}
+                        disabled={isHallazgoPending}
+                        aria-label={`Estado del hallazgo #${row.hallazgo.id}`}
+                        className="h-8 text-footnote"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label>Asignado a</Label>
+                      <SelectField
+                        value={
+                          row.hallazgo.assigned_to ? String(row.hallazgo.assigned_to) : ''
+                        }
+                        onValueChange={(value) =>
+                          onHallazgoAssign(row.hallazgo.id, value ? Number(value) : null)
+                        }
+                        allowEmpty
+                        placeholder="— Sin asignar —"
+                        options={team.map((user) => ({
+                          value: String(user.id),
+                          label: user.name,
+                        }))}
+                        disabled={isHallazgoPending}
+                        aria-label={`Asignado del hallazgo #${row.hallazgo.id}`}
+                        className="h-8 text-footnote"
+                      />
+                    </div>
+                  </div>
+
+                  {row.hallazgo.description?.trim() ? (
+                    <div className="space-y-1">
+                      <p className="text-caption font-semibold uppercase tracking-wide text-fg-subtle">
+                        Descripción
+                      </p>
+                      <p className="whitespace-pre-wrap text-footnote text-fg-muted">
+                        {row.hallazgo.description}
+                      </p>
+                    </div>
+                  ) : null}
+
+                  {[
+                    ['Pasos para reproducir', row.hallazgo.steps_to_reproduce],
+                    ['Resultado esperado', row.hallazgo.expected_result],
+                    ['Resultado obtenido', row.hallazgo.actual_result],
+                  ]
+                    .filter(([, value]) => Boolean(value && String(value).trim()))
+                    .map(([label, value]) => (
+                      <div key={String(label)} className="space-y-1">
+                        <p className="text-caption font-semibold uppercase tracking-wide text-fg-subtle">
+                          {label}
+                        </p>
+                        <p className="whitespace-pre-wrap text-footnote text-fg-muted">{value}</p>
+                      </div>
+                    ))}
+
+                  {row.hallazgo.jira_key ? null : (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setJiraHallazgoId(row.hallazgo.id)}
+                    >
+                      <Ticket />
+                      Crear ticket en Jira
+                    </Button>
+                  )}
                 </div>
               )
             }
           />
         )}
       </div>
+
+      <JiraTicketDialog
+        open={jiraHallazgo != null}
+        onOpenChange={(open) => {
+          if (!open) setJiraHallazgoId(null);
+        }}
+        projectId={projectId}
+        kind="hallazgo"
+        items={
+          jiraHallazgo
+            ? [
+                {
+                  id: jiraHallazgo.id,
+                  title: jiraHallazgo.title,
+                  severity: jiraHallazgo.severity,
+                  jira_key: jiraHallazgo.jira_key,
+                },
+              ]
+            : []
+        }
+      />
     </div>
   );
 }
