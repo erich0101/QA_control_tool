@@ -216,7 +216,7 @@ export function AddHallazgoDialog({
         onOpenChange(next);
       }}
     >
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Agregar hallazgo</DialogTitle>
           <DialogDescription>
@@ -255,14 +255,13 @@ export function AddHallazgoDialog({
             <Textarea id="hallazgo-steps" className="min-h-16" {...register('steps')} />
           </Field>
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Resultado esperado" htmlFor="hallazgo-expected">
-              <Textarea id="hallazgo-expected" className="min-h-16" {...register('expected')} />
-            </Field>
-            <Field label="Resultado obtenido" htmlFor="hallazgo-actual">
-              <Textarea id="hallazgo-actual" className="min-h-16" {...register('actual')} />
-            </Field>
-          </div>
+          <Field label="Resultado esperado" htmlFor="hallazgo-expected">
+            <Textarea id="hallazgo-expected" className="min-h-16" {...register('expected')} />
+          </Field>
+
+          <Field label="Resultado obtenido" htmlFor="hallazgo-actual">
+            <Textarea id="hallazgo-actual" className="min-h-16" {...register('actual')} />
+          </Field>
 
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
