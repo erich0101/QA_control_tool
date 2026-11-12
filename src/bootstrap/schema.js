@@ -66,6 +66,54 @@ await query(`ALTER TABLE qa_defects ADD COLUMN IF NOT EXISTS observations TEXT`)
         await query(`ALTER TABLE qa_test_runs ADD COLUMN IF NOT EXISTS coverage_ready BOOLEAN DEFAULT FALSE`);
         await query(`ALTER TABLE qa_test_runs ADD COLUMN IF NOT EXISTS coverage_ready_at TIMESTAMP`);
         await query(`ALTER TABLE qa_test_runs ADD COLUMN IF NOT EXISTS coverage_ready_by INTEGER REFERENCES qa_users(id) ON DELETE SET NULL`);
+        // Fecha límite obligatoria de la sesión exploratoria (con zona horaria).
+        await query(`ALTER TABLE qa_test_runs ADD COLUMN IF NOT EXISTS deadline_at TIMESTAMPTZ`);
+        // Historial de extensiones de fecha (con justificación).
+        await query(`
+            CREATE TABLE IF NOT EXISTS qa_exploratory_extensions (
+                id SERIAL PRIMARY KEY,
+                run_id INTEGER NOT NULL REFERENCES qa_test_runs(id) ON DELETE CASCADE,
+                previous_deadline TIMESTAMPTZ,
+                new_deadline TIMESTAMPTZ NOT NULL,
+                reason TEXT NOT NULL,
+                created_by INTEGER REFERENCES qa_users(id) ON DELETE SET NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+        // Migración de columnas creadas como TIMESTAMP (sin zona) a TIMESTAMPTZ.
+        // Se consulta el tipo y se altera solo si hace falta (idempotente, sin DO).
+        const deadlineType = await query(`
+            SELECT data_type FROM information_schema.columns
+             WHERE table_name = 'qa_test_runs' AND column_name = 'deadline_at'
+        `);
+        if (deadlineType.rows[0]?.data_type === 'timestamp without time zone') {
+            await query(`
+                ALTER TABLE qa_test_runs
+                    ALTER COLUMN deadline_at TYPE TIMESTAMPTZ USING deadline_at AT TIME ZONE 'UTC'
+            `);
+        }
+        const extensionType = await query(`
+            SELECT data_type FROM information_schema.columns
+             WHERE table_name = 'qa_exploratory_extensions' AND column_name = 'new_deadline'
+        `);
+        if (extensionType.rows[0]?.data_type === 'timestamp without time zone') {
+            await query(`
+                ALTER TABLE qa_exploratory_extensions
+                    ALTER COLUMN previous_deadline TYPE TIMESTAMPTZ USING previous_deadline AT TIME ZONE 'UTC'
+            `);
+            await query(`
+                ALTER TABLE qa_exploratory_extensions
+                    ALTER COLUMN new_deadline TYPE TIMESTAMPTZ USING new_deadline AT TIME ZONE 'UTC'
+            `);
+        }
+
+        // Backfill: las sesiones existentes reciben una fecha límite (7 días
+        // desde su inicio) para que la regla aplique desde ya.
+        await query(`
+            UPDATE qa_test_runs
+               SET deadline_at = COALESCE(started_at, CURRENT_TIMESTAMP) + INTERVAL '7 days'
+             WHERE run_type = 'EXPLORATORY' AND deadline_at IS NULL
+        `);
         // Hallazgos creados dentro de una sesión exploratoria (sin ejecución).
         await query(`ALTER TABLE qa_defects ADD COLUMN IF NOT EXISTS exploratory_run_id INTEGER REFERENCES qa_test_runs(id) ON DELETE CASCADE`);
         // Métricas de sesiones exploratorias (persistidas en PG, no SQLite)

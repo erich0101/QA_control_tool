@@ -6,6 +6,8 @@ export interface StartSessionInput {
   name: string;
   charter?: string;
   timebox_minutes?: number | null;
+  /** Fecha límite obligatoria (ISO). */
+  deadline_at: string;
 }
 
 export interface ExecuteFlowInput {
@@ -45,6 +47,13 @@ export const exploratoriaApi = {
 
   finishSession: (runId: number) =>
     apiFetch<{ ok: true }>(`/api/explorations/sessions/${runId}/finish`, { method: 'POST' }),
+
+  /** Extiende la fecha límite con justificación (sesiones en curso). */
+  extendDeadline: (runId: number, input: { deadlineAt: string; reason: string }) =>
+    apiFetch<{ ok: true; deadline_at: string; extension_id?: number }>(
+      `/api/explorations/sessions/${runId}/deadline`,
+      { method: 'PUT', body: { deadline_at: input.deadlineAt, reason: input.reason } },
+    ),
 
   /** Declara (o quita) que los TC de cobertura funcional/negocio están cargados. */
   setCoverage: (runId: number, ready: boolean) =>

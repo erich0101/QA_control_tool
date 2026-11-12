@@ -114,6 +114,17 @@ export function useExploratoriaMutations(projectId: number | null, runId: number
     onError: (error: Error) => toast.error(error.message),
   });
 
+  /** Extiende la fecha límite de la sesión con justificación. */
+  const extendDeadline = useMutation({
+    mutationFn: ({ id, deadlineAt, reason }: { id: number; deadlineAt: string; reason: string }) =>
+      exploratoriaApi.extendDeadline(id, { deadlineAt, reason }),
+    onSuccess: async () => {
+      await invalidateAll();
+      toast.success('Fecha límite extendida');
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
   /** Declara (o quita) que los TC de cobertura están cargados. */
   const setCoverage = useMutation({
     mutationFn: ({ id, ready }: { id: number; ready: boolean }) =>
@@ -267,6 +278,7 @@ export function useExploratoriaMutations(projectId: number | null, runId: number
     finishSession,
     deleteSession,
     setCoverage,
+    extendDeadline,
     uploadEvidence,
     deleteEvidence,
     assignTester,

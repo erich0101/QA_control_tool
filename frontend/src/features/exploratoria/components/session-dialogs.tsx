@@ -14,6 +14,20 @@ import { Input, Textarea } from '@/components/ui/input';
 import { SelectField } from '@/components/ui/select-field';
 import { HALLZGO_SEVERITIES, type ExploratoryHallazgo } from '@/lib/api/types';
 
+/** Default: dentro de 7 días a las 18:00, en formato datetime-local. */
+function defaultDeadlineInput() {
+  const date = new Date();
+  date.setDate(date.getDate() + 7);
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T18:00`;
+}
+
+function nowInput() {
+  const date = new Date();
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
 export function StartSessionDialog({
   open,
   onOpenChange,
@@ -23,17 +37,33 @@ export function StartSessionDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   isPending?: boolean;
-  onSubmit: (values: { name: string; charter: string; timebox_minutes: number | null }) => Promise<void>;
+  onSubmit: (values: {
+    name: string;
+    charter: string;
+    timebox_minutes: number | null;
+    deadline_at: string;
+  }) => Promise<void>;
 }) {
   const { register, handleSubmit, reset, formState } = useForm({
-    defaultValues: { name: '', charter: '', timebox: '' },
+    defaultValues: { name: '', charter: '', timebox: '', deadline: defaultDeadlineInput() },
   });
+
+  useEffect(() => {
+    if (!open) return;
+    reset({
+      name: '',
+      charter: '',
+      timebox: '',
+      deadline: defaultDeadlineInput(),
+    });
+  }, [open, reset]);
 
   const submit = handleSubmit(async (values) => {
     await onSubmit({
       name: values.name.trim(),
       charter: values.charter.trim(),
       timebox_minutes: values.timebox ? Number(values.timebox) : null,
+      deadline_at: new Date(values.deadline).toISOString(),
     });
     reset();
     onOpenChange(false);
@@ -45,7 +75,7 @@ export function StartSessionDialog({
         <DialogHeader>
           <DialogTitle>Nueva sesión exploratoria</DialogTitle>
           <DialogDescription>
-            Definí el charter (misión) y, si querés, un timebox.
+            Definí el charter (misión), la fecha límite obligatoria y, si querés, un timebox.
           </DialogDescription>
         </DialogHeader>
 
@@ -65,6 +95,23 @@ export function StartSessionDialog({
               className="min-h-20"
               placeholder="¿Qué vas a explorar y qué buscás?"
               {...register('charter')}
+            />
+          </Field>
+
+          <Field
+            label="Fecha límite"
+            htmlFor="session-deadline"
+            error={formState.errors.deadline?.message}
+          >
+            <Input
+              id="session-deadline"
+              type="datetime-local"
+              min={nowInput()}
+              {...register('deadline', {
+                required: 'La fecha límite es obligatoria',
+                validate: (value) =>
+                  new Date(value).getTime() > Date.now() || 'La fecha límite debe ser futura',
+              })}
             />
           </Field>
 

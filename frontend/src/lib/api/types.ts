@@ -334,6 +334,8 @@ export interface ExploratorySession {
   coverage_ready?: boolean;
   coverage_ready_at?: string | null;
   coverage_ready_by?: number | null;
+  /** Fecha límite de la sesión (obligatoria desde esta versión). */
+  deadline_at?: string | null;
 }
 
 export interface ExploratoryFlow {
@@ -375,6 +377,17 @@ export interface ExploratoryDetail {
   attachments: ExploratoryAttachment[];
   /** Hallazgos (qa_defects sin ejecución) creados en la sesión. */
   hallazgos: ExploratoryHallazgo[];
+  /** Extensiones de fecha límite registradas. */
+  extensions: ExploratoryExtension[];
+}
+
+export interface ExploratoryExtension {
+  id: number;
+  previous_deadline?: string | null;
+  new_deadline: string;
+  reason: string;
+  created_at?: string;
+  created_by_name?: string | null;
 }
 
 export interface ExploratoryHallazgo {

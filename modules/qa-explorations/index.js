@@ -95,7 +95,7 @@ router.get('/sessions', async (req, res) => {
                     u.name AS creator_name,
                     r.total_flows AS flow_count,
                     r.ok_count, r.fail_count, r.warning_count, r.block_count,
-                    r.skip_count, r.pending_count, r.coverage_ready,
+                    r.skip_count, r.pending_count, r.coverage_ready, r.deadline_at,
                     (SELECT COUNT(*) FROM qa_defects d
                       WHERE d.exploratory_run_id = r.id AND d.execution_id IS NULL) AS hallazgo_count
                FROM qa_test_runs r
@@ -113,19 +113,28 @@ router.get('/sessions', async (req, res) => {
 // ── POST /api/explorations/sessions ───────────────────────────────────────────
 router.post('/sessions', async (req, res) => {
     try {
-        const { name, charter, timebox_minutes, use_case_id } = req.body;
+        const { name, charter, timebox_minutes, use_case_id, deadline_at } = req.body;
         const projectId = req.body.project_id;
         if (!projectId) return res.status(400).json({ error: 'project_id requerido' });
         if (!name || !name.trim()) return res.status(400).json({ error: 'name requerido' });
+
+        const deadline = deadline_at ? new Date(deadline_at) : null;
+        if (!deadline || Number.isNaN(deadline.getTime())) {
+            return res.status(400).json({ error: 'La fecha límite (deadline_at) es obligatoria' });
+        }
+        if (deadline.getTime() <= Date.now()) {
+            return res.status(400).json({ error: 'La fecha límite debe ser futura' });
+        }
 
         const { suiteId } = await ensureExploratoriaSuite(projectId, use_case_id, req.user.id);
 
         const ins = await query(
             `INSERT INTO qa_test_runs
-                (suite_id, project_id, status, created_by, run_type, name, charter, timebox_minutes, last_resume_at, accumulated_seconds)
-             VALUES (?, ?, 'RUNNING', ?, 'EXPLORATORY', ?, ?, ?, CURRENT_TIMESTAMP, 0)
+                (suite_id, project_id, status, created_by, run_type, name, charter, timebox_minutes,
+                 deadline_at, last_resume_at, accumulated_seconds)
+             VALUES (?, ?, 'RUNNING', ?, 'EXPLORATORY', ?, ?, ?, ?, CURRENT_TIMESTAMP, 0)
              RETURNING id`,
-            [suiteId, projectId, req.user.id, name.trim(), charter || '', timebox_minutes || null]
+            [suiteId, projectId, req.user.id, name.trim(), charter || '', timebox_minutes || null, deadline]
         );
         const runId = ins.rows[0].id;
         res.json({ ok: true, run_id: runId, suite_id: suiteId });
@@ -147,6 +156,17 @@ router.get('/sessions/:runId', async (req, res) => {
         );
         if (runRes.rows.length === 0) return res.status(404).json({ error: 'Sesión no encontrada' });
         const run = runRes.rows[0];
+
+        const extRes = await query(
+            `SELECT e.id, e.previous_deadline, e.new_deadline, e.reason, e.created_at,
+                    u.name AS created_by_name
+               FROM qa_exploratory_extensions e
+               LEFT JOIN qa_users u ON u.id = e.created_by
+              WHERE e.run_id = ?
+              ORDER BY e.id DESC`,
+            [runId]
+        );
+        const extensions = extRes.rows;
 
         // Flujos = TCs vinculados a este run via qa_executions. La pertenencia se
         // deriva de la tabla de ejecuciones (no del project_id del TC) para que
@@ -180,7 +200,7 @@ router.get('/sessions/:runId', async (req, res) => {
         const hallazgos = hallazgosRes.rows;
 
         if (flows.length === 0) {
-            return res.json({ run, flows: [], executions: [], defects: [], attachments: [], hallazgos });
+            return res.json({ run, flows: [], executions: [], defects: [], attachments: [], hallazgos, extensions });
         }
 
         const flowIds = flows.map(f => f.id);
@@ -219,7 +239,7 @@ router.get('/sessions/:runId', async (req, res) => {
             attachments = attRes.rows;
         }
 
-        res.json({ run, flows, executions, defects, attachments, hallazgos });
+        res.json({ run, flows, executions, defects, attachments, hallazgos, extensions });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -616,6 +636,53 @@ router.post('/sessions/:runId/import-flows', upload.single('xlsx'), async (req, 
 });
 
 
+
+
+// ── PUT /api/explorations/sessions/:runId/deadline ───────────────────────────
+// Extiende la fecha límite de una sesión en curso y guarda la justificación.
+router.put('/sessions/:runId/deadline', async (req, res) => {
+    try {
+        const runId = parseInt(req.params.runId, 10);
+        const { deadline_at, reason } = req.body;
+        if (!runId) return res.status(400).json({ error: 'runId inválido' });
+
+        const runRes = await query(
+            `SELECT id, status, deadline_at FROM qa_test_runs WHERE id = ? AND run_type = 'EXPLORATORY'`,
+            [runId]
+        );
+        if (runRes.rows.length === 0) return res.status(404).json({ error: 'Sesión no encontrada' });
+        const run = runRes.rows[0];
+        if (run.status !== 'RUNNING') {
+            return res.status(400).json({ error: 'La sesión ya fue finalizada' });
+        }
+
+        const newDeadline = deadline_at ? new Date(deadline_at) : null;
+        if (!newDeadline || Number.isNaN(newDeadline.getTime())) {
+            return res.status(400).json({ error: 'La nueva fecha límite es obligatoria' });
+        }
+        if (newDeadline.getTime() <= Date.now()) {
+            return res.status(400).json({ error: 'La nueva fecha límite debe ser futura' });
+        }
+        if (run.deadline_at && newDeadline.getTime() <= new Date(run.deadline_at).getTime()) {
+            return res.status(400).json({ error: 'La nueva fecha debe ser posterior a la actual' });
+        }
+        const justification = String(reason || '').trim();
+        if (justification.length < 5) {
+            return res.status(400).json({ error: 'Justificá la demora (mínimo 5 caracteres)' });
+        }
+
+        const ins = await query(
+            `INSERT INTO qa_exploratory_extensions (run_id, previous_deadline, new_deadline, reason, created_by)
+             VALUES (?, ?, ?, ?, ?) RETURNING id`,
+            [runId, run.deadline_at || null, newDeadline, justification, req.user.id]
+        );
+        await query(`UPDATE qa_test_runs SET deadline_at = ? WHERE id = ?`, [newDeadline, runId]);
+
+        res.json({ ok: true, deadline_at: newDeadline, extension_id: ins.rows[0]?.id ?? ins.lastID });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
 
 // ── PUT /api/explorations/sessions/:runId/coverage ───────────────────────────
 // El tester declara que ya cargó los TC que cubren las validaciones
@@ -1040,7 +1107,7 @@ router.get('/reports/status', async (req, res) => {
             ...hallazgos.rows.map(h => h.exploratory_run_id),
         ])];
         const runsRes = runIds.length === 0 ? { rows: [] } : await query(`
-            SELECT id, name, charter, started_at, finished_at, status, coverage_ready
+            SELECT id, name, charter, started_at, finished_at, status, coverage_ready, deadline_at
               FROM qa_test_runs WHERE id IN (${runIds.map(() => '?').join(',')})
         `, runIds);
         const runsById = new Map(runsRes.rows.map(r => [r.id, r]));
@@ -1282,6 +1349,9 @@ router.get('/reports/status', async (req, res) => {
                     <div style="font-weight:800;font-size:.9rem;">#${run.id} · ${htmlEscape(run.name || 'Sesión exploratoria')}</div>
                     <div style="font-size:.72rem;color:#4b5563;margin-top:2px;">${htmlEscape(run.charter || '')}</div>
                     <div style="font-size:.68rem;color:#6b7280;margin-top:2px;">${fmtReportDate(run.started_at)} → ${run.finished_at ? fmtReportDate(run.finished_at) : 'en curso'} · ${runExecs.length} tests en el rango · ${runHallazgos.length} hallazgos</div>
+                    <div style="font-size:.68rem;margin-top:2px;color:${run.deadline_at && new Date(run.deadline_at) < new Date() ? '#dc2626' : '#4b5563'};">
+                        Límite: ${run.deadline_at ? fmtReportDate(run.deadline_at) : 'sin definir'}${run.deadline_at && new Date(run.deadline_at) < new Date() ? ' · VENCIDA' : ''}
+                    </div>
                     <div style="font-size:.68rem;color:#4b5563;margin-top:2px;">Avance sesión ${(() => {
                         const t = totalsByRun.get(run.id);
                         return t && t.total > 0 ? Math.round((t.executed / t.total) * 100) + '% (' + t.executed + '/' + t.total + ')' : '—';

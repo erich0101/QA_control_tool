@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import {
   Bug,
+  CalendarClock,
   ChevronRight,
   ClipboardCheck,
   ExternalLink,
@@ -51,6 +52,7 @@ interface SessionDetailProps {
   onFinish: () => void;
   onDeleteSession: () => void;
   onToggleCoverage: (ready: boolean) => void;
+  onExtendDeadline: () => void;
   onAssignTester: (tcId: number, userId: number | null) => void;
   onHallazgoStatus: (id: number, status: string) => void;
   onHallazgoAssign: (id: number, userId: number | null) => void;
@@ -96,6 +98,7 @@ export function SessionDetail({
   onFinish,
   onDeleteSession,
   onToggleCoverage,
+  onExtendDeadline,
   onAssignTester,
   onHallazgoStatus,
   onHallazgoAssign,
@@ -107,7 +110,7 @@ export function SessionDetail({
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
   const [jiraHallazgoId, setJiraHallazgoId] = useState<number | null>(null);
   const [reportOpen, setReportOpen] = useState(false);
-  const { run, flows, executions, defects, attachments, hallazgos = [] } = detail;
+  const { run, flows, executions, defects, attachments, hallazgos = [], extensions = [] } = detail;
   const isFinished = run.status === 'FINISHED';
   const jiraHallazgo = hallazgos.find((hallazgo) => hallazgo.id === jiraHallazgoId) ?? null;
 
@@ -133,6 +136,24 @@ export function SessionDetail({
   const acceptanceEvaluated = evaluables > 0 ? Math.round((counts.OK / evaluables) * 100) : null;
   const acceptanceTotal = total > 0 ? Math.round((counts.OK / total) * 100) : null;
   const coverageReady = Boolean(run.coverage_ready);
+
+  const deadline = run.deadline_at ? new Date(run.deadline_at) : null;
+  const hoursToDeadline = deadline ? (deadline.getTime() - Date.now()) / 3_600_000 : null;
+  const deadlineOverdue = hoursToDeadline !== null && hoursToDeadline <= 0;
+  const deadlineNear = hoursToDeadline !== null && hoursToDeadline > 0 && hoursToDeadline <= 24;
+  const deadlineLabel = deadline
+    ? deadline.toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })
+    : 'sin definir';
+  const remainingLabel = (() => {
+    if (hoursToDeadline === null) return '';
+    const absMs = Math.abs(hoursToDeadline) * 3_600_000;
+    const days = Math.floor(absMs / 86_400_000);
+    const hours = Math.floor((absMs % 86_400_000) / 3_600_000);
+    const minutes = Math.max(1, Math.floor((absMs % 3_600_000) / 60_000));
+    if (days > 0) return `${days} día${days === 1 ? '' : 's'}${hours ? ` y ${hours} h` : ''}`;
+    if (hours > 0) return `${hours} h ${minutes} min`;
+    return `${minutes} min`;
+  })();
 
   /** Semáforo para las dos aceptaciones (mismo criterio visual). */
   const acceptanceTone = (value: number | null) =>
@@ -308,6 +329,23 @@ export function SessionDetail({
         <div className="mt-1 flex flex-wrap items-center gap-3 text-caption text-fg-subtle">
           {run.charter ? <span>📜 {run.charter}</span> : null}
           {run.timebox_minutes ? <span>⏱ {run.timebox_minutes} min</span> : null}
+          <span
+            className={cn(
+              deadlineOverdue
+                ? 'font-semibold text-fail'
+                : deadlineNear
+                  ? 'font-semibold text-warn'
+                  : '',
+            )}
+          >
+            ⏰ Límite: {deadlineLabel}
+          </span>
+          {extensions[0] ? (
+            <span title={extensions[0].reason}>
+              🕓 Última extensión:{' '}
+              {new Date(extensions[0].new_deadline).toLocaleDateString('es-AR')}
+            </span>
+          ) : null}
           <span>👤 {run.creator_name ?? '—'}</span>
           {run.started_at ? <span>🟢 {new Date(run.started_at).toLocaleString('es-AR')}</span> : null}
           {run.finished_at ? (
@@ -315,6 +353,31 @@ export function SessionDetail({
           ) : null}
         </div>
       </header>
+
+      {!isFinished && (deadlineOverdue || deadlineNear || !deadline) ? (
+        <div
+          className={cn(
+            'flex shrink-0 flex-wrap items-center gap-2 border-b px-5 py-2 text-caption',
+            deadlineOverdue
+              ? 'border-fail/30 bg-fail-soft text-fail'
+              : 'border-warn/30 bg-warn-soft text-warn',
+          )}
+        >
+          <TriangleAlert className="size-3.5 shrink-0" />
+          <span className="flex-1">
+            {deadlineOverdue
+              ? `La sesión venció hace ${remainingLabel}.`
+              : deadline
+                ? `La sesión vence en ${remainingLabel}.`
+                : 'La sesión no tiene fecha límite definida.'}{' '}
+            Extendé la fecha y justificá la demora.
+          </span>
+          <Button variant="secondary" size="sm" className="h-7" onClick={onExtendDeadline}>
+            <CalendarClock />
+            Extender fecha
+          </Button>
+        </div>
+      ) : null}
 
       {!coverageReady ? (
         <div className="flex shrink-0 items-start gap-2 border-b border-warn/30 bg-warn-soft px-5 py-2 text-caption text-warn">

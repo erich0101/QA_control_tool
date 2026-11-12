@@ -14,6 +14,7 @@ import { useSessionStore } from '@/stores/session';
 import { useTeam } from '@/features/team/use-team';
 import { AddFlowDialog, AddHallazgoDialog, StartSessionDialog } from './components/session-dialogs';
 import { StatusReportDialog } from './components/status-report-dialog';
+import { ExtendDeadlineDialog } from './components/extend-deadline-dialog';
 import { SessionDetail } from './components/session-detail';
 import { useExploratoriaMutations, useExploratorySession, useExploratorySessions } from './use-exploratoria';
 
@@ -30,6 +31,7 @@ export function ExploratoriaPage() {
   const [search, setSearch] = useState('');
   const [startOpen, setStartOpen] = useState(false);
   const [statusReportOpen, setStatusReportOpen] = useState(false);
+  const [deadlineOpen, setDeadlineOpen] = useState(false);
   const [flowForm, setFlowForm] = useState<{
     mode: 'create' | 'edit';
     flow?: ExploratoryFlow;
@@ -266,6 +268,7 @@ export function ExploratoriaPage() {
               onToggleCoverage={(ready) =>
                 mutations.setCoverage.mutate({ id: detail.run.id, ready })
               }
+              onExtendDeadline={() => setDeadlineOpen(true)}
               onBack={() => patchParams({ run: null })}
               onAddFlow={() => setFlowForm({ mode: 'create' })}
               onAddHallazgo={() => setHallazgoForm({ mode: 'create' })}
@@ -319,6 +322,7 @@ export function ExploratoriaPage() {
             name: values.name,
             charter: values.charter,
             timebox_minutes: values.timebox_minutes,
+            deadline_at: values.deadline_at,
           });
           patchParams({ v: null, run: String(result.run_id) });
         }}
@@ -367,6 +371,22 @@ export function ExploratoriaPage() {
               return;
             }
             await mutations.addHallazgo.mutateAsync(values);
+          }}
+        />
+      ) : null}
+
+      {detail ? (
+        <ExtendDeadlineDialog
+          open={deadlineOpen}
+          onOpenChange={setDeadlineOpen}
+          currentDeadline={detail.run.deadline_at ?? null}
+          isPending={mutations.extendDeadline.isPending}
+          onSubmit={async (values) => {
+            await mutations.extendDeadline.mutateAsync({
+              id: detail.run.id,
+              deadlineAt: values.deadlineAt,
+              reason: values.reason,
+            });
           }}
         />
       ) : null}
@@ -443,6 +463,13 @@ function SessionRow({
           ) : null}
           {!session.coverage_ready ? (
             <span className="text-warn">⚠ sin cobertura TC</span>
+          ) : null}
+          {session.status !== 'FINISHED' && session.deadline_at ? (
+            new Date(session.deadline_at) < new Date() ? (
+              <span className="text-fail">⏰ vencida</span>
+            ) : new Date(session.deadline_at).getTime() - Date.now() <= 86_400_000 ? (
+              <span className="text-warn">⏰ vence pronto</span>
+            ) : null
           ) : null}
           {(session.fail_count ?? 0) > 0 ? (
             <span className="text-fail">{session.fail_count} FAIL</span>
