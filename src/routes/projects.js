@@ -61,21 +61,21 @@ router.delete('/:id', requireAuth, requireAdmin, async (req, res) => {
 router.get('/:id/jira-config', requireAuth, async (req, res) => {
     try {
         const projectId = req.params.id;
-        const result = await query(`SELECT jira_domain, jira_project_key FROM qa_jira_configs WHERE project_id = ?`, [projectId]);
-        if (result.rows.length === 0) {
-            return res.json({ config: null, userHasToken: false });
-        }
+        // El token del usuario se consulta siempre: puede existir aunque el
+        // proyecto todavía no tenga dominio/key (antes se devolvía
+        // userHasToken=false por el early return y la UI mentía "Sin token").
+        const [result, userConfig] = await Promise.all([
+            query(`SELECT jira_domain, jira_project_key FROM qa_jira_configs WHERE project_id = ?`, [projectId]),
+            query(`SELECT id FROM qa_jira_user_configs WHERE project_id = ? AND user_id = ?`, [projectId, req.user.id])
+        ]);
         const row = result.rows[0];
 
-        const userConfig = await query(`SELECT id FROM qa_jira_user_configs WHERE project_id = ? AND user_id = ?`, [projectId, req.user.id]);
-        const userHasToken = userConfig.rows.length > 0;
-
         res.json({
-            config: {
+            config: row ? {
                 jira_domain: row.jira_domain,
                 jira_project_key: row.jira_project_key
-            },
-            userHasToken
+            } : null,
+            userHasToken: userConfig.rows.length > 0
         });
     } catch (err) {
         res.status(500).json({ error: err.message });

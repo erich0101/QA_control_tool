@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Download, FlaskConical, Pencil, Plus, Settings2 } from 'lucide-react';
-import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { JiraConfigDialog } from '@/features/projects/jira-config-dialog';
 import { ProjectDialog } from '@/features/projects/project-dialog';
 import { useProjects } from '@/features/projects/use-projects';
 import { projectsApi } from '@/lib/api/projects';
@@ -18,6 +18,7 @@ export function Topbar() {
   const { data: projects } = useProjects();
 
   const [dialogMode, setDialogMode] = useState<'create' | 'edit' | null>(null);
+  const [jiraConfigOpen, setJiraConfigOpen] = useState(false);
 
   const activeProject = projects?.find((p) => p.id === activeProjectId) ?? null;
 
@@ -61,9 +62,7 @@ export function Topbar() {
                 variant="ghost"
                 size="icon-sm"
                 aria-label="Configurar JIRA"
-                onClick={() =>
-                  toast.info('La configuración de JIRA se migra junto con el módulo Tools')
-                }
+                onClick={() => setJiraConfigOpen(true)}
               >
                 <Settings2 />
               </Button>
@@ -97,6 +96,12 @@ export function Topbar() {
         open={dialogMode !== null}
         onOpenChange={(open) => setDialogMode(open ? (dialogMode ?? 'create') : null)}
         project={dialogMode === 'edit' ? activeProject : null}
+      />
+
+      <JiraConfigDialog
+        open={jiraConfigOpen}
+        onOpenChange={setJiraConfigOpen}
+        projectId={activeProjectId}
       />
     </header>
   );
