@@ -46,6 +46,20 @@ export const exploratoriaApi = {
   finishSession: (runId: number) =>
     apiFetch<{ ok: true }>(`/api/explorations/sessions/${runId}/finish`, { method: 'POST' }),
 
+  /** Elimina la sesión completa (flujos ejecutados, defectos, hallazgos, evidencias). */
+  deleteSession: (runId: number) =>
+    apiFetch<{
+      ok: true;
+      deleted: {
+        sessions: number;
+        executions: number;
+        defects: number;
+        hallazgos: number;
+        test_cases: number;
+        attachments: number;
+      };
+    }>(`/api/explorations/sessions/${runId}`, { method: 'DELETE' }),
+
   bugsReportUrl: (
     runId: number,
     options?: { testerId?: number | null; tester?: string | null },

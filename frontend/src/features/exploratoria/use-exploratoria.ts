@@ -114,6 +114,19 @@ export function useExploratoriaMutations(projectId: number | null, runId: number
     onError: (error: Error) => toast.error(error.message),
   });
 
+  /** Elimina toda la sesión y sus datos asociados. */
+  const deleteSession = useMutation({
+    mutationFn: (id: number) => exploratoriaApi.deleteSession(id),
+    onSuccess: async (result) => {
+      await invalidateAll();
+      const d = result.deleted;
+      toast.success(
+        `Sesión eliminada (${d.executions} ejecuciones, ${d.defects + d.hallazgos} defectos/hallazgos)`,
+      );
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
   const uploadEvidence = useMutation({
     mutationFn: exploratoriaApi.uploadEvidence,
     onSuccess: async () => {
@@ -238,6 +251,7 @@ export function useExploratoriaMutations(projectId: number | null, runId: number
     removeFlow,
     executeFlow,
     finishSession,
+    deleteSession,
     uploadEvidence,
     deleteEvidence,
     assignTester,

@@ -110,6 +110,20 @@ export function ExploratoriaPage() {
     await mutations.removeHallazgo.mutateAsync(hallazgo.id);
   };
 
+  const handleDeleteSession = async (id: number) => {
+    const ok = await confirm({
+      title: 'Eliminar sesión exploratoria',
+      description:
+        'Se elimina la sesión completa: flujos ejecutados, ejecuciones, defectos, hallazgos y evidencias asociadas. ' +
+        'Los archivos locales de evidencia NO se borran. Esta acción no se puede deshacer.',
+      confirmLabel: 'Eliminar sesión',
+      destructive: true,
+    });
+    if (!ok) return;
+    await mutations.deleteSession.mutateAsync(id);
+    patchParams({ run: null });
+  };
+
   if (!projectId) {
     return (
       <div className="mx-auto max-w-xl p-10">
@@ -246,6 +260,8 @@ export function ExploratoriaPage() {
               }
               isFlowPending={mutations.updateFlow.isPending || mutations.removeFlow.isPending}
               canDelete={canManage}
+              canDeleteSession={canManage}
+              onDeleteSession={() => handleDeleteSession(detail.run.id)}
               onBack={() => patchParams({ run: null })}
               onAddFlow={() => setFlowForm({ mode: 'create' })}
               onAddHallazgo={() => setHallazgoForm({ mode: 'create' })}

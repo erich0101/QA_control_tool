@@ -13,6 +13,7 @@ const express = require('express');
 const multer = require('multer');
 const XLSX = require('xlsx');
 const { query } = require('../../db');
+const { requireAdmin } = require('../../src/middleware/auth');
 const { getEvidenceBase64, evidenceHTML, lightboxHTML } = require('../../src/lib/report-evidence');
 
 const router = express.Router();
@@ -438,29 +439,6 @@ router.post('/sessions/:runId/finish', async (req, res) => {
     }
 });
 
-// ── DELETE /api/explorations/sessions/:runId ─────────────────────────────────
-// Borra una sesión de Exploratoria y todos sus datos asociados (cascade via
-// FK). Usado por scripts de limpieza; no expuesto en la UI normal.
-router.delete('/sessions/:runId', async (req, res) => {
-    try {
-        const runId = parseInt(req.params.runId, 10);
-        const runRes = await query(
-            `SELECT id FROM qa_test_runs WHERE id = ? AND run_type = 'EXPLORATORY'`,
-            [runId]
-        );
-        if (runRes.rows.length === 0) return res.status(404).json({ error: 'Sesión no encontrada' });
-        // Cascade via FK:
-        //   qa_executions (run_id ON DELETE CASCADE)
-        //   qa_attachments (execution_id ON DELETE CASCADE)
-        //   qa_defects (execution_id FK, queda huérfano pero permitido)
-        //   qa_hallazgo_bug, qa_hallazgo_tc (defect_id ON DELETE CASCADE si el defect se borra)
-        await query(`DELETE FROM qa_test_runs WHERE id = ?`, [runId]);
-        res.json({ ok: true, deleted_id: runId });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
 // ── POST /api/explorations/flows/:tcId/evidence ───────────────────────────────
 // Multipart: delega al endpoint /api/evidence existente. El frontend no usa este
 // endpoint directamente — prefiere POST /api/evidence con FormData (más simple).
@@ -607,6 +585,91 @@ router.post('/sessions/:runId/import-flows', upload.single('xlsx'), async (req, 
         });
     } catch (err) {
         console.error('Error en import-flows:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+
+// ── DELETE /api/explorations/sessions/:runId ─────────────────────────────────
+// Elimina la sesión completa: ejecuciones, defectos, hallazgos, evidencias
+// (filas; los archivos locales NO se borran) y los flujos creados para ella.
+// El borrado en cascada de la DB cubre hijos; acá limpiamos los TC huérfanos.
+router.delete('/sessions/:runId', requireAdmin, async (req, res) => {
+    try {
+        const runId = parseInt(req.params.runId, 10);
+        if (!runId) return res.status(400).json({ error: 'runId inválido' });
+
+        const runRes = await query(
+            `SELECT id, project_id, status FROM qa_test_runs WHERE id = ? AND run_type = 'EXPLORATORY'`,
+            [runId]
+        );
+        if (runRes.rows.length === 0) return res.status(404).json({ error: 'Sesión no encontrada' });
+        const run = runRes.rows[0];
+
+        const execRes = await query(`SELECT id, tc_id FROM qa_executions WHERE run_id = ?`, [runId]);
+        const execIds = execRes.rows.map((row) => row.id);
+        const tcIds = [...new Set(execRes.rows.map((row) => row.tc_id))];
+
+        const hallazgoRes = await query(
+            `SELECT id FROM qa_defects WHERE exploratory_run_id = ? AND execution_id IS NULL`,
+            [runId]
+        );
+        const defectIds = execIds.length === 0 ? [] : (await query(
+            `SELECT id FROM qa_defects WHERE execution_id IN (${execIds.map(() => '?').join(',')})`,
+            execIds
+        )).rows.map((row) => row.id);
+
+        // Adjuntos antes del borrado (para limpiar el índice SQLite local).
+        const attachmentIds = [];
+        if (execIds.length > 0 || defectIds.length > 0) {
+            const attRes = await query(
+                `SELECT id FROM qa_attachments
+                  WHERE execution_id IN (${execIds.map(() => '?').join(',') || 'NULL'})
+                     OR defect_id IN (${defectIds.map(() => '?').join(',') || 'NULL'})`,
+                [...execIds, ...defectIds]
+            );
+            attachmentIds.push(...attRes.rows.map((row) => row.id));
+        }
+
+        // Borra el run: cascada sobre executions, defects (por execution_id),
+        // hallazgos (por exploratory_run_id) y attachments.
+        await query(`DELETE FROM qa_test_runs WHERE id = ?`, [runId]);
+
+        // Flujos creados para la sesión: solo se borran si quedaron sin
+        // ejecuciones y siguen marcados como exploratorios del mismo proyecto.
+        let deletedTestCases = 0;
+        for (const tcId of tcIds) {
+            const orphan = await query(
+                `SELECT tc.id
+                   FROM qa_test_cases tc
+                  WHERE tc.id = ? AND tc.is_exploratory = true AND tc.project_id = ?
+                    AND NOT EXISTS (SELECT 1 FROM qa_executions e WHERE e.tc_id = tc.id)`,
+                [tcId, run.project_id]
+            );
+            if (orphan.rows.length === 0) continue;
+            await query(`DELETE FROM qa_test_cases WHERE id = ?`, [tcId]);
+            deletedTestCases += 1;
+        }
+
+        // Índice local de evidencias (best-effort). Los archivos quedan en disco.
+        try {
+            const evidenceStore = require('../../modules/evidence-store');
+            for (const id of attachmentIds) evidenceStore.deleteIndex(id);
+        } catch (_) { /* best-effort */ }
+
+        res.json({
+            ok: true,
+            deleted: {
+                sessions: 1,
+                executions: execIds.length,
+                defects: defectIds.length,
+                hallazgos: hallazgoRes.rows.length,
+                test_cases: deletedTestCases,
+                attachments: attachmentIds.length,
+            },
+        });
+    } catch (err) {
+        console.error('Error eliminando sesión exploratoria:', err);
         res.status(500).json({ error: err.message });
     }
 });

@@ -40,11 +40,13 @@ interface SessionDetailProps {
   isHallazgoPending: boolean;
   isFlowPending: boolean;
   canDelete: boolean;
+  canDeleteSession: boolean;
   canAddHallazgo: boolean;
   onBack: () => void;
   onAddFlow: () => void;
   onAddHallazgo: () => void;
   onFinish: () => void;
+  onDeleteSession: () => void;
   onAssignTester: (tcId: number, userId: number | null) => void;
   onHallazgoStatus: (id: number, status: string) => void;
   onHallazgoAssign: (id: number, userId: number | null) => void;
@@ -81,11 +83,13 @@ export function SessionDetail({
   isHallazgoPending,
   isFlowPending,
   canDelete,
+  canDeleteSession,
   canAddHallazgo,
   onBack,
   onAddFlow,
   onAddHallazgo,
   onFinish,
+  onDeleteSession,
   onAssignTester,
   onHallazgoStatus,
   onHallazgoAssign,
@@ -246,6 +250,13 @@ export function SessionDetail({
                 Finalizar sesión
               </Button>
             </>
+          ) : null}
+
+          {canDeleteSession ? (
+            <Button variant="ghost" size="sm" className="text-fail" onClick={onDeleteSession}>
+              <Trash2 />
+              Eliminar sesión
+            </Button>
           ) : null}
         </div>
 
