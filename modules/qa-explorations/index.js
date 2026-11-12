@@ -1055,6 +1055,9 @@ router.get('/reports/status', async (req, res) => {
             ? Math.round((sessionTotals.ok / sessionEvaluables) * 100) : null;
         const acceptanceTotalPct = sessionTotals.total > 0
             ? Math.round((sessionTotals.ok / sessionTotals.total) * 100) : null;
+        const acceptanceColor = (pct) => pct == null
+            ? '#6b7280'
+            : pct >= 80 ? '#15803d' : pct >= 50 ? '#b45309' : '#dc2626';
 
         const uncoveredRuns = [...runsById.values()].filter(r => !r.coverage_ready);
         const coveredCount = runsById.size - uncoveredRuns.length;
@@ -1259,10 +1262,12 @@ router.get('/reports/status', async (req, res) => {
                     })()} · Pendientes ${totalsByRun.get(run.id)?.pending ?? 0} · Aceptación evaluada ${(() => {
                         const t = totalsByRun.get(run.id);
                         const ev = t ? t.ok + t.fail + t.warning : 0;
-                        return ev > 0 ? Math.round((t.ok / ev) * 100) + '%' : '—';
+                        const pct = ev > 0 ? Math.round((t.ok / ev) * 100) : null;
+                        return `<strong style="color:${acceptanceColor(pct)}">${pct === null ? '—' : pct + '%'}</strong>`;
                     })()} · Aceptación total ${(() => {
                         const t = totalsByRun.get(run.id);
-                        return t && t.total > 0 ? Math.round((t.ok / t.total) * 100) + '%' : '—';
+                        const pct = t && t.total > 0 ? Math.round((t.ok / t.total) * 100) : null;
+                        return `<strong style="color:${acceptanceColor(pct)}">${pct === null ? '—' : pct + '%'}</strong>`;
                     })()}</div>
                     <div style="margin-top:4px;">${run.coverage_ready
                         ? '<span style="font-size:.62rem;font-weight:700;background:#dcfce7;color:#15803d;padding:2px 8px;border-radius:10px;">✓ TC de cobertura declarados</span>'
@@ -1295,8 +1300,8 @@ router.get('/reports/status', async (req, res) => {
             <div class="kpi"><div class="kpi-val">${runIds.length}</div><div class="kpi-lab">Sesiones</div></div>
             <div class="kpi"><div class="kpi-val">${coveredCount}/${runsById.size}</div><div class="kpi-lab">Cobertura TC</div></div>
             <div class="kpi"><div class="kpi-val">${execs.rows.length}</div><div class="kpi-lab">Tests ejecutados</div></div>
-            <div class="kpi" title="OK / (OK + FAIL + WARNING) en las sesiones incluidas. Calidad de lo probado."><div class="kpi-val">${acceptanceEvaluatedPct === null ? '—' : `${acceptanceEvaluatedPct}%`}</div><div class="kpi-lab">Aceptación evaluada</div></div>
-            <div class="kpi" title="OK / total de TC de las sesiones incluidas. Pendientes, BLOCK y SKIP cuentan como no aceptados."><div class="kpi-val">${acceptanceTotalPct === null ? '—' : `${acceptanceTotalPct}%`}</div><div class="kpi-lab">Aceptación total</div></div>
+            <div class="kpi" title="OK / (OK + FAIL + WARNING) en las sesiones incluidas. Calidad de lo probado."><div class="kpi-val" style="color:${acceptanceColor(acceptanceEvaluatedPct)}">${acceptanceEvaluatedPct === null ? '—' : `${acceptanceEvaluatedPct}%`}</div><div class="kpi-lab">Aceptación evaluada</div></div>
+            <div class="kpi" title="OK / total de TC de las sesiones incluidas. Pendientes, BLOCK y SKIP cuentan como no aceptados."><div class="kpi-val" style="color:${acceptanceColor(acceptanceTotalPct)}">${acceptanceTotalPct === null ? '—' : `${acceptanceTotalPct}%`}</div><div class="kpi-lab">Aceptación total</div></div>
             <div class="kpi"><div class="kpi-val">${counts.OK}</div><div class="kpi-lab">OK</div></div>
             <div class="kpi"><div class="kpi-val">${counts.FAIL}</div><div class="kpi-lab">FAIL</div></div>
             <div class="kpi"><div class="kpi-val">${counts.WARNING}</div><div class="kpi-lab">WARNING</div></div>

@@ -134,6 +134,16 @@ export function SessionDetail({
   const acceptanceTotal = total > 0 ? Math.round((counts.OK / total) * 100) : null;
   const coverageReady = Boolean(run.coverage_ready);
 
+  /** Semáforo para las dos aceptaciones (mismo criterio visual). */
+  const acceptanceTone = (value: number | null) =>
+    value == null
+      ? 'bg-fill-soft text-fg-muted'
+      : value >= 80
+        ? 'bg-ok-soft text-ok'
+        : value >= 50
+          ? 'bg-warn-soft text-warn'
+          : 'bg-fail-soft text-fail';
+
   const defectsFor = (flow: ExploratoryFlow) => {
     const exec = execByTc.get(flow.id);
     return exec ? defects.filter((defect) => defect.execution_id === exec.id) : [];
@@ -363,8 +373,8 @@ export function SessionDetail({
               </span>
               <span
                 className={cn(
-                  'text-caption font-bold tabular-nums',
-                  coverageReady ? 'text-ok' : 'text-warn',
+                  'rounded px-1.5 py-0.5 text-caption font-bold tabular-nums',
+                  acceptanceTone(acceptanceEvaluated),
                 )}
               >
                 {acceptanceEvaluated === null ? '—' : `${acceptanceEvaluated}%`}
@@ -387,7 +397,12 @@ export function SessionDetail({
               <span className="text-caption font-semibold uppercase tracking-wide text-fg-subtle">
                 Aceptación total
               </span>
-              <span className="text-caption font-bold tabular-nums text-fg">
+              <span
+                className={cn(
+                  'rounded px-1.5 py-0.5 text-caption font-bold tabular-nums',
+                  acceptanceTone(acceptanceTotal),
+                )}
+              >
                 {acceptanceTotal === null ? '—' : `${acceptanceTotal}%`}
               </span>
               <span className="text-caption text-fg-subtle">
