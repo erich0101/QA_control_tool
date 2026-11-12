@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { FormProvider, useForm } from 'react-hook-form';
-import { Bug, ExternalLink, RotateCcw, Save, Trash2, Wand2 } from 'lucide-react';
+import { Bug, ExternalLink, Rocket, RotateCcw, Save, Trash2, Wand2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { useConfirm } from '@/components/ui/confirm-provider';
@@ -17,6 +17,7 @@ import { SeverityBadge } from './badges';
 import { EvidencePanel } from './evidence-panel';
 import { HallazgoFields } from './hallazgo-fields';
 import { ConvertToTcDialog } from './convert-to-tc-dialog';
+import { JiraTicketDialog } from '@/features/jira-tickets/jira-ticket-dialog';
 
 interface HallazgoPaneProps {
   hallazgo?: Hallazgo | null;
@@ -48,6 +49,7 @@ export function HallazgoPane({
   );
   const evidenceMutations = useEvidenceMutations(projectId, 'defect', hallazgo?.id ?? null);
   const [convertOpen, setConvertOpen] = useState(false);
+  const [jiraOpen, setJiraOpen] = useState(false);
 
   const form = useForm<HallazgoFormValues>({ defaultValues: hallazgoToForm(hallazgo) });
   const { isDirty, dirtyFields } = form.formState;
@@ -128,7 +130,17 @@ export function HallazgoPane({
                     <ExternalLink />
                   </a>
                 </Button>
-              ) : null}
+              ) : (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setJiraOpen(true)}
+                  title="Crear un ticket en Jira a partir de este hallazgo"
+                >
+                  <Rocket />
+                  Exportar a Jira
+                </Button>
+              )}
 
               <Button
                 variant="secondary"
@@ -210,16 +222,33 @@ export function HallazgoPane({
       </div>
 
       {hallazgo ? (
-        <ConvertToTcDialog
-          open={convertOpen}
-          onOpenChange={setConvertOpen}
-          suites={suites}
-          isPending={mutations.convertToTestCase.isPending}
-          onConvert={async (suiteId) => {
-            await mutations.convertToTestCase.mutateAsync({ id: hallazgo.id, suiteId });
-            setConvertOpen(false);
-          }}
-        />
+        <>
+          <ConvertToTcDialog
+            open={convertOpen}
+            onOpenChange={setConvertOpen}
+            suites={suites}
+            isPending={mutations.convertToTestCase.isPending}
+            onConvert={async (suiteId) => {
+              await mutations.convertToTestCase.mutateAsync({ id: hallazgo.id, suiteId });
+              setConvertOpen(false);
+            }}
+          />
+
+          <JiraTicketDialog
+            open={jiraOpen}
+            onOpenChange={setJiraOpen}
+            projectId={projectId}
+            kind="hallazgo"
+            items={[
+              {
+                id: hallazgo.id,
+                title: hallazgo.title ?? 'Sin título',
+                severity: hallazgo.severity,
+                jira_key: hallazgo.jira_key,
+              },
+            ]}
+          />
+        </>
       ) : null}
     </div>
   );
