@@ -221,6 +221,7 @@ export function ExploratoriaPage() {
             </div>
           ) : (
             <SessionDetail
+              key={detail.run.id}
               detail={detail}
               projectId={projectId}
               team={team}

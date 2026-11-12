@@ -23,6 +23,7 @@ import type {
   User,
 } from '@/lib/api/types';
 import { HALLZGO_STATUSES } from '@/lib/api/types';
+import { EXPLORATORY_STATUSES } from '@/lib/api/types';
 import { cn } from '@/lib/utils';
 import { exploratoriaApi } from '@/lib/api/exploratoria';
 import { SelectField } from '@/components/ui/select-field';
@@ -139,6 +140,66 @@ export function SessionDetail({
     WONT_FIX: 'neutral',
   };
 
+  // ── Filtros (tipo, estado y tester) ─────────────────────────
+  const FLOW_STATUSES = [...EXPLORATORY_STATUSES, 'PENDING'];
+  const [typeFilter, setTypeFilter] = useState<'all' | 'flow' | 'hallazgo'>('all');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [testerFilter, setTesterFilter] = useState('all');
+
+  const testerName = (row: Row) =>
+    row.kind === 'flow'
+      ? (execByTc.get(row.flow.id)?.tester ??
+        team.find((user) => user.id === row.flow.assigned_to)?.name ??
+        '')
+      : (row.hallazgo.assignee_name ?? row.hallazgo.reporter_name ?? '');
+
+  const statusOf = (row: Row) =>
+    row.kind === 'flow' ? (execByTc.get(row.flow.id)?.status ?? 'PENDING') : row.hallazgo.status;
+
+  const statusOptions =
+    typeFilter === 'flow'
+      ? FLOW_STATUSES
+      : typeFilter === 'hallazgo'
+        ? [...HALLZGO_STATUSES]
+        : [...FLOW_STATUSES, ...HALLZGO_STATUSES];
+
+  // Los testers disponibles dependen del tipo elegido (TC vs hallazgo).
+  const scopedRows = typeFilter === 'all' ? rows : rows.filter((row) => row.kind === typeFilter);
+  const testerNames = [...new Set(scopedRows.map(testerName).filter(Boolean))].sort((a, b) =>
+    a.localeCompare(b),
+  );
+  const hasUnassigned = scopedRows.some((row) => !testerName(row));
+  const filtersActive =
+    typeFilter !== 'all' || statusFilter !== 'all' || testerFilter !== 'all';
+
+  const filteredRows = rows.filter((row) => {
+    if (typeFilter !== 'all' && row.kind !== typeFilter) return false;
+    if (statusFilter !== 'all' && statusOf(row) !== statusFilter) return false;
+    if (testerFilter === '__none__') return !testerName(row);
+    if (testerFilter !== 'all' && testerName(row) !== testerFilter) return false;
+    return true;
+  });
+
+  const changeType = (value: string) => {
+    const next = value as typeof typeFilter;
+    setTypeFilter(next);
+    const allowed =
+      next === 'flow'
+        ? FLOW_STATUSES
+        : next === 'hallazgo'
+          ? [...HALLZGO_STATUSES]
+          : [...FLOW_STATUSES, ...HALLZGO_STATUSES];
+    if (statusFilter !== 'all' && !allowed.includes(statusFilter)) setStatusFilter('all');
+    // La lista de testers cambia con el tipo: evitamos un filtro inválido.
+    setTesterFilter('all');
+  };
+
+  const clearFilters = () => {
+    setTypeFilter('all');
+    setStatusFilter('all');
+    setTesterFilter('all');
+  };
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <header className="shrink-0 border-b border-border bg-surface px-5 py-2.5">
@@ -227,6 +288,60 @@ export function SessionDetail({
               {hallazgos.length} hallazgo{hallazgos.length === 1 ? '' : 's'}
             </Badge>
           ) : null}
+        </div>
+      ) : null}
+
+      {rows.length > 0 ? (
+        <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border bg-surface px-5 py-2">
+          <span className="mr-1 text-caption font-semibold uppercase tracking-wide text-fg-subtle">
+            Filtros
+          </span>
+
+          <SelectField
+            value={typeFilter}
+            onValueChange={changeType}
+            allowEmpty={false}
+            aria-label="Filtrar por tipo"
+            className="h-8 w-32 text-footnote"
+            options={[
+              { value: 'all', label: 'Todos' },
+              { value: 'flow', label: 'TC' },
+              { value: 'hallazgo', label: 'Hallazgos' },
+            ]}
+          />
+
+          <SelectField
+            value={statusFilter}
+            onValueChange={setStatusFilter}
+            aria-label="Filtrar por estado"
+            className="h-8 w-40 text-footnote"
+            options={[
+              { value: 'all', label: 'Todos los estados' },
+              ...statusOptions.map((status) => ({ value: status, label: status })),
+            ]}
+          />
+
+          <SelectField
+            value={testerFilter}
+            onValueChange={setTesterFilter}
+            aria-label="Filtrar por tester"
+            className="h-8 w-44 text-footnote"
+            options={[
+              { value: 'all', label: 'Todos los testers' },
+              ...(hasUnassigned ? [{ value: '__none__', label: '— Sin asignar —' }] : []),
+              ...testerNames.map((name) => ({ value: name, label: name })),
+            ]}
+          />
+
+          {filtersActive ? (
+            <Button variant="ghost" size="sm" onClick={clearFilters}>
+              Limpiar
+            </Button>
+          ) : null}
+
+          <span className="ml-auto text-caption text-fg-subtle">
+            {filteredRows.length} de {rows.length}
+          </span>
         </div>
       ) : null}
 
@@ -440,13 +555,14 @@ export function SessionDetail({
                 },
               },
             ]}
-            rows={rows}
+            rows={filteredRows}
             getRowId={(row) => row.rowId}
             onRowClick={(row) =>
               setExpandedRowId((current) => (current === row.rowId ? null : row.rowId))
             }
             activeRowId={expandedRowId}
             expandedRowId={expandedRowId}
+            emptyMessage="Sin resultados para los filtros aplicados."
             renderExpanded={(row) =>
               row.kind === 'flow' ? (
                 <FlowDetail
