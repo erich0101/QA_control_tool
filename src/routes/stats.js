@@ -13,7 +13,7 @@ router.get('/jira-daily', requireAuth, async (req, res) => {
 
         const creds = await getJiraUserCredentials(project_id, req.user.id);
         if (creds.error) {
-            return res.json({ issues: [], assigneeCounts: {}, closedToday: 0, openCount: 0, avgResolutionDays: 0, error: creds.error });
+            return res.json({ issues: [], assigneeCounts: {}, closedToday: 0, openCount: 0, avgResolutionDays: 0, error: creds.error, error_code: creds.code });
         }
 
         const jql = `project = "${creds.projectKey}" AND issuetype = Bug AND (updated >= "-2d" OR statusCategory != Done)`;
@@ -133,7 +133,7 @@ router.get('/jira-productivity', requireAuth, async (req, res) => {
     const { project_id } = req.query;
     try {
         const creds = await getJiraUserCredentials(project_id, req.user.id);
-        if (creds.error) return res.json({ error: creds.error });
+        if (creds.error) return res.json({ error: creds.error, error_code: creds.code });
 
         const jql = `project = "${creds.projectKey}" AND issuetype = Bug AND (statusCategory != done OR resolved >= -30d)`;
         

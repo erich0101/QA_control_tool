@@ -2,8 +2,8 @@ import { CircleAlert, Ticket } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DataTable } from '@/components/ui/data-table';
-import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
+import { JiraSetupState } from '@/features/jira/components/jira-setup-state';
 import type { JiraDailyIssue } from '@/lib/api/stats';
 import { jiraIssueUrl } from '@/lib/api/jira';
 import { formatDate, initials } from '@/lib/utils';
@@ -52,10 +52,11 @@ export function DailyTab({ projectId }: { projectId: number }) {
 
   if (!data || data.error) {
     return (
-      <EmptyState
+      <JiraSetupState
+        projectId={projectId}
+        code={data?.error_code}
+        message={data?.error ?? 'No se pudo consultar Jira.'}
         icon={<CircleAlert />}
-        title="Configuración pendiente"
-        description={data?.error ?? 'Configurá el token de Jira para ver el tablero diario.'}
       />
     );
   }

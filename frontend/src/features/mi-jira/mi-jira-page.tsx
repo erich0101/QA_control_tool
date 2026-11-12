@@ -8,6 +8,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ApiError } from '@/lib/api/client';
 import { jiraIssueUrl } from '@/lib/api/jira';
+import { getJiraErrorCode, JiraSetupState } from '@/features/jira/components/jira-setup-state';
 import type { JiraTicket, MyJiraFilter } from '@/lib/api/types';
 import { cn, formatDate } from '@/lib/utils';
 import { useUiStore } from '@/stores/ui';
@@ -131,10 +132,11 @@ export function MiJiraPage() {
           </div>
         ) : errorMessage ? (
           <div className="p-8">
-            <EmptyState
+            <JiraSetupState
+              projectId={projectId}
+              code={getJiraErrorCode(error)}
+              message={errorMessage}
               icon={<Ticket />}
-              title="No se pudo consultar Jira"
-              description={errorMessage}
             />
           </div>
         ) : tickets.length === 0 ? (

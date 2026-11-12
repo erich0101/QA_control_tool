@@ -39,6 +39,8 @@ export interface JiraDailyStats {
   epicCounts?: Record<string, number>;
   jiraUrl?: string;
   error?: string;
+  /** `NO_PROJECT_CONFIG` | `NO_USER_TOKEN` (para el estado accionable). */
+  error_code?: string;
 }
 
 export interface TeamProductivity {
@@ -117,9 +119,10 @@ export const statsApi = {
     apiFetch<JiraDailyStats>('/api/stats/jira-daily', { query: { project_id: projectId } }),
 
   jiraProductivity: (projectId: number) =>
-    apiFetch<TeamProductivity[] | { error: string }>('/api/stats/jira-productivity', {
-      query: { project_id: projectId },
-    }),
+    apiFetch<TeamProductivity[] | { error: string; error_code?: string }>(
+      '/api/stats/jira-productivity',
+      { query: { project_id: projectId } },
+    ),
 
   /** Reporte de la épica para el cliente (Jira + métricas locales de QA). */
   epicReport: (projectId: number, epicKey: string, from: string, to: string) =>

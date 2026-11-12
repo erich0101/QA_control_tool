@@ -11,16 +11,31 @@ interface UiState {
   setActiveProjectId: (id: number | null) => void;
 }
 
+/** Clave que también usa la UI legacy: mantenerlas sincronizadas. */
+const LEGACY_PROJECT_KEY = 'activeProjectId';
+
+function writeLegacyProject(id: number | null) {
+  if (id == null) localStorage.removeItem(LEGACY_PROJECT_KEY);
+  else localStorage.setItem(LEGACY_PROJECT_KEY, String(id));
+}
+
+function readLegacyProject(): number | null {
+  const raw = localStorage.getItem(LEGACY_PROJECT_KEY);
+  const value = raw ? Number(raw) : NaN;
+  return Number.isFinite(value) && value > 0 ? value : null;
+}
+
 /**
  * Estado de UI persistido. Usamos las mismas claves de localStorage que la
- * versión legacy (theme / activeProjectId) para que la transición entre
- * ambas UIs no pierda el contexto del usuario.
+ * versión legacy (theme / activeProjectId) y escribimos ambas en cada cambio:
+ * así el proyecto activo sobrevive al cambio de UI, a un reload o a un
+ * `git pull`, y nadie "pierde" el contexto (ni la config de Jira asociada).
  */
 export const useUiStore = create<UiState>()(
   persist(
     (set, get) => ({
       theme: (localStorage.getItem('theme') as Theme) || 'dark',
-      activeProjectId: Number(localStorage.getItem('activeProjectId')) || null,
+      activeProjectId: readLegacyProject(),
 
       setTheme: (theme) => {
         set({ theme });
@@ -29,7 +44,10 @@ export const useUiStore = create<UiState>()(
 
       toggleTheme: () => get().setTheme(get().theme === 'dark' ? 'light' : 'dark'),
 
-      setActiveProjectId: (id) => set({ activeProjectId: id }),
+      setActiveProjectId: (id) => {
+        writeLegacyProject(id);
+        set({ activeProjectId: id });
+      },
     }),
     {
       name: 'qa_ui_state',
@@ -37,6 +55,19 @@ export const useUiStore = create<UiState>()(
         theme: state.theme,
         activeProjectId: state.activeProjectId,
       }),
+      merge: (persisted, current) => {
+        const stored = (persisted ?? {}) as Partial<UiState>;
+        // Migración desde la UI legacy: si dejó un proyecto, se respeta.
+        // (Después del cambio, ambas claves se escriben siempre igual.)
+        return {
+          ...current,
+          ...stored,
+          activeProjectId: readLegacyProject() ?? stored.activeProjectId ?? current.activeProjectId,
+        };
+      },
+      onRehydrateStorage: () => (state) => {
+        if (state) writeLegacyProject(state.activeProjectId);
+      },
     },
   ),
 );

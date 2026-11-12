@@ -11,7 +11,7 @@ const router = express.Router();
 router.get('/projects/:id/epics', requireAuth, async (req, res) => {
     try {
         const creds = await getJiraUserCredentials(req.params.id, req.user.id);
-        if (creds.error) return res.status(creds.code === 'NO_PROJECT_CONFIG' ? 404 : 403).json({ error: creds.error });
+        if (creds.error) return res.status(creds.code === 'NO_PROJECT_CONFIG' ? 404 : 403).json({ error: creds.error, code: creds.code });
         
         const epics = await JiraService.getEpics(creds.userCredentials, creds.projectKey, creds.domain);
         res.json({ epics });
@@ -23,7 +23,7 @@ router.get('/projects/:id/epics', requireAuth, async (req, res) => {
 router.get('/projects/:id/epic-stats', requireAuth, async (req, res) => {
     try {
         const creds = await getJiraUserCredentials(req.params.id, req.user.id);
-        if (creds.error) return res.status(creds.code === 'NO_PROJECT_CONFIG' ? 404 : 403).json({ error: creds.error });
+        if (creds.error) return res.status(creds.code === 'NO_PROJECT_CONFIG' ? 404 : 403).json({ error: creds.error, code: creds.code });
 
         const { epicKey, from, to } = req.query;
         if (!epicKey || !from || !to) {
@@ -370,7 +370,7 @@ router.get('/projects/:id/epic-stats', requireAuth, async (req, res) => {
 router.get('/projects/:id/my-tickets', requireAuth, async (req, res) => {
     try {
         const creds = await getJiraUserCredentials(req.params.id, req.user.id);
-        if (creds.error) return res.status(creds.code === 'NO_PROJECT_CONFIG' ? 404 : 403).json({ error: creds.error });
+        if (creds.error) return res.status(creds.code === 'NO_PROJECT_CONFIG' ? 404 : 403).json({ error: creds.error, code: creds.code });
 
         const { filter } = req.query;
         const maxResults = parseInt(req.query.maxResults) || 50;
@@ -413,7 +413,7 @@ router.get('/projects/:id/my-tickets', requireAuth, async (req, res) => {
 router.get('/projects/:id/context', requireAuth, async (req, res) => {
     try {
         const creds = await getJiraUserCredentials(req.params.id, req.user.id);
-        if (creds.error) return res.status(creds.code === 'NO_PROJECT_CONFIG' ? 404 : 403).json({ error: creds.error, epics: [], users: [], priorities: [], customFields: [] });
+        if (creds.error) return res.status(creds.code === 'NO_PROJECT_CONFIG' ? 404 : 403).json({ error: creds.error, code: creds.code, epics: [], users: [], priorities: [], customFields: [] });
         
         const [epics, users, priorities, customFields] = await Promise.all([
             JiraService.getEpics(creds.userCredentials, creds.projectKey, creds.domain),
@@ -432,7 +432,7 @@ router.get('/projects/:id/tracking', requireAuth, async (req, res) => {
     try {
         const projectId = req.params.id;
         const creds = await getJiraUserCredentials(projectId, req.user.id);
-        if (creds.error) return res.status(creds.code === 'NO_PROJECT_CONFIG' ? 404 : 403).json({ error: creds.error });
+        if (creds.error) return res.status(creds.code === 'NO_PROJECT_CONFIG' ? 404 : 403).json({ error: creds.error, code: creds.code });
 
         const dbBugs = await query(`
             SELECT d.id, d.title, d.jira_key, d.jira_url, d.created_at
@@ -474,7 +474,7 @@ router.get('/issues/:key/comments', requireAuth, async (req, res) => {
         if (!project_id) return res.status(400).json({ error: 'project_id requerido' });
         
         const creds = await getJiraUserCredentials(project_id, req.user.id);
-        if (creds.error) return res.status(creds.code === 'NO_PROJECT_CONFIG' ? 404 : 403).json({ error: creds.error });
+        if (creds.error) return res.status(creds.code === 'NO_PROJECT_CONFIG' ? 404 : 403).json({ error: creds.error, code: creds.code });
         
         const comments = await JiraService.getIssueComments(creds.userCredentials, creds.domain, req.params.key);
         res.json({ comments });
@@ -489,7 +489,7 @@ router.post('/issues/:key/comments', requireAuth, async (req, res) => {
         if (!text) return res.status(400).json({ error: 'El texto del comentario es requerido.' });
 
         const creds = await getJiraUserCredentials(project_id, req.user.id);
-        if (creds.error) return res.status(creds.code === 'NO_PROJECT_CONFIG' ? 404 : 403).json({ error: creds.error });
+        if (creds.error) return res.status(creds.code === 'NO_PROJECT_CONFIG' ? 404 : 403).json({ error: creds.error, code: creds.code });
         
         const result = await JiraService.addIssueComment(creds.userCredentials, creds.domain, req.params.key, text, mentionId);
         res.json({ ok: true, comment: result });
@@ -533,7 +533,7 @@ router.post('/defects/:id/create-ticket', requireAuth, async (req, res) => {
 
         // 4. Obtener credenciales del usuario
         const creds = await getJiraUserCredentials(projectId, req.user.id);
-        if (creds.error) return res.status(creds.code === 'NO_PROJECT_CONFIG' ? 404 : 403).json({ error: creds.error });
+        if (creds.error) return res.status(creds.code === 'NO_PROJECT_CONFIG' ? 404 : 403).json({ error: creds.error, code: creds.code });
 
         // 5. Crear Ticket
         const jiraResult = await JiraService.createIssue(creds.userCredentials, creds.projectKey, creds.domain, bug, epicId, assigneeId, priorityId, customFields);
@@ -604,7 +604,7 @@ router.post('/hallazgos/:id/create-ticket', requireAuth, async (req, res) => {
         }
 
         const creds = await getJiraUserCredentials(projectId, req.user.id);
-        if (creds.error) return res.status(creds.code === 'NO_PROJECT_CONFIG' ? 404 : 403).json({ error: creds.error });
+        if (creds.error) return res.status(creds.code === 'NO_PROJECT_CONFIG' ? 404 : 403).json({ error: creds.error, code: creds.code });
 
         const jiraResult = await JiraService.createIssue(creds.userCredentials, creds.projectKey, creds.domain, bug, epicId, assigneeId, priorityId, customFields);
         const jiraUrl = `${jiraResult.self.split('/rest/')[0]}/browse/${jiraResult.key}`;

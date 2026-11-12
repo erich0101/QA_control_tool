@@ -1,6 +1,7 @@
 import { Users } from 'lucide-react';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
+import { JiraSetupState } from '@/features/jira/components/jira-setup-state';
 import { cn, initials } from '@/lib/utils';
 import { ProgressBar } from './charts';
 import { useJiraProductivity } from '../use-dashboard';
@@ -25,9 +26,20 @@ export function ProductivityTab({ projectId }: { projectId: number }) {
     payload && !Array.isArray(payload) && typeof payload === 'object' && 'error' in payload
       ? String((payload as { error: unknown }).error)
       : null;
+  const errorCode =
+    payload && !Array.isArray(payload) && typeof payload === 'object' && 'error_code' in payload
+      ? String((payload as { error_code: unknown }).error_code)
+      : null;
 
   if (errorMessage) {
-    return <EmptyState icon={<Users />} title="Configuración pendiente" description={errorMessage} />;
+    return (
+      <JiraSetupState
+        projectId={projectId}
+        code={errorCode}
+        message={errorMessage}
+        icon={<Users />}
+      />
+    );
   }
 
   const team = Array.isArray(payload) ? payload : [];

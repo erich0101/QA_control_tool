@@ -6,6 +6,26 @@ import {
 } from '@/lib/api/projects';
 import { queryKeys } from '@/lib/query-keys';
 
+
+/**
+ * Pantallas que dependen de Jira: al cambiar la config o el token deben
+ * refrescarse solas (dashboard, seguimiento, Mi JIRA, épicas, tickets).
+ */
+const JIRA_DEPENDENT_KEYS = [
+  'stats-jira-daily',
+  'stats-jira-productivity',
+  'jira-tracking',
+  'my-jira-tickets',
+  'jira-context',
+  'epic-report',
+];
+
+function invalidateJiraQueries(queryClient: ReturnType<typeof useQueryClient>) {
+  queryClient.invalidateQueries({
+    predicate: (query) => JIRA_DEPENDENT_KEYS.includes(String(query.queryKey[0])),
+  });
+}
+
 /** Configuración del proyecto + si el usuario ya tiene token guardado. */
 export function useJiraConfig(projectId: number | null) {
   return useQuery({
@@ -36,6 +56,7 @@ export function useSaveJiraUserConfig(projectId: number | null) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.jiraConfig(projectId ?? 0) });
       queryClient.invalidateQueries({ queryKey: queryKeys.jiraContext(projectId) });
+      invalidateJiraQueries(queryClient);
     },
     onError: (error: Error) => toast.error(error.message),
   });
@@ -49,6 +70,7 @@ export function useDeleteJiraUserConfig(projectId: number | null) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.jiraConfig(projectId ?? 0) });
       queryClient.invalidateQueries({ queryKey: queryKeys.jiraContext(projectId) });
+      invalidateJiraQueries(queryClient);
       toast.success('Token de Jira eliminado');
     },
     onError: (error: Error) => toast.error(error.message),
@@ -70,6 +92,7 @@ export function useTestJiraConnection(projectId: number | null) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.jiraConfig(projectId ?? 0) });
       queryClient.invalidateQueries({ queryKey: queryKeys.jiraContext(projectId) });
+      invalidateJiraQueries(queryClient);
       toast.success('Conexión exitosa con Jira');
     },
     onError: (error: Error) => toast.error(`No se pudo conectar: ${error.message}`),
@@ -86,6 +109,7 @@ export function useSaveJiraConfig(projectId: number | null) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.jiraConfig(projectId ?? 0) });
       queryClient.invalidateQueries({ queryKey: queryKeys.jiraContext(projectId) });
+      invalidateJiraQueries(queryClient);
       toast.success('Configuración de Jira guardada');
     },
     onError: (error: Error) => toast.error(error.message),

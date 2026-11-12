@@ -6,6 +6,7 @@ import { DataTable } from '@/components/ui/data-table';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ApiError } from '@/lib/api/client';
+import { JiraSetupState, getJiraErrorCode } from '@/features/jira/components/jira-setup-state';
 import type { JiraTrackingItem } from '@/lib/api/types';
 import { formatDate } from '@/lib/utils';
 import { useUiStore } from '@/stores/ui';
@@ -106,7 +107,12 @@ export function JiraTrackingPage() {
             ))}
           </div>
         ) : errorMessage ? (
-          <EmptyState icon={<Target />} title="No se pudo consultar Jira" description={errorMessage} />
+          <JiraSetupState
+            projectId={projectId}
+            code={getJiraErrorCode(error)}
+            message={errorMessage}
+            icon={<Target />}
+          />
         ) : tracking.length === 0 ? (
           <EmptyState
             icon={<Target />}
