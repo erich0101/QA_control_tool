@@ -3,6 +3,9 @@ const sharp = require('sharp');
 const { query } = require('../../db');
 const evidenceStore = require('../../modules/evidence-store');
 
+// Respaldo del binario en PG; mismo tope que /api/evidence.
+const EMBED_MAX_BYTES = Number(process.env.EVIDENCE_EMBED_MAX_BYTES || 10 * 1024 * 1024);
+
 async function getEvidenceBase64(attachmentId) {
     try {
         const result = await query(
@@ -18,8 +21,14 @@ async function getEvidenceBase64(attachmentId) {
             buffer = Buffer.from(r.file_data, 'base64');
         } else {
             const abs = evidenceStore.absolutePath(r.storage_path);
-            if (!fs.existsSync(abs)) return null;
-            buffer = fs.readFileSync(abs);
+            if (fs.existsSync(abs)) {
+                buffer = fs.readFileSync(abs);
+            } else if (r.file_data) {
+                // El archivo local no está en esta máquina pero hay respaldo en PG.
+                buffer = Buffer.from(r.file_data, 'base64');
+            } else {
+                return null;
+            }
         }
 
         const isVideo = (r.mime_type || '').startsWith('video/');
@@ -111,10 +120,11 @@ async function saveAttachment(execId, defectId, fileObj, category) {
     const ins = await query(
         `INSERT INTO qa_attachments
             (execution_id, defect_id, file_name, mime_type, evidence_category, project_id,
-             storage_path, sha256, size_bytes, storage_kind)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'local')`,
+             storage_path, sha256, size_bytes, file_data, storage_kind)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'local')`,
         [execId, defectId, filename, mime, category || 'GENERAL', projectId,
-         stored.storagePath, stored.sha256, stored.size]
+         stored.storagePath, stored.sha256, stored.size,
+         finalBuffer.length <= EMBED_MAX_BYTES ? finalBuffer : null]
     );
     if (ins.lastID && stored.indexId) {
         evidenceStore.setPgAttachmentId(stored.indexId, ins.lastID);
