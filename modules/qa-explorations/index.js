@@ -13,6 +13,7 @@ const express = require('express');
 const multer = require('multer');
 const XLSX = require('xlsx');
 const { query } = require('../../db');
+const { getEvidenceBase64, evidenceHTML, lightboxHTML } = require('../../src/lib/report-evidence');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -187,7 +188,7 @@ router.get('/sessions/:runId', async (req, res) => {
         // db.js usa placeholders ? anónimos posicionales: runId va en [0],
         // los tc_id se expanden como ?, ?, ? y se concatenan al final.
         const execRes = await query(
-            `SELECT id, tc_id, status, observations, obtained_result, executed_at, tester
+            `SELECT id, tc_id, status, observations, obtained_result, executed_at, tester, tester_id
                FROM qa_executions
               WHERE run_id = ? AND tc_id IN (${flowIds.map(() => '?').join(',')})`,
             [runId, ...flowIds]
@@ -628,14 +629,31 @@ router.get('/sessions/:runId/bugs-report', async (req, res) => {
         if (runRes.rows.length === 0) return res.status(404).json({ error: 'Sesión no encontrada' });
         const run = runRes.rows[0];
 
+        // Filtro opcional por tester (id y/o nombre). Se usa `tester_id`
+        // cuando existe y el nombre como respaldo para datos viejos.
+        const testerId = req.query.tester_id ? parseInt(req.query.tester_id, 10) : null;
+        const testerName = req.query.tester ? String(req.query.tester) : null;
+        let testerFilter = '';
+        const execParams = [runId];
+        if (testerId && testerName) {
+            testerFilter = 'AND (e.tester_id = ? OR e.tester = ?)';
+            execParams.push(testerId, testerName);
+        } else if (testerId) {
+            testerFilter = 'AND e.tester_id = ?';
+            execParams.push(testerId);
+        } else if (testerName) {
+            testerFilter = 'AND e.tester = ?';
+            execParams.push(testerName);
+        }
+
         const execs = await query(`
-            SELECT e.id, e.status, e.obtained_result, e.observations, e.executed_at, e.tester,
+            SELECT e.id, e.status, e.obtained_result, e.observations, e.executed_at, e.tester, e.tester_id,
                    tc.title as tc_title, tc.steps, tc.expected_result, tc.key_id
             FROM qa_executions e
             JOIN qa_test_cases tc ON e.tc_id = tc.id
-            WHERE e.run_id = ? AND e.status IN ('FAIL', 'WARNING', 'BLOCK')
+            WHERE e.run_id = ? AND e.status IN ('FAIL', 'WARNING', 'BLOCK') ${testerFilter}
             ORDER BY e.executed_at DESC
-        `, [runId]);
+        `, execParams);
 
         const defects = await query(`
             SELECT d.id, d.title, d.description, d.severity, d.status, d.actual_result,
@@ -652,68 +670,18 @@ router.get('/sessions/:runId/bugs-report', async (req, res) => {
                OR a.defect_id IN (${defects.rows.map(d => d.id).join(',') || '0'})
         `);
 
-        const sharp = require('sharp');
-        const fs = require('fs');
-        const evidenceStore = require('../../modules/evidence-store');
-
-        async function getEvidenceBase64(attId) {
-            try {
-                const r = await query(`SELECT mime_type, storage_kind, storage_path, file_data FROM qa_attachments WHERE id = ?`, [attId]);
-                if (r.rows.length === 0) return null;
-                const row = r.rows[0];
-                let buffer;
-                if (row.storage_kind === 'legacy_pg' || !row.storage_kind || !row.storage_path) {
-                    if (!row.file_data) return null;
-                    buffer = Buffer.from(row.file_data, 'base64');
-                } else {
-                    const abs = evidenceStore.absolutePath(row.storage_path);
-                    if (!fs.existsSync(abs)) return null;
-                    buffer = fs.readFileSync(abs);
-                }
-                const isVideo = (row.mime_type || '').startsWith('video/');
-                if (isVideo) {
-                    return { type: 'video', mime: row.mime_type, data: `data:${row.mime_type};base64,${buffer.toString('base64')}` };
-                }
-                const compressed = await sharp(buffer).resize(800, 600, { fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 60 }).toBuffer();
-                return { type: 'image', mime: 'image/jpeg', data: `data:image/jpeg;base64,${compressed.toString('base64')}` };
-            } catch (e) { return null; }
-        }
-
-        function evidenceHTML(ev, maxWidth = 200) {
-            if (!ev) return '';
-            if (ev.type === 'video') {
-                return `<video src="${ev.data}" controls preload="none" style="max-width:${maxWidth}px; border-radius:6px; margin:4px; cursor:pointer;" title="Click para reproducir"></video>`;
-            }
-            return `<img src="${ev.data}" style="max-width:${maxWidth}px; border-radius:6px; margin:4px; cursor:pointer; transition:transform 0.2s;" onclick="openLightbox(this.src)" onmouseenter="this.style.transform='scale(1.05)'" onmouseleave="this.style.transform='scale(1)'" title="Click para ampliar">`;
-        }
-
-        function lightboxHTML() {
-            return `
-                <div id="lightbox" onclick="closeLightbox()" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.9); z-index:9999; cursor:pointer; align-items:center; justify-content:center;">
-                    <img id="lightbox-img" style="max-width:95vw; max-height:95vh; object-fit:contain; border-radius:8px;">
-                    <button onclick="closeLightbox()" style="position:absolute; top:20px; right:20px; background:white; border:none; width:40px; height:40px; border-radius:50%; font-size:1.2rem; cursor:pointer; font-weight:700;">✕</button>
-                </div>
-                <script>
-                    function openLightbox(src) {
-                        document.getElementById('lightbox-img').src = src;
-                        document.getElementById('lightbox').style.display = 'flex';
-                    }
-                    function closeLightbox() {
-                        document.getElementById('lightbox').style.display = 'none';
-                        document.getElementById('lightbox-img').src = '';
-                    }
-                    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
-                </script>
-            `;
-        }
-
         const evidByExec = {};
         const evidByDef = {};
+        let omittedEvidence = 0;
         for (const a of attachments.rows) {
+            // Si el archivo no está en esta máquina y no hay copia en PG, se
+            // omite (el reporte sigue generándose).
             const ev = await getEvidenceBase64(a.id);
             if (ev) {
                 if (a.execution_id) { evidByExec[a.execution_id] = evidByExec[a.execution_id] || []; evidByExec[a.execution_id].push(ev); }
                 if (a.defect_id) { evidByDef[a.defect_id] = evidByDef[a.defect_id] || []; evidByDef[a.defect_id].push(ev); }
+            } else {
+                omittedEvidence += 1;
             }
         }
 
@@ -767,7 +735,7 @@ router.get('/sessions/:runId/bugs-report', async (req, res) => {
         @media print{body{background:white;padding:0}}</style></head><body>
         <div class="header">
             <h1>Reporte de Bugs - Sesión #${run.id}</h1>
-            <p>${escapeHTML(run.name || 'Exploratoria')} | ${escapeHTML(run.project_name)} | Tester: ${escapeHTML(run.creator_name || '—')}</p>
+            <p>${escapeHTML(run.name || 'Exploratoria')} | ${escapeHTML(run.project_name)} | Tester: ${escapeHTML(testerName || 'Todos')}</p>
         </div>
         <div style="display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap;">
             <div class="kpi"><div class="kpi-val">${execs.rows.length}</div><div class="kpi-lab">Tests con Issues</div></div>
@@ -777,6 +745,7 @@ router.get('/sessions/:runId/bugs-report', async (req, res) => {
             <div class="kpi"><div class="kpi-val">${defects.rows.length}</div><div class="kpi-lab">Defectos</div></div>
         </div>
         ${execsHTML || '<div style="text-align:center;padding:40px;color:#6b7280;">Sin tests con problemas en esta sesión</div>'}
+        ${omittedEvidence > 0 ? `<div style="text-align:center;padding:8px;color:#b45309;font-size:.72rem;">${omittedEvidence} evidencia(s) no disponible(s) en esta máquina: se omitieron del reporte.</div>` : ''}
         <div class="footer">Reporte generado automáticamente | ${new Date().toLocaleString('es-AR')}</div>
         ${lightboxHTML()}
         </body></html>`;

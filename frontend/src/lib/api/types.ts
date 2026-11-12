@@ -350,6 +350,7 @@ export interface ExploratoryExecution {
   obtained_result?: string | null;
   executed_at?: string | null;
   tester?: string | null;
+  tester_id?: number | null;
 }
 
 export interface ExploratoryAttachment {

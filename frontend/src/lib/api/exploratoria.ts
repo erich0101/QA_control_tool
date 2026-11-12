@@ -46,7 +46,16 @@ export const exploratoriaApi = {
   finishSession: (runId: number) =>
     apiFetch<{ ok: true }>(`/api/explorations/sessions/${runId}/finish`, { method: 'POST' }),
 
-  bugsReportUrl: (runId: number) => `/api/explorations/sessions/${runId}/bugs-report`,
+  bugsReportUrl: (
+    runId: number,
+    options?: { testerId?: number | null; tester?: string | null },
+  ) => {
+    const params = new URLSearchParams();
+    if (options?.testerId) params.set('tester_id', String(options.testerId));
+    if (options?.tester) params.set('tester', options.tester);
+    const qs = params.toString();
+    return `/api/explorations/sessions/${runId}/bugs-report${qs ? `?${qs}` : ''}`;
+  },
 
   /** Evidencia atada a la ejecución del flujo (no al TC). */
   uploadEvidence: ({ file, executionId, category }: { file: File; executionId: number; category: string }) => {

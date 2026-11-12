@@ -26,9 +26,9 @@ import type {
 import { HALLZGO_STATUSES } from '@/lib/api/types';
 import { EXPLORATORY_STATUSES } from '@/lib/api/types';
 import { cn } from '@/lib/utils';
-import { exploratoriaApi } from '@/lib/api/exploratoria';
 import { SelectField } from '@/components/ui/select-field';
 import { JiraTicketDialog } from '@/features/jira-tickets/jira-ticket-dialog';
+import { BugsReportDialog } from './bugs-report-dialog';
 import { FlowDetail } from './flow-detail';
 
 interface SessionDetailProps {
@@ -96,6 +96,7 @@ export function SessionDetail({
 }: SessionDetailProps) {
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
   const [jiraHallazgoId, setJiraHallazgoId] = useState<number | null>(null);
+  const [reportOpen, setReportOpen] = useState(false);
   const { run, flows, executions, defects, attachments, hallazgos = [] } = detail;
   const isFinished = run.status === 'FINISHED';
   const jiraHallazgo = hallazgos.find((hallazgo) => hallazgo.id === jiraHallazgoId) ?? null;
@@ -222,7 +223,7 @@ export function SessionDetail({
             variant="ghost"
             size="sm"
             className="text-fail"
-            onClick={() => window.open(exploratoriaApi.bugsReportUrl(run.id), '_blank', 'noopener')}
+            onClick={() => setReportOpen(true)}
           >
             <FileText />
             Reporte bugs
@@ -686,6 +687,14 @@ export function SessionDetail({
               ]
             : []
         }
+      />
+
+      <BugsReportDialog
+        open={reportOpen}
+        onOpenChange={setReportOpen}
+        runId={run.id}
+        runName={run.name}
+        executions={executions}
       />
     </div>
   );
