@@ -18,7 +18,8 @@ Tiempo estimado: **15-30 minutos**.
 
 ## 1. Requisitos previos
 
-- **Node.js 18+** instalado (`node -v` para verificar).
+- **Node.js 22.12+** instalado (`node -v` para verificar). Vite 8 y el
+  frontend nuevo requieren esta versión.
 - Una cuenta en [Supabase](https://supabase.com) (es gratis para empezar).
 - Git para clonar el repositorio.
 
@@ -29,10 +30,21 @@ Tiempo estimado: **15-30 minutos**.
 ```bash
 git clone <URL-DEL-REPO>
 cd <carpeta-del-repo>
-npm install
+git fetch origin
+git switch refactor_UI
+git pull
 ```
 
-> Si ya lo tienes clonado, simplemente haz `git pull` y `npm install` para asegurarte de tener la última versión.
+Instalá backend y frontend, y compilá la UI nueva:
+
+```bash
+npm run setup
+```
+
+> `npm run setup` = `npm install` + `cd frontend && npm install` +
+> `cd frontend && npm run build`.
+>
+> Si ya lo tenés clonado y sólo actualizás: `git pull` y luego `npm run update`.
 
 ---
 
@@ -107,6 +119,9 @@ PORT=3001
 JWT_SECRET=<GENERA-32-BYTES-HEX>
 JIRA_ENCRYPTION_KEY=<GENERA-32-BYTES-HEX>
 
+# Opcional: tope de respaldo de evidencias en Postgres (bytes)
+# EVIDENCE_EMBED_MAX_BYTES=10485760
+
 # ──────────────────────────────────────────────
 # Opcionales (si aplican, si no, déjalos vacíos o bórralos)
 # ──────────────────────────────────────────────
@@ -124,9 +139,12 @@ Abre una terminal en la carpeta del proyecto y ejecuta:
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
-Hazlo **dos veces**: una para `JWT_SECRET` y otra para `JIRA_ENCRYPTION_KEY`. Cada ejecución produce una cadena hex de 64 caracteres.
+Hazlo **dos veces**: una para `JWT_SECRET` y otra para `JIRA_ENCRYPTION_KEY`.
+Cada ejecución produce una cadena hex de 64 caracteres (32 bytes).
 
-> **Importante:** Si `JIRA_ENCRYPTION_KEY` no tiene exactamente 32 bytes, el cifrado AES-256-CBC de los tokens de Jira **fallará** y no podrás guardar credenciales de Jira. La salida del comando de arriba ya tiene el tamaño correcto.
+> `JIRA_ENCRYPTION_KEY` acepta 64 caracteres hex o una cadena de 32
+> caracteres; cualquier otro valor se deriva con SHA-256. Igual conviene usar
+> una llave nueva y no reutilizar la de otro equipo.
 
 ---
 
@@ -150,11 +168,15 @@ Manual QA Tool (JIRA Edition) -> http://localhost:3001
 
 El servidor crea **automáticamente** todas las tablas, índices, y el usuario admin la primera vez que arranca.
 
+Las migraciones corren en background: el puerto abre enseguida y el esquema
+termina de actualizarse en ~30 segundos.
+
 ---
 
 ## 7. Primer acceso y cambio obligatorio de contraseña
 
-1. Abre `http://localhost:3001` (o el puerto que hayas puesto).
+1. Abre `http://localhost:3001/app` (UI nueva) o `http://localhost:3001`
+   (UI legacy).
 2. Inicia sesión con:
    - **Email:** `erich@qa.local`
    - **Contraseña:** `admin123`
@@ -172,7 +194,9 @@ El servidor crea **automáticamente** todas las tablas, índices, y el usuario a
 - Tu base de datos es **independiente**: nadie más la ve.
 - Los tokens de Jira se cifran con **tu propia** `JIRA_ENCRYPTION_KEY`.
 - Las sesiones de usuario se firman con **tu propio** `JWT_SECRET`.
-- Los adjuntos/evidencias viven como BLOB dentro de tu propio Supabase.
+- Las evidencias se guardan en `data/evidences/` de tu máquina y, si entran
+  en el tope, también como respaldo en tu Supabase (`file_data`).
+  Corré `npm run evidences:publish` para respaldar las históricas.
 
 En resumen: **aislamiento total**.
 
@@ -180,12 +204,13 @@ En resumen: **aislamiento total**.
 
 ## 9. Checklist rápido
 
-- [ ] Cloné el repo y corrí `npm install`.
+- [ ] Cloné el repo en la rama `refactor_UI` y corrí `npm run setup`.
 - [ ] Creé mi propio proyecto Supabase.
 - [ ] Copié `SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY` desde Project Settings → API.
 - [ ] Ejecuté `docs/sql/create_exec_query_function.sql` en el SQL Editor de Supabase.
 - [ ] Creé mi `.env` con mis propias llaves generadas.
 - [ ] `npm start` arrancó sin errores y vi el mensaje "Esquema verificado".
+- [ ] Abrí `http://localhost:3001/app` y carga la UI nueva.
 - [ ] Hice login con `erich@qa.local` / `admin123`.
 - [ ] **Cambié la contraseña del admin.**
 - [ ] (Opcional) Creé un proyecto de prueba y verifiqué que persiste.

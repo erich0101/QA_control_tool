@@ -6,10 +6,16 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
-    "verify-index": "node scripts/verify-index.js",
+    "setup": "npm install && npm run ui:install && npm run ui:build",
+    "update": "npm install && npm run ui:install && npm run ui:build",
+    "ui:install": "cd frontend && npm install",
     "ui:dev": "npm --prefix frontend run dev",
     "ui:build": "npm --prefix frontend run build",
-    "ui:typecheck": "npm --prefix frontend run typecheck"
+    "ui:typecheck": "npm --prefix frontend run typecheck",
+    "check:ui": "npm --prefix frontend run check:ui",
+    "evidences:audit": "node tools/evidences-sync.js",
+    "evidences:publish": "node tools/evidences-sync.js --publish",
+    "verify-index": "node scripts/verify-index.js"
   },
   "author": "",
   "license": "ISC",
@@ -31,5 +37,8 @@
   },
   "devDependencies": {
     "nodemon": "^3.0.1"
+  },
+  "engines": {
+    "node": ">=22.12.0"
   }
 }

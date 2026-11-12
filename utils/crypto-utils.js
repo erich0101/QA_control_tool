@@ -1,7 +1,18 @@
 const crypto = require('crypto');
 
-// La clave de cifrado debe ser de 32 bytes para aes-256-cbc
-const ENCRYPTION_KEY = process.env.JIRA_ENCRYPTION_KEY || 'a'.repeat(32); 
+// AES-256-CBC requiere una clave de 32 bytes. Aceptamos:
+//  - 32 caracteres (clave histórica del proyecto, se mantiene igual),
+//  - 64 caracteres hex (formato recomendado en .env.example),
+//  - cualquier otra cadena: se deriva con SHA-256 para no romper el arranque.
+function getEncryptionKey() {
+    const raw = process.env.JIRA_ENCRYPTION_KEY || 'a'.repeat(32);
+    if (/^[0-9a-fA-F]{64}$/.test(raw)) return Buffer.from(raw, 'hex');
+    const asUtf8 = Buffer.from(raw);
+    if (asUtf8.length === 32) return asUtf8;
+    return crypto.createHash('sha256').update(raw).digest();
+}
+
+const ENCRYPTION_KEY = getEncryptionKey();
 const IV_LENGTH = 16; // Para AES, esto es siempre 16
 
 function encrypt(text) {
