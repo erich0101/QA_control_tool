@@ -401,6 +401,65 @@ export function SessionDetail({
         </div>
       ) : null}
 
+      {extensions.length > 0 ? (
+        <details className="shrink-0 border-b border-border bg-surface px-5 py-2 text-caption">
+          <summary className="cursor-pointer select-none font-medium text-fg-muted">
+            Trazabilidad de fecha límite · {extensions.length} postergación
+            {extensions.length === 1 ? '' : 'es'}
+          </summary>
+          <div className="mt-2 space-y-2">
+            <p className="text-fg-subtle">
+              Original:{' '}
+              <strong className="text-fg-muted">
+                {new Date(
+                  [...extensions].reverse()[0]?.previous_deadline ?? run.deadline_at ?? '',
+                ).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })}
+              </strong>{' '}
+              · Actual:{' '}
+              <strong className="text-fg-muted">
+                {new Date(
+                  extensions[0]?.new_deadline ?? run.deadline_at ?? '',
+                ).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })}
+              </strong>
+            </p>
+            <ol className="space-y-1.5">
+              {[...extensions].reverse().map((extension) => (
+                <li
+                  key={extension.id}
+                  className="rounded-md border border-border bg-surface-2 px-2.5 py-1.5"
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-medium text-fg">
+                      {extension.previous_deadline
+                        ? new Date(extension.previous_deadline).toLocaleString('es-AR', {
+                            dateStyle: 'short',
+                            timeStyle: 'short',
+                          })
+                        : '—'}{' '}
+                      →{' '}
+                      {new Date(extension.new_deadline).toLocaleString('es-AR', {
+                        dateStyle: 'short',
+                        timeStyle: 'short',
+                      })}
+                    </span>
+                    <span className="text-fg-subtle">
+                      por {extension.created_by_name ?? '—'}
+                      {extension.created_at
+                        ? ` · ${new Date(extension.created_at).toLocaleString('es-AR', {
+                            dateStyle: 'short',
+                            timeStyle: 'short',
+                          })}`
+                        : ''}
+                    </span>
+                  </div>
+                  <p className="mt-0.5 text-fg-muted">{extension.reason}</p>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </details>
+      ) : null}
+
       {total > 0 || hallazgos.length > 0 ? (
         <div className="flex shrink-0 flex-wrap items-center gap-4 border-b border-border bg-surface-2 px-5 py-2">
           {total > 0 ? (

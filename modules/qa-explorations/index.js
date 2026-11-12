@@ -1130,6 +1130,22 @@ router.get('/reports/status', async (req, res) => {
         `, runIds);
         const totalsByRun = new Map(runTotalsRes.rows.map(r => [r.run_id, r]));
         const totalPending = runTotalsRes.rows.reduce((acc, row) => acc + row.pending, 0);
+
+        // Trazabilidad de la fecha límite: todas las postergaciones.
+        const extRes = runIds.length === 0 ? { rows: [] } : await query(`
+            SELECT e.run_id, e.previous_deadline, e.new_deadline, e.reason, e.created_at,
+                   u.name AS created_by_name
+              FROM qa_exploratory_extensions e
+              LEFT JOIN qa_users u ON u.id = e.created_by
+             WHERE e.run_id IN (${runIds.map(() => '?').join(',')})
+             ORDER BY e.run_id, e.id ASC
+        `, runIds);
+        const extensionsByRun = new Map();
+        for (const ext of extRes.rows) {
+            if (!extensionsByRun.has(ext.run_id)) extensionsByRun.set(ext.run_id, []);
+            extensionsByRun.get(ext.run_id).push(ext);
+        }
+        const totalExtensions = extRes.rows.length;
         const sessionTotals = runTotalsRes.rows.reduce(
             (acc, row) => ({
                 total: acc.total + row.total,
@@ -1365,6 +1381,16 @@ router.get('/reports/status', async (req, res) => {
                         const pct = t && t.total > 0 ? Math.round((t.ok / t.total) * 100) : null;
                         return `<strong style="color:${acceptanceColor(pct)}">${pct === null ? '—' : pct + '%'}</strong>`;
                     })()}</div>
+                    ${(() => {
+                        const runExts = extensionsByRun.get(run.id) || [];
+                        const original = runExts[0]?.previous_deadline || run.deadline_at;
+                        const current = runExts[runExts.length - 1]?.new_deadline || run.deadline_at;
+                        return `<div style="margin-top:6px;border-top:1px dashed #e5e7eb;padding-top:6px;">
+                            <div style="font-size:.64rem;font-weight:700;color:#6b7280;text-transform:uppercase;">Trazabilidad de fecha límite</div>
+                            <div style="font-size:.68rem;color:#4b5563;margin-top:2px;">Original: ${original ? fmtReportDate(original) : 'sin definir'} · Actual: ${current ? fmtReportDate(current) : 'sin definir'}${runExts.length ? ` · ${runExts.length} postergación(es)` : ''}</div>
+                            ${runExts.length ? `<ol style="margin:4px 0 0 16px;padding:0;font-size:.66rem;color:#4b5563;">${runExts.map((ext) => `<li style="margin-bottom:2px;">${ext.previous_deadline ? fmtReportDate(ext.previous_deadline) : '—'} → ${fmtReportDate(ext.new_deadline)} · <em>${htmlEscape(ext.reason)}</em> · ${htmlEscape(ext.created_by_name || '—')} · ${fmtReportDate(ext.created_at)}</li>`).join('')}</ol>` : '<div style="font-size:.66rem;color:#6b7280;">Sin postergaciones.</div>'}
+                        </div>`;
+                    })()}
                     <div style="margin-top:4px;">${run.coverage_ready
                         ? '<span style="font-size:.62rem;font-weight:700;background:#dcfce7;color:#15803d;padding:2px 8px;border-radius:10px;">✓ TC de cobertura declarados</span>'
                         : '<span style="font-size:.62rem;font-weight:700;background:#fef3c7;color:#b45309;padding:2px 8px;border-radius:10px;">⚠ TC de cobertura sin declarar</span>'}</div>
@@ -1404,6 +1430,7 @@ router.get('/reports/status', async (req, res) => {
             <div class="kpi"><div class="kpi-val">${counts.BLOCK}</div><div class="kpi-lab">BLOCK</div></div>
             <div class="kpi"><div class="kpi-val">${counts.SKIP}</div><div class="kpi-lab">SKIP</div></div>
             <div class="kpi" title="Flujos sin ejecutar en las sesiones del reporte"><div class="kpi-val">${totalPending}</div><div class="kpi-lab">Pendientes</div></div>
+            <div class="kpi" title="Cambios de fecha límite registrados con justificación"><div class="kpi-val">${totalExtensions}</div><div class="kpi-lab">Postergaciones</div></div>
             <div class="kpi"><div class="kpi-val">${hallazgos.rows.length}</div><div class="kpi-lab">Hallazgos</div></div>
             <div class="kpi"><div class="kpi-val">${defects.rows.length}</div><div class="kpi-lab">Defectos</div></div>
         </div>

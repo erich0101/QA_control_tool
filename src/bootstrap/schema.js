@@ -77,7 +77,7 @@ await query(`ALTER TABLE qa_defects ADD COLUMN IF NOT EXISTS observations TEXT`)
                 new_deadline TIMESTAMPTZ NOT NULL,
                 reason TEXT NOT NULL,
                 created_by INTEGER REFERENCES qa_users(id) ON DELETE SET NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
             )
         `);
         // Migración de columnas creadas como TIMESTAMP (sin zona) a TIMESTAMPTZ.
@@ -104,6 +104,16 @@ await query(`ALTER TABLE qa_defects ADD COLUMN IF NOT EXISTS observations TEXT`)
             await query(`
                 ALTER TABLE qa_exploratory_extensions
                     ALTER COLUMN new_deadline TYPE TIMESTAMPTZ USING new_deadline AT TIME ZONE 'UTC'
+            `);
+        }
+        const createdAtType = await query(`
+            SELECT data_type FROM information_schema.columns
+             WHERE table_name = 'qa_exploratory_extensions' AND column_name = 'created_at'
+        `);
+        if (createdAtType.rows[0]?.data_type === 'timestamp without time zone') {
+            await query(`
+                ALTER TABLE qa_exploratory_extensions
+                    ALTER COLUMN created_at TYPE TIMESTAMPTZ USING created_at AT TIME ZONE 'UTC'
             `);
         }
 
