@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ChevronRight, ExternalLink, RotateCcw, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { ReadField } from '@/components/ui/read-field';
 import type { Defect } from '@/lib/api/types';
 import { cn } from '@/lib/utils';
 
@@ -23,16 +24,6 @@ const STATUS_TONE: Record<string, 'ok' | 'warn' | 'neutral'> = {
   OPEN: 'warn',
   DISMISSED: 'neutral',
 };
-
-function DetailRow({ label, value }: { label: string; value?: string | null }) {
-  if (!value) return null;
-  return (
-    <div>
-      <p className="text-caption font-bold uppercase tracking-wide text-fg-subtle">{label}</p>
-      <p className="whitespace-pre-wrap text-footnote text-fg">{value}</p>
-    </div>
-  );
-}
 
 export function BugRow({ bug, onDismiss, isBusy }: BugRowProps) {
   const [expanded, setExpanded] = useState(false);
@@ -105,13 +96,23 @@ export function BugRow({ bug, onDismiss, isBusy }: BugRowProps) {
 
       {expanded ? (
         <div className="grid gap-3 border-t border-border bg-surface-2 px-14 py-3 md:grid-cols-2">
-          <DetailRow label="Descripción" value={bug.description} />
-          <DetailRow label="Pasos para reproducir" value={bug.steps_to_reproduce} />
-          <DetailRow label="Resultado esperado" value={bug.expected_result} />
-          <DetailRow label="Resultado real" value={bug.actual_result} />
-          <DetailRow label="Frecuencia" value={bug.frequency} />
-          <DetailRow label="Impacto de negocio" value={bug.business_impact} />
-          <DetailRow label="Observaciones" value={bug.observations} />
+          {bug.description ? <ReadField label="Descripción" value={bug.description} /> : null}
+          {bug.steps_to_reproduce ? (
+            <ReadField label="Pasos para reproducir" value={bug.steps_to_reproduce} mono />
+          ) : null}
+          {bug.expected_result ? (
+            <ReadField label="Resultado esperado" value={bug.expected_result} />
+          ) : null}
+          {bug.actual_result ? (
+            <ReadField label="Resultado real" value={bug.actual_result} />
+          ) : null}
+          {bug.frequency ? <ReadField label="Frecuencia" value={bug.frequency} /> : null}
+          {bug.business_impact ? (
+            <ReadField label="Impacto de negocio" value={bug.business_impact} />
+          ) : null}
+          {bug.observations ? (
+            <ReadField label="Observaciones" value={bug.observations} />
+          ) : null}
 
           <div className="md:col-span-2 flex flex-wrap gap-4 border-t border-border pt-2 text-caption text-fg-subtle">
             <span>TC: {bug.tc_key ?? '—'}</span>

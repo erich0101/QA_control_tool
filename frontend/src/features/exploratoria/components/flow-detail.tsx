@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useConfirm } from '@/components/ui/confirm-provider';
 import { Field } from '@/components/ui/field';
+import { ReadField } from '@/components/ui/read-field';
 import { Input, Textarea } from '@/components/ui/input';
 import { SelectField } from '@/components/ui/select-field';
 import type {
@@ -185,20 +186,19 @@ export function FlowDetail({
   return (
     <div className="space-y-4 px-4 py-4">
       <div className="grid gap-3 md:grid-cols-2">
-        <div>
-          <p className="mb-1 text-caption font-bold uppercase tracking-wide text-fg-subtle">Pasos</p>
-          <pre className="scrollbar-apple max-h-40 overflow-auto whitespace-pre-wrap rounded-md border border-border bg-surface p-3 font-mono text-footnote text-fg">
-            {flow.steps || 'Sin pasos definidos.'}
-          </pre>
-        </div>
-        <div>
-          <p className="mb-1 text-caption font-bold uppercase tracking-wide text-fg-subtle">
-            Resultado esperado
-          </p>
-          <div className="max-h-40 overflow-auto whitespace-pre-wrap rounded-md border border-border bg-surface p-3 text-footnote text-fg">
-            {flow.expected_result || '—'}
-          </div>
-        </div>
+        <ReadField
+          label="Pasos"
+          value={flow.steps}
+          empty="Sin pasos definidos."
+          mono
+          maxHeightClassName="max-h-40"
+        />
+        <ReadField
+          label="Resultado esperado"
+          value={flow.expected_result}
+          empty="Sin resultado esperado definido."
+          maxHeightClassName="max-h-40"
+        />
       </div>
 
       {defects.length > 0 ? (

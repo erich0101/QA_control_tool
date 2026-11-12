@@ -370,3 +370,44 @@ Nota de arquitectura: `db.js` ejecuta cada consulta contra Supabase vía RPC
 es un adaptador que delega en `query()`. Cualquier código nuevo debe ser
 idempotente o compensar errores a mano.
 
+
+## Reglas de UI (design system)
+
+Cada tipo de elemento tiene **un solo** componente. Si una pantalla necesita
+otra variante, se extiende el primitivo; no se copia el markup.
+
+| Necesidad | Componente obligatorio | Prohibido |
+|---|---|---|
+| Campo editable (label + control) | `Field` + `Input` / `Textarea` / `SelectField` | label/`<input>` sueltos |
+| Texto de solo lectura con label | **`ReadField`** (`components/ui/read-field.tsx`) | `<p>`/`<pre>`/`<div>` armados a mano |
+| Tabla / listado | `DataTable` | `<table>` |
+| Textarea | `Textarea` | `<textarea>` |
+| Diálogo / confirmación | `Dialog*` / `useConfirm` | `window.confirm`, modales ad-hoc |
+| Notificaciones | `toast` (sonner) | alerts |
+
+`ReadField` centraliza label + bloque multilínea (borde, `whitespace-pre-wrap`,
+scroll y estado vacío). Ejemplo:
+
+```tsx
+<ReadField label="Pasos para reproducir" value={hallazgo.steps_to_reproduce} mono />
+<ReadField label="Resultado esperado" value={hallazgo.expected_result} />
+```
+
+### Cómo se evita que vuelva a pasar
+
+1. **Chequeo automático**: `npm run check:ui`
+   (`frontend/scripts/check-ui-conventions.mjs`) falla si aparece `<table>`,
+   `<textarea>`, `<pre>` o `whitespace-pre-wrap` fuera de los componentes
+   permitidos. Corre en `prebuild`, así que un `npm run build` no compila con
+   el patrón prohibido.
+2. **Allowlist explícita** para casos legítimos: viewers de código
+   (`features/tools/**`) y cuerpos de comentarios de Jira (donde el texto no
+   es un campo con label).
+3. **Regla de revisión**: si un PR agrega un bloque "Label + texto", debe
+   aparecer `ReadField` en el diff. Cualquier excepción se justifica en el
+   mismo PR y se agrega a la allowlist.
+4. **Un solo lugar para cambiar estilos**: ajustar `ReadField` (o `Field`)
+   impacta en todas las pantallas automáticamente.
+
+Refactor aplicado con esta regla: detalle de hallazgo y de flujo en
+Exploratoria, detalle de ejecución y fila de bug en Historial.

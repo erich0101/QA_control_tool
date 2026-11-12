@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button';
 import { DataTable } from '@/components/ui/data-table';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Label } from '@/components/ui/label';
+import { ReadField } from '@/components/ui/read-field';
 import type {
   ExploratoryAttachment,
   ExploratoryDetail,
@@ -640,31 +641,14 @@ export function SessionDetail({
                     </div>
                   </div>
 
-                  {row.hallazgo.description?.trim() ? (
-                    <div className="space-y-1">
-                      <p className="text-caption font-semibold uppercase tracking-wide text-fg-subtle">
-                        Descripción
-                      </p>
-                      <p className="whitespace-pre-wrap text-footnote text-fg-muted">
-                        {row.hallazgo.description}
-                      </p>
-                    </div>
-                  ) : null}
-
-                  {[
-                    ['Pasos para reproducir', row.hallazgo.steps_to_reproduce],
-                    ['Resultado esperado', row.hallazgo.expected_result],
-                    ['Resultado obtenido', row.hallazgo.actual_result],
-                  ]
-                    .filter(([, value]) => Boolean(value && String(value).trim()))
-                    .map(([label, value]) => (
-                      <div key={String(label)} className="space-y-1">
-                        <p className="text-caption font-semibold uppercase tracking-wide text-fg-subtle">
-                          {label}
-                        </p>
-                        <p className="whitespace-pre-wrap text-footnote text-fg-muted">{value}</p>
-                      </div>
-                    ))}
+                  <ReadField label="Descripción" value={row.hallazgo.description} />
+                  <ReadField
+                    label="Pasos para reproducir"
+                    value={row.hallazgo.steps_to_reproduce}
+                    mono
+                  />
+                  <ReadField label="Resultado esperado" value={row.hallazgo.expected_result} />
+                  <ReadField label="Resultado obtenido" value={row.hallazgo.actual_result} />
 
                   {row.hallazgo.jira_key ? null : (
                     <Button

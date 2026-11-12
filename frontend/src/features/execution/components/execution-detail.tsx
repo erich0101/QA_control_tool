@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
+import { ReadField } from '@/components/ui/read-field';
 import { Textarea } from '@/components/ui/input';
 import type { BugDraft, ExecutionStatus, TestCase } from '@/lib/api/types';
 import { cn } from '@/lib/utils';
@@ -98,23 +99,17 @@ export function ExecutionDetail({ testCase, projectId }: ExecutionDetailProps) {
   return (
     <div className="space-y-4 px-4 py-4">
       <div className="grid gap-3 md:grid-cols-2">
-        <div>
-          <p className="mb-1 text-caption font-bold uppercase tracking-wide text-fg-subtle">
-            Instrucciones / Pasos
-          </p>
-          <pre className="scrollbar-apple max-h-48 overflow-auto whitespace-pre-wrap rounded-md border border-border bg-surface p-3 font-mono text-footnote leading-relaxed text-fg">
-            {testCase.steps || testCase.description || 'Sin pasos.'}
-          </pre>
-        </div>
-
-        <div>
-          <p className="mb-1 text-caption font-bold uppercase tracking-wide text-fg-subtle">
-            Resultado esperado
-          </p>
-          <div className="scrollbar-apple max-h-48 overflow-auto whitespace-pre-wrap rounded-md border border-border bg-surface p-3 text-footnote leading-relaxed text-fg">
-            {testCase.expected_result || 'Sin resultado esperado definido.'}
-          </div>
-        </div>
+        <ReadField
+          label="Instrucciones / Pasos"
+          value={testCase.steps || testCase.description}
+          empty="Sin pasos."
+          mono
+        />
+        <ReadField
+          label="Resultado esperado"
+          value={testCase.expected_result}
+          empty="Sin resultado esperado definido."
+        />
       </div>
 
       {existingDefects.length > 0 ? (
