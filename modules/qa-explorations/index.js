@@ -201,7 +201,9 @@ router.get('/sessions/:runId', async (req, res) => {
         let attachments = [];
         if (execIds.length > 0) {
             const defRes = await query(
-                `SELECT id, execution_id, title, description, severity, status, jira_key, jira_url
+                `SELECT id, execution_id, title, description, severity, status, jira_key, jira_url,
+                        steps_to_reproduce, expected_result, actual_result, frequency,
+                        business_impact, observations
                    FROM qa_defects
                   WHERE execution_id IN (${execIds.map(() => '?').join(',')})`,
                 execIds
@@ -361,20 +363,52 @@ router.post('/flows/:tcId/execute', async (req, res) => {
             execId = ins.rows[0].id;
         }
 
-        // Si FAIL o WARNING, crear defectos
+        // Si FAIL o WARNING, crear o ACTUALIZAR defectos.
+        // - `b.id` permite editar un defecto ya reportado en esta ejecución.
+        // - Si no hay id, se busca por título para no duplicar y se actualizan
+        //   los detalles que el usuario completó después del primer guardado.
         const createdDefectIds = [];
         if ((status === 'FAIL' || status === 'WARNING') && Array.isArray(bugs) && bugs.length > 0) {
+            const defectValues = (b) => [
+                String(b.title).trim(),
+                b.description || '',
+                b.severity || 'Media',
+                b.steps_to_reproduce || '',
+                b.expected_result || '',
+                b.actual_result || '',
+                b.frequency || 'Siempre',
+                b.business_impact || '',
+                b.observations || '',
+            ];
+            const updateSql = `UPDATE qa_defects
+                                  SET title = ?, description = ?, severity = ?,
+                                      steps_to_reproduce = ?, expected_result = ?,
+                                      actual_result = ?, frequency = ?, business_impact = ?,
+                                      observations = ?
+                                WHERE id = ? AND execution_id = ?`;
+
             for (const b of bugs) {
                 if (!b || !b.title || !String(b.title).trim()) continue;
-                // Evitar duplicados exactos en la misma ejecución
+                const values = defectValues(b);
+
+                if (b.id) {
+                    const upd = await query(updateSql, [...values, b.id, execId]);
+                    if (upd.changes > 0) {
+                        createdDefectIds.push(b.id);
+                        continue;
+                    }
+                }
+
                 const dup = await query(
                     `SELECT id FROM qa_defects WHERE execution_id = ? AND title = ?`,
-                    [execId, b.title]
+                    [execId, values[0]]
                 );
                 if (dup.rows.length > 0) {
+                    await query(updateSql, [...values, dup.rows[0].id, execId]);
                     createdDefectIds.push(dup.rows[0].id);
                     continue;
                 }
+
                 const dIns = await query(
                     `INSERT INTO qa_defects
                         (execution_id, title, description, severity, steps_to_reproduce,
@@ -383,15 +417,7 @@ router.post('/flows/:tcId/execute', async (req, res) => {
                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?, ?, ?, ?) RETURNING id`,
                     [
                         execId,
-                        b.title,
-                        b.description || '',
-                        b.severity || 'Media',
-                        b.steps_to_reproduce || '',
-                        b.expected_result || '',
-                        b.actual_result || '',
-                        b.frequency || 'Siempre',
-                        b.business_impact || '',
-                        b.observations || '',
+                        ...values,
                         runRes.rows[0].project_id,
                         null,
                         tcId,

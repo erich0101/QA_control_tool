@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Bug, CircleCheck, CircleSlash, CircleX, Save, SkipForward, TriangleAlert, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
@@ -16,6 +16,7 @@ import type {
   ExploratoryFlow,
   ExploratoryStatus,
 } from '@/lib/api/types';
+import { FREQUENCIES, IMPACTS } from '@/lib/api/types';
 import { cn } from '@/lib/utils';
 import { useExploratoriaMutations } from '../use-exploratoria';
 
@@ -94,6 +95,22 @@ function emptyBug(expected = ''): BugDraft {
   };
 }
 
+/** Draft editable a partir de un defecto ya guardado (mantiene los detalles). */
+function bugFromDefect(defect: Defect): BugDraft {
+  return {
+    id: defect.id,
+    title: defect.title ?? '',
+    description: defect.description ?? '',
+    severity: defect.severity ?? 'Media',
+    steps_to_reproduce: defect.steps_to_reproduce ?? '',
+    expected_result: defect.expected_result ?? '',
+    actual_result: defect.actual_result ?? '',
+    frequency: defect.frequency ?? 'Siempre',
+    business_impact: defect.business_impact ?? '',
+    observations: defect.observations ?? '',
+  };
+}
+
 /**
  * Detalle de un flujo exploratorio.
  * Un solo guardado persiste status + justificación + resultado + bug,
@@ -121,6 +138,17 @@ export function FlowDetail({
   const [category, setCategory] = useState('GENERAL');
   const [pending, setPending] = useState<File[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
+  const loadedDefectKey = useRef('');
+
+  // Al abrir el flujo, o cuando se guarda un defecto, precargamos el formulario
+  // con los datos persistidos para que no se "pierdan" los detalles.
+  useEffect(() => {
+    const latest = defects[defects.length - 1];
+    const key = `${flow.id}:${latest?.id ?? 'none'}`;
+    if (loadedDefectKey.current === key) return;
+    loadedDefectKey.current = key;
+    setBug(latest ? bugFromDefect(latest) : emptyBug(flow.expected_result ?? ''));
+  }, [defects, flow.id, flow.expected_result]);
 
   const needsJustification = status === 'BLOCK' || status === 'SKIP';
   const allowsBug = status === 'FAIL' || status === 'WARNING';
@@ -178,8 +206,6 @@ export function FlowDetail({
       }
       setPending([]);
     }
-
-    setBug(emptyBug(flow.expected_result ?? ''));
   };
 
   const handleDeleteEvidence = async (attachment: ExploratoryAttachment) => {
@@ -211,15 +237,55 @@ export function FlowDetail({
       </div>
 
       {defects.length > 0 ? (
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="space-y-2">
           <span className="text-caption font-bold uppercase tracking-wide text-fg-subtle">
-            Defectos
+            Defectos reportados ({defects.length})
           </span>
           {defects.map((defect) => (
-            <Badge key={defect.id} tone="fail" className="gap-1">
-              <Bug className="size-3" />
-              {defect.title}
-            </Badge>
+            <div
+              key={defect.id}
+              className="space-y-2 rounded-md border border-fail/30 bg-fail-soft/40 p-3"
+            >
+              <div className="flex flex-wrap items-center gap-2">
+                <Bug className="size-3.5 shrink-0 text-fail" />
+                <span className="text-footnote font-semibold text-fg">{defect.title}</span>
+                <Badge
+                  tone={
+                    defect.severity === 'Crítica' || defect.severity === 'Alta'
+                      ? 'fail'
+                      : defect.severity === 'Baja'
+                        ? 'ok'
+                        : 'warn'
+                  }
+                >
+                  {defect.severity ?? 'Media'}
+                </Badge>
+                <Badge tone="outline">{defect.status ?? 'OPEN'}</Badge>
+                <span className="text-caption text-fg-subtle">#{defect.id}</span>
+              </div>
+
+              {defect.description ? (
+                <ReadField label="Descripción" value={defect.description} />
+              ) : null}
+              {defect.steps_to_reproduce ? (
+                <ReadField label="Pasos para reproducir" value={defect.steps_to_reproduce} mono />
+              ) : null}
+              {defect.expected_result ? (
+                <ReadField label="Resultado esperado" value={defect.expected_result} />
+              ) : null}
+              {defect.actual_result ? (
+                <ReadField label="Resultado real" value={defect.actual_result} />
+              ) : null}
+              {defect.frequency ? (
+                <ReadField label="Frecuencia" value={defect.frequency} />
+              ) : null}
+              {defect.business_impact ? (
+                <ReadField label="Impacto de negocio" value={defect.business_impact} />
+              ) : null}
+              {defect.observations ? (
+                <ReadField label="Observaciones" value={defect.observations} />
+              ) : null}
+            </div>
           ))}
         </div>
       ) : null}
@@ -353,9 +419,14 @@ export function FlowDetail({
 
       {allowsBug ? (
         <div className="space-y-2 rounded-lg border border-fail/30 bg-fail-soft/40 p-3">
-          <span className="text-caption font-bold uppercase tracking-wide text-fail">
-            Reporte de defecto
-          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-caption font-bold uppercase tracking-wide text-fail">
+              Reporte de defecto
+            </span>
+            {bug.id ? (
+              <span className="text-caption text-fg-subtle">Editando #{bug.id}</span>
+            ) : null}
+          </div>
 
           <div className="grid grid-cols-[1fr_140px] gap-2">
             <Field label="Título" htmlFor={`flow-bug-title-${flow.id}`}>
@@ -377,6 +448,17 @@ export function FlowDetail({
               />
             </Field>
           </div>
+
+          <Field label="Descripción" htmlFor={`flow-bug-description-${flow.id}`}>
+            <Textarea
+              id={`flow-bug-description-${flow.id}`}
+              className="min-h-16"
+              value={bug.description}
+              onChange={(event) => setBug({ ...bug, description: event.target.value })}
+              disabled={isFinished}
+              placeholder="Qué está fallando y en qué contexto"
+            />
+          </Field>
 
           <div className="grid gap-2 md:grid-cols-2">
             <Field label="Resultado esperado" htmlFor={`flow-bug-expected-${flow.id}`}>
@@ -405,6 +487,39 @@ export function FlowDetail({
               className="min-h-16"
               value={bug.steps_to_reproduce}
               onChange={(event) => setBug({ ...bug, steps_to_reproduce: event.target.value })}
+              disabled={isFinished}
+            />
+          </Field>
+
+          <div className="grid gap-2 md:grid-cols-2">
+            <Field label="Frecuencia" htmlFor={`flow-bug-frequency-${flow.id}`}>
+              <SelectField
+                id={`flow-bug-frequency-${flow.id}`}
+                value={bug.frequency}
+                onValueChange={(value) => setBug({ ...bug, frequency: value })}
+                options={FREQUENCIES.map((value) => ({ value, label: value }))}
+                disabled={isFinished}
+              />
+            </Field>
+            <Field label="Impacto de negocio" htmlFor={`flow-bug-impact-${flow.id}`}>
+              <SelectField
+                id={`flow-bug-impact-${flow.id}`}
+                value={bug.business_impact}
+                onValueChange={(value) => setBug({ ...bug, business_impact: value })}
+                allowEmpty
+                placeholder="Sin especificar"
+                options={IMPACTS.filter(Boolean).map((value) => ({ value, label: value }))}
+                disabled={isFinished}
+              />
+            </Field>
+          </div>
+
+          <Field label="Observaciones" htmlFor={`flow-bug-observations-${flow.id}`}>
+            <Textarea
+              id={`flow-bug-observations-${flow.id}`}
+              className="min-h-16"
+              value={bug.observations}
+              onChange={(event) => setBug({ ...bug, observations: event.target.value })}
               disabled={isFinished}
             />
           </Field>

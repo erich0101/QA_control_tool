@@ -452,6 +452,8 @@ export interface JiraIssueComment {
 }
 
 export interface BugDraft {
+  /** Si viene, actualiza ese defecto en vez de crear uno nuevo. */
+  id?: number;
   title: string;
   description: string;
   severity: string;
