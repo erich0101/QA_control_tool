@@ -321,3 +321,52 @@ Al cerrar la migración quedaban dos duplicaciones:
 
 Regla para nuevas pantallas: **no escribir `<table>` ni `<textarea>` a mano**;
 usar `DataTable` y `Textarea`.
+
+## Refactor del backend (`server.js`)
+
+Segunda fase, cerrada: el monolito pasó de **5.293 a 163 líneas** (−97%). Hoy
+`server.js` solo declara middlewares, monta routers, arranca HTTP/WebSocket y
+hace el cierre ordenado.
+
+Estructura:
+
+```
+src/bootstrap/schema.js        migraciones + seed (en background)
+src/config.js                  puerto, JWT, rutas base
+src/middleware/auth.js         requireAuth / requireAdmin
+src/lib/helpers.js             sanitizeInput, normalizeStatus, ...
+src/lib/sequences.js           generateKey(Batch), permisos, project ids
+src/lib/jira-credentials.js    credenciales Jira por usuario
+src/lib/upload.js              multer en memoria
+src/lib/import-processors.js   processFlatImport / processDualImport
+src/lib/report-evidence.js     evidencias en base64 + saveAttachment
+src/lib/tester-report.js       consulta y render del reporte por tester
+src/routes/*.js                21 routers por recurso
+```
+
+Verificación en cada extracción:
+
+1. `node scratch/smoke-server.mjs compare` → 27 endpoints GET idénticos al
+   baseline (hash con normalización de `iat/exp/timeMs/date`).
+2. Pruebas manuales de las rutas de escritura (el smoke solo cubre GETs).
+3. **Paridad de inventario**: 112 rutas en el monolito original → 112 hoy,
+   sin faltantes ni duplicadas.
+
+Bugs reales encontrados por este proceso (todos preexistentes o introducidos
+por un corte, nunca enviados sin corregir):
+
+- `router is not defined` en `execution.js` (los routers se llaman
+  `runsRouter`/`historyRouter`).
+- Constantes `SUGGESTION_*` arrastradas a `tools.js`, que rompían el cambio de
+  estado de sugerencias con un 500.
+- `getClient` / `generateKeyBatch` sin importar en `import-processors.js`
+  (la importación de Excel devolvía 500).
+- `POST /api/issue` hacía `query('BEGIN TRANSACTION')` fuera del `try`; en
+  Postgres/Supabase esa sentencia no existe, así que cada llamada lanzaba un
+  rechazo no capturado y **tumbaba el proceso**. Ahora responde 500 JSON.
+
+Nota de arquitectura: `db.js` ejecuta cada consulta contra Supabase vía RPC
+(conexiones independientes), por lo que **no hay transacciones**; `getClient()`
+es un adaptador que delega en `query()`. Cualquier código nuevo debe ser
+idempotente o compensar errores a mano.
+
