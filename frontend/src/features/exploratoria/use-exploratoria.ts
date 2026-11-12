@@ -24,6 +24,22 @@ export function useExploratorySession(runId: number | null) {
   });
 }
 
+/** Testers con actividad en el rango, para el modal del reporte de estatus. */
+export function useStatusReportTesters(
+  projectId: number | null,
+  dateFrom: string,
+  dateTo: string,
+  enabled: boolean,
+) {
+  return useQuery({
+    queryKey: queryKeys.exploratoryStatusTesters(projectId, dateFrom, dateTo),
+    queryFn: () => exploratoriaApi.statusReportTesters(projectId as number, dateFrom, dateTo),
+    enabled: projectId != null && enabled && Boolean(dateFrom) && Boolean(dateTo),
+    staleTime: 30_000,
+    retry: false,
+  });
+}
+
 export function useExploratoriaMutations(projectId: number | null, runId: number | null) {
   const queryClient = useQueryClient();
 

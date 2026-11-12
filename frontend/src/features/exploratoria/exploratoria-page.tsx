@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Compass, Plus, Search } from 'lucide-react';
+import { Compass, FileText, Plus, Search } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useConfirm } from '@/components/ui/confirm-provider';
@@ -13,6 +13,7 @@ import { useUiStore } from '@/stores/ui';
 import { useSessionStore } from '@/stores/session';
 import { useTeam } from '@/features/team/use-team';
 import { AddFlowDialog, AddHallazgoDialog, StartSessionDialog } from './components/session-dialogs';
+import { StatusReportDialog } from './components/status-report-dialog';
 import { SessionDetail } from './components/session-detail';
 import { useExploratoriaMutations, useExploratorySession, useExploratorySessions } from './use-exploratoria';
 
@@ -28,6 +29,7 @@ export function ExploratoriaPage() {
 
   const [search, setSearch] = useState('');
   const [startOpen, setStartOpen] = useState(false);
+  const [statusReportOpen, setStatusReportOpen] = useState(false);
   const [flowForm, setFlowForm] = useState<{
     mode: 'create' | 'edit';
     flow?: ExploratoryFlow;
@@ -173,6 +175,15 @@ export function ExploratoriaPage() {
           <Button variant="primary" size="sm" className="w-full" onClick={() => setStartOpen(true)}>
             <Plus />
             Nueva sesión
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            className="w-full"
+            onClick={() => setStatusReportOpen(true)}
+          >
+            <FileText />
+            Reporte de estatus
           </Button>
         </div>
 
@@ -339,6 +350,12 @@ export function ExploratoriaPage() {
           }}
         />
       ) : null}
+
+      <StatusReportDialog
+        open={statusReportOpen}
+        onOpenChange={setStatusReportOpen}
+        projectId={projectId}
+      />
     </div>
   );
 }

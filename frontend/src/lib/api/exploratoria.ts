@@ -57,6 +57,31 @@ export const exploratoriaApi = {
     return `/api/explorations/sessions/${runId}/bugs-report${qs ? `?${qs}` : ''}`;
   },
 
+  /** Testers con actividad exploratoria en el rango (para el modal). */
+  statusReportTesters: (projectId: number, dateFrom: string, dateTo: string) =>
+    apiFetch<{
+      testers: Array<{ id: number | null; name: string; count: number }>;
+      date_from: string;
+      date_to: string;
+    }>('/api/explorations/reports/status/testers', {
+      query: { project_id: projectId, date_from: dateFrom, date_to: dateTo },
+    }),
+
+  /** Reporte de estatus (todo lo realizado en el rango, por tester o todos). */
+  statusReportUrl: (
+    projectId: number,
+    options: { dateFrom: string; dateTo: string; testerId?: number | null; tester?: string | null },
+  ) => {
+    const params = new URLSearchParams({
+      project_id: String(projectId),
+      date_from: options.dateFrom,
+      date_to: options.dateTo,
+    });
+    if (options.testerId) params.set('tester_id', String(options.testerId));
+    if (options.tester) params.set('tester', options.tester);
+    return `/api/explorations/reports/status?${params.toString()}`;
+  },
+
   /** Evidencia atada a la ejecución del flujo (no al TC). */
   uploadEvidence: ({ file, executionId, category }: { file: File; executionId: number; category: string }) => {
     const formData = new FormData();

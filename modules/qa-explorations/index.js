@@ -758,4 +758,298 @@ router.get('/sessions/:runId/bugs-report', async (req, res) => {
     }
 });
 
+// ── Reporte de estatus de Exploratoria ───────────────────────────────────────
+// Refleja todo el trabajo del tester (o de todos) en un rango de fechas:
+// ejecuciones de flujos + defectos + hallazgos, con evidencias presentes.
+const REPORT_TZ = 'America/Argentina/Buenos_Aires';
+
+function reportToday() {
+    return new Date().toLocaleDateString('en-CA', { timeZone: REPORT_TZ });
+}
+
+function reportDaysAgo(days) {
+    const d = new Date();
+    d.setDate(d.getDate() - days);
+    return d.toLocaleDateString('en-CA', { timeZone: REPORT_TZ });
+}
+
+function htmlEscape(value) {
+    return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
+function fmtReportDate(value) {
+    if (!value) return '—';
+    return new Date(value).toLocaleString('es-AR', { timeZone: REPORT_TZ });
+}
+
+function reportRange(query) {
+    const from = query.date_from || reportDaysAgo(7);
+    const to = query.date_to || reportToday();
+    return { from, to };
+}
+
+// GET /api/explorations/reports/status/testers?project_id=&date_from=&date_to=
+// Testers con actividad (ejecuciones y hallazgos) en el rango, para el modal.
+router.get('/reports/status/testers', async (req, res) => {
+    try {
+        const projectId = parseInt(req.query.project_id, 10);
+        if (!projectId) return res.status(400).json({ error: 'project_id requerido' });
+        const { from, to } = reportRange(req.query);
+
+        const execRows = await query(`
+            SELECT e.tester_id AS id, COALESCE(e.tester, 'Sin tester') AS name, COUNT(*)::int AS count
+              FROM qa_executions e
+              JOIN qa_test_runs r ON e.run_id = r.id
+             WHERE r.project_id = ? AND r.run_type = 'EXPLORATORY' AND e.status <> 'PENDING'
+               AND (e.executed_at AT TIME ZONE '${REPORT_TZ}')::date BETWEEN ? AND ?
+             GROUP BY e.tester_id, e.tester
+        `, [projectId, from, to]);
+
+        const hallazgoRows = await query(`
+            SELECT d.created_by AS id, COALESCE(u.name, 'Sin tester') AS name, COUNT(*)::int AS count
+              FROM qa_defects d
+              JOIN qa_test_runs r ON d.exploratory_run_id = r.id
+              LEFT JOIN qa_users u ON u.id = d.created_by
+             WHERE r.project_id = ? AND r.run_type = 'EXPLORATORY' AND d.execution_id IS NULL
+               AND (d.created_at AT TIME ZONE '${REPORT_TZ}')::date BETWEEN ? AND ?
+             GROUP BY d.created_by, u.name
+        `, [projectId, from, to]);
+
+        const merged = new Map();
+        for (const row of [...execRows.rows, ...hallazgoRows.rows]) {
+            const key = row.id ? `id:${row.id}` : `name:${String(row.name).toLowerCase()}`;
+            const current = merged.get(key);
+            if (current) current.count += row.count;
+            else merged.set(key, { id: row.id || null, name: row.name, count: row.count });
+        }
+
+        const testers = [...merged.values()].sort((a, b) => a.name.localeCompare(b.name));
+        res.json({ testers, date_from: from, date_to: to });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// GET /api/explorations/reports/status?project_id=&date_from=&date_to=&tester_id=&tester=
+router.get('/reports/status', async (req, res) => {
+    try {
+        const projectId = parseInt(req.query.project_id, 10);
+        if (!projectId) return res.status(400).json({ error: 'project_id requerido' });
+        const { from, to } = reportRange(req.query);
+        const testerId = req.query.tester_id ? parseInt(req.query.tester_id, 10) : null;
+        const testerName = req.query.tester ? String(req.query.tester) : null;
+
+        const projectRes = await query(`SELECT id, name FROM qa_projects WHERE id = ?`, [projectId]);
+        if (projectRes.rows.length === 0) return res.status(404).json({ error: 'Proyecto no encontrado' });
+        const project = projectRes.rows[0];
+
+        // Ejecuciones del rango (se excluyen PENDING: no representan trabajo hecho).
+        let execFilter = '';
+        const execParams = [projectId, from, to];
+        if (testerId && testerName) {
+            execFilter = 'AND (e.tester_id = ? OR e.tester = ?)';
+            execParams.push(testerId, testerName);
+        } else if (testerId) {
+            execFilter = 'AND e.tester_id = ?';
+            execParams.push(testerId);
+        } else if (testerName) {
+            execFilter = 'AND e.tester = ?';
+            execParams.push(testerName);
+        }
+
+        const execs = await query(`
+            SELECT e.id, e.status, e.observations, e.obtained_result, e.executed_at,
+                   e.tester, e.tester_id,
+                   tc.id AS tc_id, tc.title AS tc_title, tc.key_id,
+                   r.id AS run_id, r.name AS run_name
+              FROM qa_executions e
+              JOIN qa_test_cases tc ON e.tc_id = tc.id
+              JOIN qa_test_runs r ON e.run_id = r.id
+             WHERE r.project_id = ? AND r.run_type = 'EXPLORATORY' AND e.status <> 'PENDING'
+               AND (e.executed_at AT TIME ZONE '${REPORT_TZ}')::date BETWEEN ? AND ?
+               ${execFilter}
+             ORDER BY e.executed_at ASC
+        `, execParams);
+
+        const defects = execs.rows.length === 0 ? { rows: [] } : await query(`
+            SELECT d.id, d.execution_id, d.title, d.severity, d.status, d.actual_result,
+                   d.jira_key, d.jira_url
+              FROM qa_defects d
+             WHERE d.execution_id IN (${execs.rows.map(() => '?').join(',')})
+             ORDER BY d.id
+        `, execs.rows.map(e => e.id));
+
+        // Hallazgos creados en sesiones exploratorias dentro del rango.
+        let hallazgoFilter = '';
+        const hallazgoParams = [projectId, from, to];
+        if (testerId) {
+            hallazgoFilter = 'AND d.created_by = ?';
+            hallazgoParams.push(testerId);
+        } else if (testerName) {
+            hallazgoFilter = 'AND rep.name = ?';
+            hallazgoParams.push(testerName);
+        }
+
+        const hallazgos = await query(`
+            SELECT d.id, d.title, d.severity, d.status, d.created_at, d.exploratory_run_id,
+                   COALESCE(rep.name, 'Sin tester') AS reporter_name
+              FROM qa_defects d
+              JOIN qa_test_runs r ON d.exploratory_run_id = r.id
+              LEFT JOIN qa_users rep ON rep.id = d.created_by
+             WHERE r.project_id = ? AND r.run_type = 'EXPLORATORY' AND d.execution_id IS NULL
+               AND (d.created_at AT TIME ZONE '${REPORT_TZ}')::date BETWEEN ? AND ?
+               ${hallazgoFilter}
+             ORDER BY d.created_at ASC
+        `, hallazgoParams);
+
+        const runIds = [...new Set([
+            ...execs.rows.map(e => e.run_id),
+            ...hallazgos.rows.map(h => h.exploratory_run_id),
+        ])];
+        const runsRes = runIds.length === 0 ? { rows: [] } : await query(`
+            SELECT id, name, charter, started_at, finished_at, status
+              FROM qa_test_runs WHERE id IN (${runIds.map(() => '?').join(',')})
+        `, runIds);
+        const runsById = new Map(runsRes.rows.map(r => [r.id, r]));
+
+        const defectIds = defects.rows.map(d => d.id);
+        const attachments = (execs.rows.length === 0 && defectIds.length === 0) ? { rows: [] } : await query(`
+            SELECT id, execution_id, defect_id
+              FROM qa_attachments
+             WHERE execution_id IN (${execs.rows.map(() => '?').join(',') || 'NULL'})
+                OR defect_id IN (${defectIds.map(() => '?').join(',') || 'NULL'})
+        `, [...execs.rows.map(e => e.id), ...defectIds]);
+
+        const evidByExec = {};
+        const evidByDef = {};
+        let omittedEvidence = 0;
+        for (const a of attachments.rows) {
+            const ev = await getEvidenceBase64(a.id);
+            if (!ev) { omittedEvidence += 1; continue; }
+            if (a.execution_id) { evidByExec[a.execution_id] = evidByExec[a.execution_id] || []; evidByExec[a.execution_id].push(ev); }
+            if (a.defect_id) { evidByDef[a.defect_id] = evidByDef[a.defect_id] || []; evidByDef[a.defect_id].push(ev); }
+        }
+
+        const defectsByExec = new Map();
+        for (const d of defects.rows) {
+            if (!defectsByExec.has(d.execution_id)) defectsByExec.set(d.execution_id, []);
+            defectsByExec.get(d.execution_id).push(d);
+        }
+
+        const STATUS_COLOR = {
+            OK: { bg: '#dcfce7', fg: '#15803d' },
+            FAIL: { bg: '#fee2e2', fg: '#dc2626' },
+            WARNING: { bg: '#fef3c7', fg: '#b45309' },
+            BLOCK: { bg: '#fef3c7', fg: '#b45309' },
+            SKIP: { bg: '#e5e7eb', fg: '#4b5563' },
+        };
+
+        const counts = { OK: 0, FAIL: 0, WARNING: 0, BLOCK: 0, SKIP: 0 };
+        for (const e of execs.rows) {
+            if (counts[e.status] !== undefined) counts[e.status] += 1;
+        }
+
+        const execByRun = new Map();
+        for (const e of execs.rows) {
+            if (!execByRun.has(e.run_id)) execByRun.set(e.run_id, []);
+            execByRun.get(e.run_id).push(e);
+        }
+        const hallazgosByRun = new Map();
+        for (const h of hallazgos.rows) {
+            if (!hallazgosByRun.has(h.exploratory_run_id)) hallazgosByRun.set(h.exploratory_run_id, []);
+            hallazgosByRun.get(h.exploratory_run_id).push(h);
+        }
+
+        let sessionsHTML = '';
+        for (const runId of runIds) {
+            const run = runsById.get(runId);
+            if (!run) continue;
+            const runExecs = execByRun.get(runId) || [];
+            const runHallazgos = hallazgosByRun.get(runId) || [];
+
+            const testsHTML = runExecs.map(e => {
+                const color = STATUS_COLOR[e.status] || { bg: '#e5e7eb', fg: '#4b5563' };
+                const execDefects = defectsByExec.get(e.id) || [];
+                const evidHTML = (evidByExec[e.id] || []).map(ev => evidenceHTML(ev, 180)).join('');
+                const defectsHTML = execDefects.map(d => {
+                    const defEvid = (evidByDef[d.id] || []).map(ev => evidenceHTML(ev, 160)).join('');
+                    return `<div style="padding:7px 9px;background:rgba(220,38,38,.05);border-radius:6px;margin-top:5px;">
+                        <div style="font-weight:700;font-size:.78rem;">${htmlEscape(d.title)}</div>
+                        <div style="font-size:.7rem;color:#6b7280;">Severidad: ${htmlEscape(d.severity)} · Estado: ${htmlEscape(d.status)}${d.jira_key ? ' · Jira: ' + (d.jira_url ? `<a href="${htmlEscape(d.jira_url)}" target="_blank" style="color:#2563eb;font-weight:600;text-decoration:none;">${htmlEscape(d.jira_key)} ↗</a>` : htmlEscape(d.jira_key)) : ''}</div>
+                        ${d.actual_result ? `<div style="font-size:.72rem;margin-top:3px;"><strong>Obtenido:</strong> ${htmlEscape(d.actual_result)}</div>` : ''}
+                        ${defEvid ? `<div style="margin-top:4px;">${defEvid}</div>` : ''}
+                    </div>`;
+                }).join('');
+
+                return `<div style="padding:12px;background:#fff;border-radius:8px;margin-bottom:9px;border-left:4px solid ${color.fg};box-shadow:0 1px 3px rgba(0,0,0,.07);">
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+                        <div style="font-weight:700;font-size:.82rem;">${htmlEscape(e.key_id || '')} — ${htmlEscape(e.tc_title)}</div>
+                        <span style="padding:2px 8px;border-radius:4px;font-size:.62rem;font-weight:700;background:${color.bg};color:${color.fg};">${htmlEscape(e.status)}</span>
+                    </div>
+                    <div style="font-size:.7rem;color:#6b7280;margin-top:2px;">Tester: ${htmlEscape(e.tester || '—')} · ${fmtReportDate(e.executed_at)}</div>
+                    ${e.obtained_result ? `<div style="font-size:.74rem;margin-top:4px;"><strong>Obtenido:</strong> ${htmlEscape(e.obtained_result)}</div>` : ''}
+                    ${e.observations ? `<div style="font-size:.74rem;margin-top:2px;"><strong>Observaciones:</strong> ${htmlEscape(e.observations)}</div>` : ''}
+                    ${evidHTML ? `<div style="margin-top:5px;">${evidHTML}</div>` : ''}
+                    ${execDefects.length > 0 ? `<div style="margin-top:6px;"><div style="font-size:.66rem;font-weight:700;color:#6b7280;text-transform:uppercase;">Defectos (${execDefects.length})</div>${defectsHTML}</div>` : ''}
+                </div>`;
+            }).join('');
+
+            const hallazgosHTML = runHallazgos.map(h => `
+                <div style="padding:7px 9px;background:#fffbeb;border-radius:6px;margin-top:5px;border-left:3px solid #d97706;">
+                    <div style="font-weight:700;font-size:.78rem;">H-${h.id} · ${htmlEscape(h.title)}</div>
+                    <div style="font-size:.7rem;color:#6b7280;">Severidad: ${htmlEscape(h.severity || 'Media')} · Estado: ${htmlEscape(h.status)} · ${htmlEscape(h.reporter_name)} · ${fmtReportDate(h.created_at)}</div>
+                </div>`).join('');
+
+            sessionsHTML += `<div style="margin-bottom:18px;">
+                <div style="background:#eef2ff;border-radius:8px;padding:12px 14px;margin-bottom:8px;border-left:4px solid #4f46e5;">
+                    <div style="font-weight:800;font-size:.9rem;">#${run.id} · ${htmlEscape(run.name || 'Sesión exploratoria')}</div>
+                    <div style="font-size:.72rem;color:#4b5563;margin-top:2px;">${htmlEscape(run.charter || '')}</div>
+                    <div style="font-size:.68rem;color:#6b7280;margin-top:2px;">${fmtReportDate(run.started_at)} → ${run.finished_at ? fmtReportDate(run.finished_at) : 'en curso'} · ${runExecs.length} tests · ${runHallazgos.length} hallazgos</div>
+                </div>
+                ${testsHTML || '<div style="font-size:.74rem;color:#6b7280;padding:4px 0;">Sin tests ejecutados en el rango.</div>'}
+                ${runHallazgos.length > 0 ? `<div style="margin-top:6px;"><div style="font-size:.66rem;font-weight:700;color:#6b7280;text-transform:uppercase;">Hallazgos (${runHallazgos.length})</div>${hallazgosHTML}</div>` : ''}
+            </div>`;
+        }
+
+        const testerLabel = testerName || 'Todos los testers';
+        const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Reporte de estatus - Exploratoria</title>
+        <style>body{font-family:'Segoe UI',system-ui,sans-serif;background:#f3f4f6;margin:0;padding:20px;color:#111827}
+        .header{background:linear-gradient(135deg,#4f46e5,#3730a3);color:#fff;border-radius:12px;padding:24px;margin-bottom:20px}
+        .header h1{margin:0 0 4px;font-size:1.3rem}.header p{margin:0;opacity:.9;font-size:.85rem}
+        .kpi{background:#fff;border-radius:8px;padding:12px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.1);border-top:3px solid #e5e7eb}
+        .kpi-val{font-size:1.35rem;font-weight:700}.kpi-lab{font-size:.62rem;color:#6b7280;text-transform:uppercase}
+        .footer{text-align:center;padding:16px;color:#6b7280;font-size:.72rem}
+        @media print{body{background:#fff;padding:0}.kpi{box-shadow:none;border:1px solid #e5e7eb}}</style></head><body>
+        <div class="header">
+            <h1>Reporte de estatus — Exploratoria</h1>
+            <p>${htmlEscape(project.name)} · ${htmlEscape(testerLabel)} · ${from} → ${to}</p>
+        </div>
+        <div style="display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap;">
+            <div class="kpi"><div class="kpi-val">${runIds.length}</div><div class="kpi-lab">Sesiones</div></div>
+            <div class="kpi"><div class="kpi-val">${execs.rows.length}</div><div class="kpi-lab">Tests ejecutados</div></div>
+            <div class="kpi"><div class="kpi-val">${counts.OK}</div><div class="kpi-lab">OK</div></div>
+            <div class="kpi"><div class="kpi-val">${counts.FAIL}</div><div class="kpi-lab">FAIL</div></div>
+            <div class="kpi"><div class="kpi-val">${counts.WARNING}</div><div class="kpi-lab">WARNING</div></div>
+            <div class="kpi"><div class="kpi-val">${counts.BLOCK}</div><div class="kpi-lab">BLOCK</div></div>
+            <div class="kpi"><div class="kpi-val">${counts.SKIP}</div><div class="kpi-lab">SKIP</div></div>
+            <div class="kpi"><div class="kpi-val">${hallazgos.rows.length}</div><div class="kpi-lab">Hallazgos</div></div>
+            <div class="kpi"><div class="kpi-val">${defects.rows.length}</div><div class="kpi-lab">Defectos</div></div>
+        </div>
+        ${sessionsHTML || '<div style="text-align:center;padding:40px;color:#6b7280;">Sin actividad en el rango seleccionado.</div>'}
+        ${omittedEvidence > 0 ? `<div style="text-align:center;padding:8px;color:#b45309;font-size:.72rem;">${omittedEvidence} evidencia(s) no disponible(s) en esta máquina: se omitieron del reporte.</div>` : ''}
+        <div class="footer">Reporte generado automáticamente | ${new Date().toLocaleString('es-AR', { timeZone: REPORT_TZ })}</div>
+        ${lightboxHTML()}
+        </body></html>`;
+
+        res.setHeader('Content-Type', 'text/html');
+        res.send(html);
+    } catch (err) {
+        console.error('Error en reports/status:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+
 module.exports = router;
