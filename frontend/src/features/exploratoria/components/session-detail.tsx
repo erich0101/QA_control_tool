@@ -8,18 +8,23 @@ import type {
   ExploratoryAttachment,
   ExploratoryDetail,
   ExploratoryFlow,
+  User,
 } from '@/lib/api/types';
 import { cn } from '@/lib/utils';
 import { exploratoriaApi } from '@/lib/api/exploratoria';
+import { SelectField } from '@/components/ui/select-field';
 import { FlowDetail } from './flow-detail';
 
 interface SessionDetailProps {
   detail: ExploratoryDetail;
   projectId: number | null;
+  team: User[];
   isFinishing: boolean;
+  isAssigning: boolean;
   onBack: () => void;
   onAddFlow: () => void;
   onFinish: () => void;
+  onAssignTester: (tcId: number, userId: number | null) => void;
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -43,10 +48,13 @@ const STATUS_TONE: Record<string, 'ok' | 'fail' | 'warn' | 'neutral'> = {
 export function SessionDetail({
   detail,
   projectId,
+  team,
   isFinishing,
+  isAssigning,
   onBack,
   onAddFlow,
   onFinish,
+  onAssignTester,
 }: SessionDetailProps) {
   const [expandedFlowId, setExpandedFlowId] = useState<number | null>(null);
   const { run, flows, executions, defects, attachments } = detail;
@@ -201,9 +209,39 @@ export function SessionDetail({
               {
                 id: 'tester',
                 header: 'Tester',
-                headerClassName: 'w-32',
+                headerClassName: 'w-40',
                 cellClassName: 'text-caption text-fg-muted',
-                cell: (flow) => execByTc.get(flow.id)?.tester ?? '—',
+                cell: (flow) => {
+                  const exec = execByTc.get(flow.id);
+                  const isPending = !exec || exec.status === 'PENDING';
+                  const assignee = team.find((user) => user.id === flow.assigned_to);
+
+                  // Flujos pendientes: el tester se asigna desde acá (como en el
+                  // legacy) y el backend lo usa al ejecutar el flujo.
+                  if (!isFinished && isPending) {
+                    return (
+                      <div onClick={(event) => event.stopPropagation()}>
+                        <SelectField
+                          value={flow.assigned_to ? String(flow.assigned_to) : ''}
+                          onValueChange={(value) =>
+                            onAssignTester(flow.id, value ? Number(value) : null)
+                          }
+                          allowEmpty
+                          placeholder="— Sin asignar —"
+                          disabled={isAssigning}
+                          aria-label={`Tester de ${flow.key_id ?? `#${flow.id}`}`}
+                          className="h-7 text-caption"
+                          options={team.map((user) => ({
+                            value: String(user.id),
+                            label: user.name,
+                          }))}
+                        />
+                      </div>
+                    );
+                  }
+
+                  return exec?.tester ?? assignee?.name ?? '—';
+                },
               },
               {
                 id: 'executed',

@@ -10,6 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import type { ExploratorySession } from '@/lib/api/types';
 import { cn } from '@/lib/utils';
 import { useUiStore } from '@/stores/ui';
+import { useTeam } from '@/features/team/use-team';
 import { AddFlowDialog, StartSessionDialog } from './components/session-dialogs';
 import { SessionDetail } from './components/session-detail';
 import { useExploratoriaMutations, useExploratorySession, useExploratorySessions } from './use-exploratoria';
@@ -31,6 +32,7 @@ export function ExploratoriaPage() {
   const status = subTab === 'active' ? 'RUNNING' : 'FINISHED';
   const { data: sessions = [], isLoading } = useExploratorySessions(projectId, status);
   const { data: detail, isLoading: detailLoading } = useExploratorySession(runId);
+  const { data: team = [] } = useTeam();
   const mutations = useExploratoriaMutations(projectId, runId);
 
   const patchParams = (updates: Record<string, string | null>) => {
@@ -185,10 +187,15 @@ export function ExploratoriaPage() {
             <SessionDetail
               detail={detail}
               projectId={projectId}
+              team={team}
               isFinishing={mutations.finishSession.isPending}
+              isAssigning={mutations.assignTester.isPending}
               onBack={() => patchParams({ run: null })}
               onAddFlow={() => setFlowOpen(true)}
               onFinish={() => handleFinish(detail.run.id)}
+              onAssignTester={(tcId, userId) =>
+                mutations.assignTester.mutate({ tcId, userId })
+              }
             />
           )
         ) : (

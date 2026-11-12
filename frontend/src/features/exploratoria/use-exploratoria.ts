@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { exploratoriaApi, type StartSessionInput } from '@/lib/api/exploratoria';
+import { testSuitesApi } from '@/lib/api/test-suites';
 import { queryKeys } from '@/lib/query-keys';
 
 export function useExploratorySessions(projectId: number | null, status: 'RUNNING' | 'FINISHED') {
@@ -88,5 +89,27 @@ export function useExploratoriaMutations(projectId: number | null, runId: number
     onError: (error: Error) => toast.error(error.message),
   });
 
-  return { startSession, addFlow, executeFlow, finishSession, uploadEvidence, deleteEvidence };
+  /**
+   * Asigna (o quita) el tester de un flujo PENDING. El tester vive en el test
+   * case (`assigned_to`), igual que en la UI legacy: al ejecutar el flujo, el
+   * backend lo usa como tester real de la ejecución.
+   */
+  const assignTester = useMutation({
+    mutationFn: ({ tcId, userId }: { tcId: number; userId: number | null }) =>
+      testSuitesApi.testCases.update(tcId, { assigned_to: userId }),
+    onSuccess: async () => {
+      await invalidateAll();
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  return {
+    startSession,
+    addFlow,
+    executeFlow,
+    finishSession,
+    uploadEvidence,
+    deleteEvidence,
+    assignTester,
+  };
 }
