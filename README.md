@@ -27,13 +27,15 @@ La app convive con dos frontends durante la migración:
 
 ### 1. Requisitos
 
-- **Node.js 22.12 o superior** (`node -v`).
+- **Node.js 22.12+** (`node -v`). Recomendado **Node 22 LTS**; Node 24
+  también funciona con `better-sqlite3` 12.x (que ya trae binarios
+  precompilados para 20/22/23/24/25/26).
 - **Git**.
 - Una cuenta/proyecto de **Supabase** con la función `exec_query` creada
   (ver `docs/SETUP_OTRO_DEPTO.md`, pasos 3 y 4).
-- En Windows, si `npm install` falla al compilar `better-sqlite3`, instalar
-  *Visual Studio Build Tools* con “Desktop development with C++” (o usar una
-  versión de Node con binarios precompilados para `better-sqlite3`).
+- En Windows, si tu versión de Node no tiene binario precompilado de
+  `better-sqlite3`, necesitás **Python 3.11+** y *Visual Studio Build Tools*
+  con “Desktop development with C++”. La forma más simple es usar Node 22 LTS.
 
 ### 2. Clonar y elegir la rama
 
@@ -160,7 +162,7 @@ Detalle completo en `docs/evidence-integrity.md`.
 | Síntoma | Causa / solución |
 |---|---|
 | `/app` da 404 | Falta `frontend/dist`: corré `npm run ui:build` |
-| `npm install` falla en `better-sqlite3` | Node sin binario precompilado: instalá Build Tools o usá Node 22 LTS |
+| `npm install` falla en `better-sqlite3` | Ver la sección “Problemas con better-sqlite3” abajo |
 | `Esquema verificado` pero no hay tablas | La función `exec_query` está mal creada (ver `docs/SETUP_OTRO_DEPTO.md`) |
 | `fetch failed` / Supabase | Revisar `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` |
 | Jira: “Configuración pendiente” | Cargar dominio/key del proyecto y tu token personal (menú de usuario) |
@@ -168,3 +170,49 @@ Detalle completo en `docs/evidence-integrity.md`.
 | Puerto ocupado | Cambiar `PORT` en `.env` |
 
 Guía detallada para otro departamento (Supabase propio): `docs/SETUP_OTRO_DEPTO.md`.
+
+### Problemas con `better-sqlite3`
+
+Si `npm install` termina con algo como:
+
+```
+prebuild-install warn install No prebuilt binaries found (target=24.x...)
+gyp ERR! find Python Could not find any Python installation to use
+```
+
+es porque esa versión de Node no tiene binario precompilado y npm intentó
+compilar el módulo nativo. Pasos:
+
+1. **Actualizá el repo** para traer `better-sqlite3` 12.x (soporta Node
+   20–26):
+
+   ```bash
+   git pull
+   npm install
+   ```
+
+2. Si el error persiste, usá **Node 22 LTS**:
+
+   ```bash
+   nvm install 22
+   nvm use 22
+   node -v          # debe ser v22.x
+   npm run setup
+   ```
+
+3. Alternativa (compilar desde fuente): instalá **Python 3.11+** y
+   **Visual Studio Build Tools** con “Desktop development with C++”, y
+   volvé a correr `npm install`. Si Python está instalado pero node-gyp no
+   lo encuentra:
+
+   ```bash
+   npm config set python "C:/Ruta/a/python.exe"
+   npm install
+   ```
+
+4. Si ves `EPERM: operation not permitted, rmdir ... node_modules`:
+
+   - cerrá el servidor (`Ctrl+C`), VS Code/editor y cualquier terminal que
+     esté usando el proyecto;
+   - borrá `node_modules` (`rmdir /s /q node_modules` en CMD);
+   - `npm cache verify` y luego `npm install` (o `npm run setup`).

@@ -18,7 +18,8 @@ Tiempo estimado: **15-30 minutos**.
 
 ## 1. Requisitos previos
 
-- **Node.js 22.12+** instalado (`node -v` para verificar). Vite 8 y el
+- **Node.js 22.12+** instalado (`node -v` para verificar). Recomendado
+  **Node 22 LTS**; Node 24 funciona con `better-sqlite3` 12.x. Vite 8 y el
   frontend nuevo requieren esta versión.
 - Una cuenta en [Supabase](https://supabase.com) (es gratis para empezar).
 - Git para clonar el repositorio.
