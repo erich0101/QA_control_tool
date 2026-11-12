@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Compass, FileText, Plus, Search } from 'lucide-react';
+import { Compass, FileText, Loader2, Plus, Search } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useConfirm } from '@/components/ui/confirm-provider';
@@ -376,6 +376,25 @@ export function ExploratoriaPage() {
         onOpenChange={setStatusReportOpen}
         projectId={projectId}
       />
+
+      {mutations.deleteSession.isPending ? (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm"
+          role="status"
+          aria-live="polite"
+          aria-busy="true"
+        >
+          <div className="flex items-center gap-3 rounded-xl border border-border bg-surface px-5 py-4 shadow-apple-lg">
+            <Loader2 className="size-5 animate-spin text-brand" />
+            <div>
+              <p className="text-footnote font-semibold text-fg">Eliminando sesión…</p>
+              <p className="text-caption text-fg-subtle">
+                Se están borrando flujos, ejecuciones, hallazgos y evidencias.
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
