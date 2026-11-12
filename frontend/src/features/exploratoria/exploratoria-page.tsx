@@ -7,7 +7,7 @@ import { useConfirm } from '@/components/ui/confirm-provider';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
-import type { ExploratorySession } from '@/lib/api/types';
+import type { ExploratoryHallazgo, ExploratorySession, ExploratoryFlow } from '@/lib/api/types';
 import { cn } from '@/lib/utils';
 import { useUiStore } from '@/stores/ui';
 import { useSessionStore } from '@/stores/session';
@@ -28,12 +28,20 @@ export function ExploratoriaPage() {
 
   const [search, setSearch] = useState('');
   const [startOpen, setStartOpen] = useState(false);
-  const [flowOpen, setFlowOpen] = useState(false);
-  const [hallazgoOpen, setHallazgoOpen] = useState(false);
+  const [flowForm, setFlowForm] = useState<{
+    mode: 'create' | 'edit';
+    flow?: ExploratoryFlow;
+  } | null>(null);
+  const [hallazgoForm, setHallazgoForm] = useState<{
+    mode: 'create' | 'edit';
+    hallazgo?: ExploratoryHallazgo;
+  } | null>(null);
 
   const status = subTab === 'active' ? 'RUNNING' : 'FINISHED';
   // Mismo criterio que la pantalla de Hallazgos (POST /api/hallazgos).
   const canAddHallazgo = useSessionStore((s) => s.canManage() || s.can('can_create_cu'));
+  // Borrar flujos/hallazgos exige rol Admin o Analista QA (requireAdmin).
+  const canManage = useSessionStore((s) => s.canManage());
   const { data: sessions = [], isLoading } = useExploratorySessions(projectId, status);
   const { data: detail, isLoading: detailLoading } = useExploratorySession(runId);
   const { data: team = [] } = useTeam();
@@ -74,6 +82,30 @@ export function ExploratoriaPage() {
 
     await mutations.finishSession.mutateAsync(id);
     patchParams({ run: null });
+  };
+
+  const handleDeleteFlow = async (flow: ExploratoryFlow) => {
+    const ok = await confirm({
+      title: 'Eliminar flujo',
+      description: `¿Eliminar “${flow.title}”? Se borra el test case y su ejecución de la sesión.`,
+      confirmLabel: 'Eliminar flujo',
+      destructive: true,
+    });
+    if (!ok) return;
+    await mutations.removeFlow.mutateAsync(flow.id);
+  };
+
+  const handleDeleteHallazgo = async (hallazgo: ExploratoryHallazgo) => {
+    const ok = await confirm({
+      title: 'Eliminar hallazgo',
+      description: `¿Eliminar “${hallazgo.title}”?${
+        hallazgo.jira_key ? ' El ticket de Jira no se elimina.' : ''
+      }`,
+      confirmLabel: 'Eliminar hallazgo',
+      destructive: true,
+    });
+    if (!ok) return;
+    await mutations.removeHallazgo.mutateAsync(hallazgo.id);
   };
 
   if (!projectId) {
@@ -195,11 +227,16 @@ export function ExploratoriaPage() {
               isFinishing={mutations.finishSession.isPending}
               isAssigning={mutations.assignTester.isPending}
               isHallazgoPending={
-                mutations.setHallazgoStatus.isPending || mutations.assignHallazgo.isPending
+                mutations.setHallazgoStatus.isPending ||
+                mutations.assignHallazgo.isPending ||
+                mutations.updateHallazgo.isPending ||
+                mutations.removeHallazgo.isPending
               }
+              isFlowPending={mutations.updateFlow.isPending || mutations.removeFlow.isPending}
+              canDelete={canManage}
               onBack={() => patchParams({ run: null })}
-              onAddFlow={() => setFlowOpen(true)}
-              onAddHallazgo={() => setHallazgoOpen(true)}
+              onAddFlow={() => setFlowForm({ mode: 'create' })}
+              onAddHallazgo={() => setHallazgoForm({ mode: 'create' })}
               canAddHallazgo={canAddHallazgo}
               onFinish={() => handleFinish(detail.run.id)}
               onAssignTester={(tcId, userId) =>
@@ -211,6 +248,10 @@ export function ExploratoriaPage() {
               onHallazgoAssign={(id, userId) =>
                 mutations.assignHallazgo.mutate({ id, userId })
               }
+              onEditFlow={(flow) => setFlowForm({ mode: 'edit', flow })}
+              onDeleteFlow={handleDeleteFlow}
+              onEditHallazgo={(hallazgo) => setHallazgoForm({ mode: 'edit', hallazgo })}
+              onDeleteHallazgo={handleDeleteHallazgo}
             />
           )
         ) : (
@@ -251,23 +292,48 @@ export function ExploratoriaPage() {
         }}
       />
 
-      {runId ? (
+      {runId && flowForm ? (
         <AddFlowDialog
-          open={flowOpen}
-          onOpenChange={setFlowOpen}
-          isPending={mutations.addFlow.isPending}
+          open
+          onOpenChange={(open) => {
+            if (!open) setFlowForm(null);
+          }}
+          isPending={
+            flowForm.mode === 'create'
+              ? mutations.addFlow.isPending
+              : mutations.updateFlow.isPending
+          }
+          initial={flowForm.flow}
           onSubmit={async (values) => {
+            if (flowForm.mode === 'edit' && flowForm.flow) {
+              await mutations.updateFlow.mutateAsync({ id: flowForm.flow.id, input: values });
+              return;
+            }
             await mutations.addFlow.mutateAsync({ id: runId, input: values });
           }}
         />
       ) : null}
 
-      {runId ? (
+      {runId && hallazgoForm ? (
         <AddHallazgoDialog
-          open={hallazgoOpen}
-          onOpenChange={setHallazgoOpen}
-          isPending={mutations.addHallazgo.isPending}
+          open
+          onOpenChange={(open) => {
+            if (!open) setHallazgoForm(null);
+          }}
+          isPending={
+            hallazgoForm.mode === 'create'
+              ? mutations.addHallazgo.isPending
+              : mutations.updateHallazgo.isPending
+          }
+          initial={hallazgoForm.hallazgo}
           onSubmit={async (values) => {
+            if (hallazgoForm.mode === 'edit' && hallazgoForm.hallazgo) {
+              await mutations.updateHallazgo.mutateAsync({
+                id: hallazgoForm.hallazgo.id,
+                patch: values,
+              });
+              return;
+            }
             await mutations.addHallazgo.mutateAsync(values);
           }}
         />

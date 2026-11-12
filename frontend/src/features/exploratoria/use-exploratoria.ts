@@ -53,6 +53,32 @@ export function useExploratoriaMutations(projectId: number | null, runId: number
     onError: (error: Error) => toast.error(error.message),
   });
 
+  /** Editar el TC de un flujo (título, pasos y resultado esperado). */
+  const updateFlow = useMutation({
+    mutationFn: ({
+      id,
+      input,
+    }: {
+      id: number;
+      input: { title: string; steps?: string; expected_result?: string };
+    }) => testSuitesApi.testCases.update(id, input),
+    onSuccess: async () => {
+      await invalidateAll();
+      toast.success('Flujo actualizado');
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  /** Eliminar el TC de un flujo (y su ejecución de la sesión). */
+  const removeFlow = useMutation({
+    mutationFn: (id: number) => testSuitesApi.testCases.remove(id),
+    onSuccess: async () => {
+      await invalidateAll();
+      toast.success('Flujo eliminado');
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
   const executeFlow = useMutation({
     mutationFn: ({ tcId, input }: { tcId: number; input: Parameters<typeof exploratoriaApi.executeFlow>[1] }) =>
       exploratoriaApi.executeFlow(tcId, input),
@@ -155,15 +181,53 @@ export function useExploratoriaMutations(projectId: number | null, runId: number
     onError: (error: Error) => toast.error(error.message),
   });
 
+  /** Editar título/severidad/descripción/pasos/resultados del hallazgo. */
+  const updateHallazgo = useMutation({
+    mutationFn: ({
+      id,
+      patch,
+    }: {
+      id: number;
+      patch: {
+        title: string;
+        description?: string;
+        severity?: string;
+        steps_to_reproduce?: string;
+        expected_result?: string;
+        actual_result?: string;
+      };
+    }) => hallazgosApi.update(id, patch),
+    onSuccess: async () => {
+      await invalidateAll();
+      await queryClient.invalidateQueries({ queryKey: queryKeys.hallazgos(projectId) });
+      toast.success('Hallazgo actualizado');
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  const removeHallazgo = useMutation({
+    mutationFn: (id: number) => hallazgosApi.remove(id),
+    onSuccess: async () => {
+      await invalidateAll();
+      await queryClient.invalidateQueries({ queryKey: queryKeys.hallazgos(projectId) });
+      toast.success('Hallazgo eliminado');
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
   return {
     startSession,
     addFlow,
+    updateFlow,
+    removeFlow,
     executeFlow,
     finishSession,
     uploadEvidence,
     deleteEvidence,
     assignTester,
     addHallazgo,
+    updateHallazgo,
+    removeHallazgo,
     setHallazgoStatus,
     assignHallazgo,
   };

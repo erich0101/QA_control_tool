@@ -1,5 +1,15 @@
 import { useState } from 'react';
-import { Bug, ChevronRight, ExternalLink, FileText, Plus, Square, Ticket } from 'lucide-react';
+import {
+  Bug,
+  ChevronRight,
+  ExternalLink,
+  FileText,
+  Pencil,
+  Plus,
+  Square,
+  Ticket,
+  Trash2,
+} from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DataTable } from '@/components/ui/data-table';
@@ -26,6 +36,8 @@ interface SessionDetailProps {
   isFinishing: boolean;
   isAssigning: boolean;
   isHallazgoPending: boolean;
+  isFlowPending: boolean;
+  canDelete: boolean;
   canAddHallazgo: boolean;
   onBack: () => void;
   onAddFlow: () => void;
@@ -34,6 +46,10 @@ interface SessionDetailProps {
   onAssignTester: (tcId: number, userId: number | null) => void;
   onHallazgoStatus: (id: number, status: string) => void;
   onHallazgoAssign: (id: number, userId: number | null) => void;
+  onEditFlow: (flow: ExploratoryFlow) => void;
+  onDeleteFlow: (flow: ExploratoryFlow) => void;
+  onEditHallazgo: (hallazgo: ExploratoryHallazgo) => void;
+  onDeleteHallazgo: (hallazgo: ExploratoryHallazgo) => void;
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -61,6 +77,8 @@ export function SessionDetail({
   isFinishing,
   isAssigning,
   isHallazgoPending,
+  isFlowPending,
+  canDelete,
   canAddHallazgo,
   onBack,
   onAddFlow,
@@ -69,6 +87,10 @@ export function SessionDetail({
   onAssignTester,
   onHallazgoStatus,
   onHallazgoAssign,
+  onEditFlow,
+  onDeleteFlow,
+  onEditHallazgo,
+  onDeleteHallazgo,
 }: SessionDetailProps) {
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
   const [jiraHallazgoId, setJiraHallazgoId] = useState<number | null>(null);
@@ -352,6 +374,69 @@ export function SessionDetail({
                         minute: '2-digit',
                       })
                     : '—';
+                },
+              },
+              {
+                id: 'actions',
+                header: '',
+                headerClassName: 'w-20',
+                cellClassName: 'text-right',
+                cell: (row) => {
+                  if (isFinished) return null;
+
+                  const busy = row.kind === 'flow' ? isFlowPending : isHallazgoPending;
+                  const executed =
+                    row.kind === 'flow' &&
+                    (execByTc.get(row.flow.id)?.status ?? 'PENDING') !== 'PENDING';
+                  const canRemove = canDelete && !executed && !busy;
+                  const label =
+                    row.kind === 'flow'
+                      ? (row.flow.key_id ?? `#${row.flow.id}`)
+                      : `#${row.hallazgo.id}`;
+
+                  const edit = () => {
+                    if (row.kind === 'flow') onEditFlow(row.flow);
+                    else onEditHallazgo(row.hallazgo);
+                  };
+                  const remove = () => {
+                    if (row.kind === 'flow') onDeleteFlow(row.flow);
+                    else onDeleteHallazgo(row.hallazgo);
+                  };
+
+                  return (
+                    <div
+                      className="flex justify-end gap-1"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label={`Editar ${label}`}
+                        title="Editar"
+                        disabled={busy}
+                        onClick={edit}
+                      >
+                        <Pencil />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        className="text-fail"
+                        aria-label={`Eliminar ${label}`}
+                        title={
+                          executed
+                            ? 'El flujo ya tiene ejecución: no se puede eliminar'
+                            : !canDelete
+                              ? 'Requiere rol Admin o Analista QA'
+                              : 'Eliminar'
+                        }
+                        disabled={!canRemove}
+                        onClick={remove}
+                      >
+                        <Trash2 />
+                      </Button>
+                    </div>
+                  );
                 },
               },
             ]}

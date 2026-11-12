@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { Button } from '@/components/ui/button';
 import {
@@ -11,7 +12,7 @@ import {
 import { Field } from '@/components/ui/field';
 import { Input, Textarea } from '@/components/ui/input';
 import { SelectField } from '@/components/ui/select-field';
-import { HALLZGO_SEVERITIES } from '@/lib/api/types';
+import { HALLZGO_SEVERITIES, type ExploratoryHallazgo } from '@/lib/api/types';
 
 export function StartSessionDialog({
   open,
@@ -90,15 +91,28 @@ export function AddFlowDialog({
   onOpenChange,
   isPending,
   onSubmit,
+  initial,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   isPending?: boolean;
   onSubmit: (values: { title: string; steps: string; expected_result: string }) => Promise<void>;
+  /** Si viene un flujo, el diálogo edita en vez de crear. */
+  initial?: { title: string; steps?: string | null; expected_result?: string | null } | null;
 }) {
+  const isEdit = Boolean(initial);
   const { register, handleSubmit, reset, formState } = useForm({
     defaultValues: { title: '', steps: '', expected: '' },
   });
+
+  useEffect(() => {
+    if (!open) return;
+    reset({
+      title: initial?.title ?? '',
+      steps: initial?.steps ?? '',
+      expected: initial?.expected_result ?? '',
+    });
+  }, [open, initial, reset]);
 
   const submit = handleSubmit(async (values) => {
     await onSubmit({
@@ -106,7 +120,6 @@ export function AddFlowDialog({
       steps: values.steps.trim(),
       expected_result: values.expected.trim(),
     });
-    reset();
     onOpenChange(false);
   });
 
@@ -114,9 +127,11 @@ export function AddFlowDialog({
     <Dialog open={open} onOpenChange={(next) => { if (!next) reset(); onOpenChange(next); }}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Agregar flujo</DialogTitle>
+          <DialogTitle>{isEdit ? 'Editar flujo' : 'Agregar flujo'}</DialogTitle>
           <DialogDescription>
-            Un flujo es un recorrido que vas a explorar dentro de la sesión.
+            {isEdit
+              ? 'Actualizá el título, los pasos o el resultado esperado del flujo.'
+              : 'Un flujo es un recorrido que vas a explorar dentro de la sesión.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -143,7 +158,7 @@ export function AddFlowDialog({
               Cancelar
             </Button>
             <Button type="submit" variant="primary" loading={isPending}>
-              Agregar flujo
+              {isEdit ? 'Guardar cambios' : 'Agregar flujo'}
             </Button>
           </DialogFooter>
         </form>
@@ -171,12 +186,16 @@ export function AddHallazgoDialog({
   onOpenChange,
   isPending,
   onSubmit,
+  initial,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   isPending?: boolean;
   onSubmit: (values: HallazgoDraftInput) => Promise<void>;
+  /** Si viene un hallazgo, el diálogo edita en vez de crear. */
+  initial?: ExploratoryHallazgo | null;
 }) {
+  const isEdit = Boolean(initial);
   const { register, handleSubmit, reset, setValue, watch, formState } = useForm<{
     title: string;
     description: string;
@@ -195,6 +214,18 @@ export function AddHallazgoDialog({
     },
   });
 
+  useEffect(() => {
+    if (!open) return;
+    reset({
+      title: initial?.title ?? '',
+      description: initial?.description ?? '',
+      severity: initial?.severity || 'Media',
+      steps: initial?.steps_to_reproduce ?? '',
+      expected: initial?.expected_result ?? '',
+      actual: initial?.actual_result ?? '',
+    });
+  }, [open, initial, reset]);
+
   const submit = handleSubmit(async (values) => {
     await onSubmit({
       title: values.title.trim(),
@@ -204,7 +235,6 @@ export function AddHallazgoDialog({
       expected_result: values.expected.trim(),
       actual_result: values.actual.trim(),
     });
-    reset();
     onOpenChange(false);
   });
 
@@ -218,9 +248,11 @@ export function AddHallazgoDialog({
     >
       <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Agregar hallazgo</DialogTitle>
+          <DialogTitle>{isEdit ? 'Editar hallazgo' : 'Agregar hallazgo'}</DialogTitle>
           <DialogDescription>
-            Se guarda como hallazgo del proyecto, asociado a esta sesión exploratoria.
+            {isEdit
+              ? 'Actualizá los datos del hallazgo. Los cambios se ven en todo el proyecto.'
+              : 'Se guarda como hallazgo del proyecto, asociado a esta sesión exploratoria.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -268,7 +300,7 @@ export function AddHallazgoDialog({
               Cancelar
             </Button>
             <Button type="submit" variant="primary" loading={isPending}>
-              Crear hallazgo
+              {isEdit ? 'Guardar cambios' : 'Crear hallazgo'}
             </Button>
           </DialogFooter>
         </form>
