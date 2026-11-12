@@ -27,6 +27,8 @@ interface FlowDetailProps {
   runId: number;
   isFinished: boolean;
   projectId: number | null;
+  /** Si el tester no declaró la cobertura de TC, se avisa al guardar. */
+  coverageReady?: boolean;
 }
 
 const STATUS_BUTTONS: Array<{
@@ -105,6 +107,7 @@ export function FlowDetail({
   runId,
   isFinished,
   projectId,
+  coverageReady = true,
 }: FlowDetailProps) {
   const confirm = useConfirm();
   const { executeFlow, uploadEvidence, deleteEvidence } = useExploratoriaMutations(projectId, runId);
@@ -137,6 +140,12 @@ export function FlowDetail({
 
   const handleSave = async () => {
     if (isFinished) return;
+
+    if (!coverageReady) {
+      toast.warning(
+        'Cobertura de TC sin declarar: el reporte de estatus saldrá con alerta',
+      );
+    }
 
     if (needsJustification && !observations.trim()) {
       toast.warning(`La justificación del ${status === 'SKIP' ? 'salto' : 'bloqueo'} es obligatoria`);

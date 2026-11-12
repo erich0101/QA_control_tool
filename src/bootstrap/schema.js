@@ -61,6 +61,11 @@ await query(`ALTER TABLE qa_defects ADD COLUMN IF NOT EXISTS observations TEXT`)
         // ── Exploratory Testing (módulo Exploratoria) ──
         await query(`ALTER TABLE qa_test_runs ADD COLUMN IF NOT EXISTS charter TEXT`);
         await query(`ALTER TABLE qa_test_runs ADD COLUMN IF NOT EXISTS timebox_minutes INTEGER`);
+        // Cobertura de TC declarada por el tester: si está en false, los
+        // reportes muestran una alerta (el regresivo no está cubierto).
+        await query(`ALTER TABLE qa_test_runs ADD COLUMN IF NOT EXISTS coverage_ready BOOLEAN DEFAULT FALSE`);
+        await query(`ALTER TABLE qa_test_runs ADD COLUMN IF NOT EXISTS coverage_ready_at TIMESTAMP`);
+        await query(`ALTER TABLE qa_test_runs ADD COLUMN IF NOT EXISTS coverage_ready_by INTEGER REFERENCES qa_users(id) ON DELETE SET NULL`);
         // Hallazgos creados dentro de una sesión exploratoria (sin ejecución).
         await query(`ALTER TABLE qa_defects ADD COLUMN IF NOT EXISTS exploratory_run_id INTEGER REFERENCES qa_test_runs(id) ON DELETE CASCADE`);
         // Métricas de sesiones exploratorias (persistidas en PG, no SQLite)

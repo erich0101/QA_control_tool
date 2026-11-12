@@ -46,6 +46,13 @@ export const exploratoriaApi = {
   finishSession: (runId: number) =>
     apiFetch<{ ok: true }>(`/api/explorations/sessions/${runId}/finish`, { method: 'POST' }),
 
+  /** Declara (o quita) que los TC de cobertura funcional/negocio están cargados. */
+  setCoverage: (runId: number, ready: boolean) =>
+    apiFetch<{ ok: true; coverage_ready: boolean }>(
+      `/api/explorations/sessions/${runId}/coverage`,
+      { method: 'PUT', body: { ready } },
+    ),
+
   /** Elimina la sesión completa (flujos ejecutados, defectos, hallazgos, evidencias). */
   deleteSession: (runId: number) =>
     apiFetch<{

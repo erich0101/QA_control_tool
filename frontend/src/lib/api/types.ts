@@ -330,6 +330,10 @@ export interface ExploratorySession {
   project_id?: number;
   accumulated_seconds?: number;
   last_resume_at?: string | null;
+  /** El tester declaró que ya cargó los TC que cubren el regresivo. */
+  coverage_ready?: boolean;
+  coverage_ready_at?: string | null;
+  coverage_ready_by?: number | null;
 }
 
 export interface ExploratoryFlow {

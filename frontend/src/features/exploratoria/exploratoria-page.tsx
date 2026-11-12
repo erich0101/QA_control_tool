@@ -259,9 +259,13 @@ export function ExploratoriaPage() {
                 mutations.removeHallazgo.isPending
               }
               isFlowPending={mutations.updateFlow.isPending || mutations.removeFlow.isPending}
+              isCoveragePending={mutations.setCoverage.isPending}
               canDelete={canManage}
               canDeleteSession={canManage}
               onDeleteSession={() => handleDeleteSession(detail.run.id)}
+              onToggleCoverage={(ready) =>
+                mutations.setCoverage.mutate({ id: detail.run.id, ready })
+              }
               onBack={() => patchParams({ run: null })}
               onAddFlow={() => setFlowForm({ mode: 'create' })}
               onAddHallazgo={() => setHallazgoForm({ mode: 'create' })}
@@ -417,6 +421,9 @@ function SessionRow({
             <span className="text-warn">
               {session.hallazgo_count} hallazgo{session.hallazgo_count === 1 ? '' : 's'}
             </span>
+          ) : null}
+          {!session.coverage_ready ? (
+            <span className="text-warn">⚠ sin cobertura TC</span>
           ) : null}
           {(session.fail_count ?? 0) > 0 ? (
             <span className="text-fail">{session.fail_count} FAIL</span>

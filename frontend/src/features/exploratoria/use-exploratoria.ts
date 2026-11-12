@@ -114,8 +114,22 @@ export function useExploratoriaMutations(projectId: number | null, runId: number
     onError: (error: Error) => toast.error(error.message),
   });
 
-  /** Elimina toda la sesión y sus datos asociados. */
-  const deleteSession = useMutation({
+  /** Declara (o quita) que los TC de cobertura están cargados. */
+  const setCoverage = useMutation({
+    mutationFn: ({ id, ready }: { id: number; ready: boolean }) =>
+      exploratoriaApi.setCoverage(id, ready),
+    onSuccess: async (result) => {
+      await invalidateAll();
+      toast.success(
+        result.coverage_ready
+          ? 'Cobertura de TC declarada'
+          : 'Cobertura de TC desmarcada',
+      );
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  /** Elimina toda la sesión y sus datos asociados. */  const deleteSession = useMutation({
     mutationFn: (id: number) => exploratoriaApi.deleteSession(id),
     onSuccess: async (result) => {
       await invalidateAll();
@@ -252,6 +266,7 @@ export function useExploratoriaMutations(projectId: number | null, runId: number
     executeFlow,
     finishSession,
     deleteSession,
+    setCoverage,
     uploadEvidence,
     deleteEvidence,
     assignTester,

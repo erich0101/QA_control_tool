@@ -2,6 +2,7 @@ import { useState } from 'react';
 import {
   Bug,
   ChevronRight,
+  ClipboardCheck,
   ExternalLink,
   FileText,
   Pencil,
@@ -9,6 +10,7 @@ import {
   Square,
   Ticket,
   Trash2,
+  TriangleAlert,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -39,6 +41,7 @@ interface SessionDetailProps {
   isAssigning: boolean;
   isHallazgoPending: boolean;
   isFlowPending: boolean;
+  isCoveragePending: boolean;
   canDelete: boolean;
   canDeleteSession: boolean;
   canAddHallazgo: boolean;
@@ -47,6 +50,7 @@ interface SessionDetailProps {
   onAddHallazgo: () => void;
   onFinish: () => void;
   onDeleteSession: () => void;
+  onToggleCoverage: (ready: boolean) => void;
   onAssignTester: (tcId: number, userId: number | null) => void;
   onHallazgoStatus: (id: number, status: string) => void;
   onHallazgoAssign: (id: number, userId: number | null) => void;
@@ -82,6 +86,7 @@ export function SessionDetail({
   isAssigning,
   isHallazgoPending,
   isFlowPending,
+  isCoveragePending,
   canDelete,
   canDeleteSession,
   canAddHallazgo,
@@ -90,6 +95,7 @@ export function SessionDetail({
   onAddHallazgo,
   onFinish,
   onDeleteSession,
+  onToggleCoverage,
   onAssignTester,
   onHallazgoStatus,
   onHallazgoAssign,
@@ -117,6 +123,8 @@ export function SessionDetail({
 
   const tested = total - counts.PENDING;
   const progress = total > 0 ? Math.round((tested / total) * 100) : 0;
+  const acceptance = tested > 0 ? Math.round((counts.OK / tested) * 100) : 0;
+  const coverageReady = Boolean(run.coverage_ready);
 
   const defectsFor = (flow: ExploratoryFlow) => {
     const exec = execByTc.get(flow.id);
@@ -233,6 +241,25 @@ export function SessionDetail({
             Reporte bugs
           </Button>
 
+          <Button
+            variant={coverageReady ? 'secondary' : 'outline'}
+            size="sm"
+            className={coverageReady ? 'text-ok' : undefined}
+            onClick={() => onToggleCoverage(!coverageReady)}
+            loading={isCoveragePending}
+            disabled={!coverageReady && flows.length === 0}
+            title={
+              !coverageReady && flows.length === 0
+                ? 'Cargá al menos un flujo/TC antes de declarar la cobertura'
+                : coverageReady
+                  ? 'Quitar la declaración de cobertura'
+                  : 'Declarar que los TC de cobertura funcional/negocio están cargados'
+            }
+          >
+            <ClipboardCheck />
+            {coverageReady ? 'Cobertura TC ✓' : 'Marcar TC cargados'}
+          </Button>
+
           {!isFinished ? (
             <>
               <Button variant="secondary" size="sm" onClick={onAddFlow}>
@@ -271,6 +298,28 @@ export function SessionDetail({
         </div>
       </header>
 
+      {!coverageReady ? (
+        <div className="flex shrink-0 items-start gap-2 border-b border-warn/30 bg-warn-soft px-5 py-2 text-caption text-warn">
+          <TriangleAlert className="mt-0.5 size-3.5 shrink-0" />
+          <span className="flex-1">
+            Los TC de cobertura funcional/negocio no están declarados. Podés seguir trabajando, pero
+            el reporte de estatus se generará con alerta.
+          </span>
+          {flows.length > 0 ? (
+            <Button
+              variant="secondary"
+              size="sm"
+              className="h-7"
+              onClick={() => onToggleCoverage(true)}
+              loading={isCoveragePending}
+            >
+              <ClipboardCheck />
+              Marcar TC cargados
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
+
       {total > 0 || hallazgos.length > 0 ? (
         <div className="flex shrink-0 flex-wrap items-center gap-4 border-b border-border bg-surface-2 px-5 py-2">
           {total > 0 ? (
@@ -283,6 +332,29 @@ export function SessionDetail({
               </div>
               <span className="text-caption tabular-nums text-fg-muted">
                 {progress}% ({tested}/{total})
+              </span>
+            </div>
+          ) : null}
+
+          {tested > 0 ? (
+            <div
+              className="flex items-center gap-1.5"
+              title={
+                coverageReady
+                  ? 'Porcentaje de tests ejecutados con resultado OK'
+                  : 'Cobertura de TC sin declarar: la aceptación no representa al regresivo'
+              }
+            >
+              <span className="text-caption font-semibold uppercase tracking-wide text-fg-subtle">
+                Aceptación
+              </span>
+              <span
+                className={cn(
+                  'text-caption font-bold tabular-nums',
+                  coverageReady ? 'text-ok' : 'text-warn',
+                )}
+              >
+                {acceptance}%
               </span>
             </div>
           ) : null}
@@ -586,6 +658,7 @@ export function SessionDetail({
                   runId={run.id}
                   isFinished={isFinished}
                   projectId={projectId}
+                  coverageReady={coverageReady}
                 />
               ) : (
                 <div className="space-y-3">

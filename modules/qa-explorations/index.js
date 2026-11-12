@@ -95,7 +95,7 @@ router.get('/sessions', async (req, res) => {
                     u.name AS creator_name,
                     r.total_flows AS flow_count,
                     r.ok_count, r.fail_count, r.warning_count, r.block_count,
-                    r.skip_count, r.pending_count,
+                    r.skip_count, r.pending_count, r.coverage_ready,
                     (SELECT COUNT(*) FROM qa_defects d
                       WHERE d.exploratory_run_id = r.id AND d.execution_id IS NULL) AS hallazgo_count
                FROM qa_test_runs r
@@ -590,6 +590,46 @@ router.post('/sessions/:runId/import-flows', upload.single('xlsx'), async (req, 
 });
 
 
+
+// ── PUT /api/explorations/sessions/:runId/coverage ───────────────────────────
+// El tester declara que ya cargó los TC que cubren las validaciones
+// funcionales y de negocio. Si no está activo, los reportes muestran alerta.
+router.put('/sessions/:runId/coverage', async (req, res) => {
+    try {
+        const runId = parseInt(req.params.runId, 10);
+        if (!runId) return res.status(400).json({ error: 'runId inválido' });
+        const ready = req.body.ready === true || req.body.ready === 'true' || req.body.ready === 1;
+
+        const runRes = await query(
+            `SELECT id, status FROM qa_test_runs WHERE id = ? AND run_type = 'EXPLORATORY'`,
+            [runId]
+        );
+        if (runRes.rows.length === 0) return res.status(404).json({ error: 'Sesión no encontrada' });
+
+        if (ready) {
+            const flows = await query(`SELECT count(*)::int AS n FROM qa_executions WHERE run_id = ?`, [runId]);
+            if (flows.rows[0].n === 0) {
+                return res.status(400).json({
+                    error: 'Cargá al menos un flujo/TC antes de declarar la cobertura',
+                });
+            }
+        }
+
+        await query(
+            `UPDATE qa_test_runs
+                SET coverage_ready = ?,
+                    coverage_ready_at = CASE WHEN ? THEN CURRENT_TIMESTAMP ELSE NULL END,
+                    coverage_ready_by = CASE WHEN ? THEN ? ELSE NULL END
+              WHERE id = ?`,
+            [ready, ready, ready, req.user.id, runId]
+        );
+
+        res.json({ ok: true, coverage_ready: ready });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // ── DELETE /api/explorations/sessions/:runId ─────────────────────────────────
 // Elimina la sesión completa: ejecuciones, defectos, hallazgos, evidencias
 // (filas; los archivos locales NO se borran) y los flujos creados para ella.
@@ -682,6 +722,7 @@ router.get('/sessions/:runId/bugs-report', async (req, res) => {
 
         const runRes = await query(
             `SELECT r.id, r.name, r.charter, r.timebox_minutes, r.started_at, r.finished_at, r.status,
+                    r.coverage_ready,
                     p.name as project_name, u.name as creator_name
              FROM qa_test_runs r
              JOIN qa_projects p ON r.project_id = p.id
@@ -800,6 +841,7 @@ router.get('/sessions/:runId/bugs-report', async (req, res) => {
             <h1>Reporte de Bugs - Sesión #${run.id}</h1>
             <p>${escapeHTML(run.name || 'Exploratoria')} | ${escapeHTML(run.project_name)} | Tester: ${escapeHTML(testerName || 'Todos')}</p>
         </div>
+        ${run.coverage_ready ? '' : `<div style="background:#fffbeb;border:1px solid #f59e0b;border-left:5px solid #d97706;border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:.76rem;color:#92400e;"><strong>⚠ Cobertura de TC no declarada.</strong> Esta sesión no tiene marcados los TC funcionales/negocio; el reporte refleja hallazgos, no aceptación del regresivo.</div>`}
         <div style="display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap;">
             <div class="kpi"><div class="kpi-val">${execs.rows.length}</div><div class="kpi-lab">Tests con Issues</div></div>
             <div class="kpi"><div class="kpi-val">${execs.rows.filter(e=>e.status==='FAIL').length}</div><div class="kpi-lab">FAIL</div></div>
@@ -972,10 +1014,21 @@ router.get('/reports/status', async (req, res) => {
             ...hallazgos.rows.map(h => h.exploratory_run_id),
         ])];
         const runsRes = runIds.length === 0 ? { rows: [] } : await query(`
-            SELECT id, name, charter, started_at, finished_at, status
+            SELECT id, name, charter, started_at, finished_at, status, coverage_ready
               FROM qa_test_runs WHERE id IN (${runIds.map(() => '?').join(',')})
         `, runIds);
         const runsById = new Map(runsRes.rows.map(r => [r.id, r]));
+        const uncoveredRuns = [...runsById.values()].filter(r => !r.coverage_ready);
+        const coveredCount = runsById.size - uncoveredRuns.length;
+        const coverageAlertHTML = uncoveredRuns.length === 0 ? '' : `
+            <div style="background:#fffbeb;border:1px solid #f59e0b;border-left:5px solid #d97706;border-radius:8px;padding:12px 14px;margin-bottom:16px;">
+                <div style="font-weight:800;color:#b45309;font-size:.85rem;">⚠ Cobertura de TC no declarada</div>
+                <div style="font-size:.74rem;color:#92400e;margin-top:3px;">
+                    ${uncoveredRuns.length} de ${runsById.size} sesión(es) no tienen marcados los TC de cobertura funcional/negocio.
+                    Los resultados reflejan ejecución, no aceptación del regresivo.
+                </div>
+                <div style="font-size:.7rem;color:#92400e;margin-top:3px;">Sesiones: ${uncoveredRuns.map(r => '#' + r.id).join(', ')}</div>
+            </div>`;
 
         const defectIds = defects.rows.map(d => d.id);
         const attachments = (execs.rows.length === 0 && defectIds.length === 0) ? { rows: [] } : await query(`
@@ -1015,6 +1068,7 @@ router.get('/reports/status', async (req, res) => {
             if (counts[e.status] !== undefined) counts[e.status] += 1;
         }
         const totalTests = execs.rows.length;
+        const acceptancePct = totalTests > 0 ? Math.round((counts.OK / totalTests) * 100) : 0;
 
         const execByRun = new Map();
         for (const e of execs.rows) {
@@ -1160,7 +1214,10 @@ router.get('/reports/status', async (req, res) => {
                 <div style="background:#eef2ff;border-radius:8px;padding:12px 14px;margin-bottom:8px;border-left:4px solid #4f46e5;">
                     <div style="font-weight:800;font-size:.9rem;">#${run.id} · ${htmlEscape(run.name || 'Sesión exploratoria')}</div>
                     <div style="font-size:.72rem;color:#4b5563;margin-top:2px;">${htmlEscape(run.charter || '')}</div>
-                    <div style="font-size:.68rem;color:#6b7280;margin-top:2px;">${fmtReportDate(run.started_at)} → ${run.finished_at ? fmtReportDate(run.finished_at) : 'en curso'} · ${runExecs.length} tests · ${runHallazgos.length} hallazgos</div>
+                    <div style="font-size:.68rem;color:#6b7280;margin-top:2px;">${fmtReportDate(run.started_at)} → ${run.finished_at ? fmtReportDate(run.finished_at) : 'en curso'} · ${runExecs.length} tests · ${runHallazgos.length} hallazgos · Aceptación ${runExecs.length ? Math.round(((runExecs.filter(e => e.status === 'OK').length) / runExecs.length) * 100) : 0}%</div>
+                    <div style="margin-top:4px;">${run.coverage_ready
+                        ? '<span style="font-size:.62rem;font-weight:700;background:#dcfce7;color:#15803d;padding:2px 8px;border-radius:10px;">✓ TC de cobertura declarados</span>'
+                        : '<span style="font-size:.62rem;font-weight:700;background:#fef3c7;color:#b45309;padding:2px 8px;border-radius:10px;">⚠ TC de cobertura sin declarar</span>'}</div>
                 </div>
                 ${testsHTML || '<div style="font-size:.74rem;color:#6b7280;padding:4px 0;">Sin tests ejecutados en el rango.</div>'}
                 ${runHallazgos.length > 0 ? `<div style="margin-top:6px;"><div style="font-size:.66rem;font-weight:700;color:#6b7280;text-transform:uppercase;">Hallazgos (${runHallazgos.length})</div>${hallazgosHTML}</div>` : ''}
@@ -1187,7 +1244,9 @@ router.get('/reports/status', async (req, res) => {
         </div>
         <div style="display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap;">
             <div class="kpi"><div class="kpi-val">${runIds.length}</div><div class="kpi-lab">Sesiones</div></div>
+            <div class="kpi"><div class="kpi-val">${coveredCount}/${runsById.size}</div><div class="kpi-lab">Cobertura TC</div></div>
             <div class="kpi"><div class="kpi-val">${execs.rows.length}</div><div class="kpi-lab">Tests ejecutados</div></div>
+            <div class="kpi"><div class="kpi-val">${acceptancePct}%</div><div class="kpi-lab">Aceptación</div></div>
             <div class="kpi"><div class="kpi-val">${counts.OK}</div><div class="kpi-lab">OK</div></div>
             <div class="kpi"><div class="kpi-val">${counts.FAIL}</div><div class="kpi-lab">FAIL</div></div>
             <div class="kpi"><div class="kpi-val">${counts.WARNING}</div><div class="kpi-lab">WARNING</div></div>
@@ -1196,6 +1255,7 @@ router.get('/reports/status', async (req, res) => {
             <div class="kpi"><div class="kpi-val">${hallazgos.rows.length}</div><div class="kpi-lab">Hallazgos</div></div>
             <div class="kpi"><div class="kpi-val">${defects.rows.length}</div><div class="kpi-lab">Defectos</div></div>
         </div>
+        ${coverageAlertHTML}
         ${chartsHTML}
         ${sessionsHTML || '<div style="text-align:center;padding:40px;color:#6b7280;">Sin actividad en el rango seleccionado.</div>'}
         ${omittedEvidence > 0 ? `<div style="text-align:center;padding:8px;color:#b45309;font-size:.72rem;">${omittedEvidence} evidencia(s) no disponible(s) en esta máquina: se omitieron del reporte.</div>` : ''}
