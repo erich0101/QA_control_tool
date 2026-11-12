@@ -938,18 +938,20 @@ router.get('/reports/status', async (req, res) => {
             defectsByExec.get(d.execution_id).push(d);
         }
 
-        const STATUS_COLOR = {
-            OK: { bg: '#dcfce7', fg: '#15803d' },
-            FAIL: { bg: '#fee2e2', fg: '#dc2626' },
-            WARNING: { bg: '#fef3c7', fg: '#b45309' },
-            BLOCK: { bg: '#fef3c7', fg: '#b45309' },
-            SKIP: { bg: '#e5e7eb', fg: '#4b5563' },
+        const STATUS_STYLE = {
+            OK: { bg: '#dcfce7', fg: '#15803d', chart: '#16a34a' },
+            FAIL: { bg: '#fee2e2', fg: '#dc2626', chart: '#dc2626' },
+            WARNING: { bg: '#fef3c7', fg: '#b45309', chart: '#d97706' },
+            BLOCK: { bg: '#fff7ed', fg: '#c2410c', chart: '#f97316' },
+            SKIP: { bg: '#e5e7eb', fg: '#4b5563', chart: '#94a3b8' },
         };
+        const STATUS_ORDER = ['FAIL', 'WARNING', 'BLOCK', 'SKIP', 'OK'];
 
         const counts = { OK: 0, FAIL: 0, WARNING: 0, BLOCK: 0, SKIP: 0 };
         for (const e of execs.rows) {
             if (counts[e.status] !== undefined) counts[e.status] += 1;
         }
+        const totalTests = execs.rows.length;
 
         const execByRun = new Map();
         for (const e of execs.rows) {
@@ -962,6 +964,72 @@ router.get('/reports/status', async (req, res) => {
             hallazgosByRun.get(h.exploratory_run_id).push(h);
         }
 
+        // ── Gráficos (SVG/CSS inline, sin dependencias externas) ──
+        function donutSVG() {
+            const radius = 54;
+            const circumference = 2 * Math.PI * radius;
+            let offset = 0;
+            const rings = STATUS_ORDER
+                .filter((status) => counts[status] > 0)
+                .map((status) => {
+                    const length = totalTests > 0 ? (counts[status] / totalTests) * circumference : 0;
+                    const ring = `<circle cx="70" cy="70" r="${radius}" fill="none" stroke="${STATUS_STYLE[status].chart}" stroke-width="18" stroke-dasharray="${length} ${circumference - length}" stroke-dashoffset="${-offset}" transform="rotate(-90 70 70)"></circle>`;
+                    offset += length;
+                    return ring;
+                })
+                .join('');
+            return `<svg width="140" height="140" viewBox="0 0 140 140" role="img" aria-label="Distribución de tests por estado">
+                <circle cx="70" cy="70" r="${radius}" fill="none" stroke="#eef2f7" stroke-width="18"></circle>
+                ${rings}
+                <text x="70" y="67" text-anchor="middle" font-size="22" font-weight="800" fill="#111827">${totalTests}</text>
+                <text x="70" y="84" text-anchor="middle" font-size="9" fill="#6b7280" letter-spacing="1">TESTS</text>
+            </svg>`;
+        }
+
+        const legendHTML = STATUS_ORDER
+            .filter((status) => counts[status] > 0)
+            .map((status) => {
+                const pct = totalTests > 0 ? Math.round((counts[status] / totalTests) * 100) : 0;
+                return `<div style="display:flex;align-items:center;gap:6px;font-size:.72rem;margin-bottom:5px;">
+                    <span style="width:9px;height:9px;border-radius:2px;background:${STATUS_STYLE[status].chart};display:inline-block;"></span>
+                    <span style="font-weight:700;min-width:62px;">${status}</span>
+                    <span style="color:#6b7280;">${counts[status]} (${pct}%)</span>
+                </div>`;
+            })
+            .join('');
+
+        const sessionBars = runIds.map((runId) => {
+            const run = runsById.get(runId);
+            const list = execByRun.get(runId) || [];
+            if (!run || list.length === 0) return '';
+            const perStatus = {};
+            for (const e of list) perStatus[e.status] = (perStatus[e.status] || 0) + 1;
+            const segments = STATUS_ORDER.map((status) => {
+                const n = perStatus[status] || 0;
+                if (!n) return '';
+                return `<div title="${status}: ${n}" style="width:${(n / list.length) * 100}%;background:${STATUS_STYLE[status].chart};height:100%;"></div>`;
+            }).join('');
+            return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:7px;">
+                <div style="width:150px;font-size:.68rem;color:#4b5563;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">#${run.id} · ${htmlEscape(run.name || 'Sesión')}</div>
+                <div style="flex:1;height:14px;border-radius:7px;background:#eef2f7;overflow:hidden;display:flex;">${segments}</div>
+                <div style="font-size:.66rem;color:#6b7280;width:28px;text-align:right;">${list.length}</div>
+            </div>`;
+        }).filter(Boolean).join('');
+
+        const chartsHTML = `<div class="charts">
+            <div class="chart-card chart-card--donut">
+                <div class="chart-title">Resultados por estado</div>
+                <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+                    ${donutSVG()}
+                    <div>${legendHTML || '<span style="font-size:.72rem;color:#6b7280;">Sin datos</span>'}</div>
+                </div>
+            </div>
+            <div class="chart-card chart-card--bars">
+                <div class="chart-title">Tests por sesión</div>
+                ${sessionBars || '<span style="font-size:.72rem;color:#6b7280;">Sin tests ejecutados en el rango.</span>'}
+            </div>
+        </div>`;
+
         let sessionsHTML = '';
         for (const runId of runIds) {
             const run = runsById.get(runId);
@@ -969,8 +1037,19 @@ router.get('/reports/status', async (req, res) => {
             const runExecs = execByRun.get(runId) || [];
             const runHallazgos = hallazgosByRun.get(runId) || [];
 
-            const testsHTML = runExecs.map(e => {
-                const color = STATUS_COLOR[e.status] || { bg: '#e5e7eb', fg: '#4b5563' };
+            // Agrupación por estado de resultado dentro de la sesión.
+            const byStatus = new Map();
+            for (const e of runExecs) {
+                if (!byStatus.has(e.status)) byStatus.set(e.status, []);
+                byStatus.get(e.status).push(e);
+            }
+            const statusesToRender = [
+                ...STATUS_ORDER,
+                ...[...byStatus.keys()].filter((status) => !STATUS_ORDER.includes(status)),
+            ];
+
+            const testCard = (e) => {
+                const color = STATUS_STYLE[e.status] || { bg: '#e5e7eb', fg: '#4b5563' };
                 const execDefects = defectsByExec.get(e.id) || [];
                 const evidHTML = (evidByExec[e.id] || []).map(ev => evidenceHTML(ev, 180)).join('');
                 const defectsHTML = execDefects.map(d => {
@@ -993,6 +1072,18 @@ router.get('/reports/status', async (req, res) => {
                     ${e.observations ? `<div style="font-size:.74rem;margin-top:2px;"><strong>Observaciones:</strong> ${htmlEscape(e.observations)}</div>` : ''}
                     ${evidHTML ? `<div style="margin-top:5px;">${evidHTML}</div>` : ''}
                     ${execDefects.length > 0 ? `<div style="margin-top:6px;"><div style="font-size:.66rem;font-weight:700;color:#6b7280;text-transform:uppercase;">Defectos (${execDefects.length})</div>${defectsHTML}</div>` : ''}
+                </div>`;
+            };
+
+            const testsHTML = statusesToRender.map((status) => {
+                const list = byStatus.get(status) || [];
+                if (list.length === 0) return '';
+                const style = STATUS_STYLE[status] || { fg: '#4b5563', chart: '#94a3b8' };
+                return `<div style="margin-bottom:10px;">
+                    <div style="display:inline-flex;align-items:center;gap:6px;font-size:.68rem;font-weight:800;color:${style.fg};text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px;">
+                        <span style="width:8px;height:8px;border-radius:50%;background:${style.chart};"></span>${status} · ${list.length}
+                    </div>
+                    ${list.map(testCard).join('')}
                 </div>`;
             }).join('');
 
@@ -1020,8 +1111,13 @@ router.get('/reports/status', async (req, res) => {
         .header h1{margin:0 0 4px;font-size:1.3rem}.header p{margin:0;opacity:.9;font-size:.85rem}
         .kpi{background:#fff;border-radius:8px;padding:12px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.1);border-top:3px solid #e5e7eb}
         .kpi-val{font-size:1.35rem;font-weight:700}.kpi-lab{font-size:.62rem;color:#6b7280;text-transform:uppercase}
+        .charts{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:18px}
+        .chart-card{background:#fff;border-radius:10px;padding:14px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+        .chart-card--donut{flex:0 0 300px}
+        .chart-card--bars{flex:1;min-width:300px}
+        .chart-title{font-size:.66rem;font-weight:800;color:#6b7280;text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px}
         .footer{text-align:center;padding:16px;color:#6b7280;font-size:.72rem}
-        @media print{body{background:#fff;padding:0}.kpi{box-shadow:none;border:1px solid #e5e7eb}}</style></head><body>
+        @media print{body{background:#fff;padding:0}.kpi,.chart-card{box-shadow:none;border:1px solid #e5e7eb}}</style></head><body>
         <div class="header">
             <h1>Reporte de estatus — Exploratoria</h1>
             <p>${htmlEscape(project.name)} · ${htmlEscape(testerLabel)} · ${from} → ${to}</p>
@@ -1037,6 +1133,7 @@ router.get('/reports/status', async (req, res) => {
             <div class="kpi"><div class="kpi-val">${hallazgos.rows.length}</div><div class="kpi-lab">Hallazgos</div></div>
             <div class="kpi"><div class="kpi-val">${defects.rows.length}</div><div class="kpi-lab">Defectos</div></div>
         </div>
+        ${chartsHTML}
         ${sessionsHTML || '<div style="text-align:center;padding:40px;color:#6b7280;">Sin actividad en el rango seleccionado.</div>'}
         ${omittedEvidence > 0 ? `<div style="text-align:center;padding:8px;color:#b45309;font-size:.72rem;">${omittedEvidence} evidencia(s) no disponible(s) en esta máquina: se omitieron del reporte.</div>` : ''}
         <div class="footer">Reporte generado automáticamente | ${new Date().toLocaleString('es-AR', { timeZone: REPORT_TZ })}</div>
