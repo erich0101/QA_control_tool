@@ -1068,7 +1068,10 @@ router.get('/reports/status', async (req, res) => {
             if (counts[e.status] !== undefined) counts[e.status] += 1;
         }
         const totalTests = execs.rows.length;
-        const acceptancePct = totalTests > 0 ? Math.round((counts.OK / totalTests) * 100) : 0;
+        // Aceptación estricta: OK / (OK + FAIL + WARNING). BLOCK y SKIP no se
+        // evaluaron y quedan fuera del denominador (igual que PENDIENTE).
+        const evaluables = counts.OK + counts.FAIL + counts.WARNING;
+        const acceptancePct = evaluables > 0 ? Math.round((counts.OK / evaluables) * 100) : null;
 
         const execByRun = new Map();
         for (const e of execs.rows) {
@@ -1214,7 +1217,10 @@ router.get('/reports/status', async (req, res) => {
                 <div style="background:#eef2ff;border-radius:8px;padding:12px 14px;margin-bottom:8px;border-left:4px solid #4f46e5;">
                     <div style="font-weight:800;font-size:.9rem;">#${run.id} · ${htmlEscape(run.name || 'Sesión exploratoria')}</div>
                     <div style="font-size:.72rem;color:#4b5563;margin-top:2px;">${htmlEscape(run.charter || '')}</div>
-                    <div style="font-size:.68rem;color:#6b7280;margin-top:2px;">${fmtReportDate(run.started_at)} → ${run.finished_at ? fmtReportDate(run.finished_at) : 'en curso'} · ${runExecs.length} tests · ${runHallazgos.length} hallazgos · Aceptación ${runExecs.length ? Math.round(((runExecs.filter(e => e.status === 'OK').length) / runExecs.length) * 100) : 0}%</div>
+                    <div style="font-size:.68rem;color:#6b7280;margin-top:2px;">${fmtReportDate(run.started_at)} → ${run.finished_at ? fmtReportDate(run.finished_at) : 'en curso'} · ${runExecs.length} tests · ${runHallazgos.length} hallazgos · Aceptación ${(() => {
+                        const ev = runExecs.filter(e => ['OK', 'FAIL', 'WARNING'].includes(e.status)).length;
+                        return ev > 0 ? Math.round((runExecs.filter(e => e.status === 'OK').length / ev) * 100) + '%' : '—';
+                    })()}</div>
                     <div style="margin-top:4px;">${run.coverage_ready
                         ? '<span style="font-size:.62rem;font-weight:700;background:#dcfce7;color:#15803d;padding:2px 8px;border-radius:10px;">✓ TC de cobertura declarados</span>'
                         : '<span style="font-size:.62rem;font-weight:700;background:#fef3c7;color:#b45309;padding:2px 8px;border-radius:10px;">⚠ TC de cobertura sin declarar</span>'}</div>
@@ -1246,7 +1252,7 @@ router.get('/reports/status', async (req, res) => {
             <div class="kpi"><div class="kpi-val">${runIds.length}</div><div class="kpi-lab">Sesiones</div></div>
             <div class="kpi"><div class="kpi-val">${coveredCount}/${runsById.size}</div><div class="kpi-lab">Cobertura TC</div></div>
             <div class="kpi"><div class="kpi-val">${execs.rows.length}</div><div class="kpi-lab">Tests ejecutados</div></div>
-            <div class="kpi"><div class="kpi-val">${acceptancePct}%</div><div class="kpi-lab">Aceptación</div></div>
+            <div class="kpi" title="OK / (OK + FAIL + WARNING). BLOCK, SKIP y PENDIENTE no cuentan."><div class="kpi-val">${acceptancePct === null ? '—' : `${acceptancePct}%`}</div><div class="kpi-lab">Aceptación</div></div>
             <div class="kpi"><div class="kpi-val">${counts.OK}</div><div class="kpi-lab">OK</div></div>
             <div class="kpi"><div class="kpi-val">${counts.FAIL}</div><div class="kpi-lab">FAIL</div></div>
             <div class="kpi"><div class="kpi-val">${counts.WARNING}</div><div class="kpi-lab">WARNING</div></div>
@@ -1254,6 +1260,10 @@ router.get('/reports/status', async (req, res) => {
             <div class="kpi"><div class="kpi-val">${counts.SKIP}</div><div class="kpi-lab">SKIP</div></div>
             <div class="kpi"><div class="kpi-val">${hallazgos.rows.length}</div><div class="kpi-lab">Hallazgos</div></div>
             <div class="kpi"><div class="kpi-val">${defects.rows.length}</div><div class="kpi-lab">Defectos</div></div>
+        </div>
+        <div style="font-size:.68rem;color:#6b7280;margin:-8px 0 14px 2px;">
+            Aceptación = <strong>OK / (OK + FAIL + WARNING)</strong>. BLOCK, SKIP y PENDIENTE no cuentan:
+            no representan una validación aprobada ni fallida.
         </div>
         ${coverageAlertHTML}
         ${chartsHTML}

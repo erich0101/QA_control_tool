@@ -183,8 +183,9 @@ export function StatusReportDialog({ open, onOpenChange, projectId }: StatusRepo
         </div>
 
         <p className="text-caption text-fg-subtle">
-          Las evidencias se incluyen sólo si están disponibles en esta máquina (o en la copia de
-          Postgres); las ausentes se omiten sin bloquear el reporte.
+          La aceptación se calcula como <strong>OK / (OK + FAIL + WARNING)</strong>; BLOCK, SKIP y
+          pendientes no cuentan. Las evidencias se incluyen sólo si están disponibles en esta
+          máquina (o en la copia de Postgres); las ausentes se omiten sin bloquear el reporte.
         </p>
 
         <DialogFooter>

@@ -123,7 +123,13 @@ export function SessionDetail({
 
   const tested = total - counts.PENDING;
   const progress = total > 0 ? Math.round((tested / total) * 100) : 0;
-  const acceptance = tested > 0 ? Math.round((counts.OK / tested) * 100) : 0;
+  /**
+   * Aceptación estricta: sólo OK sobre los tests que pudieron evaluarse.
+   * FAIL y WARNING no aceptan; BLOCK/SKIP no se evaluaron y PENDING tampoco,
+   * así que quedan fuera del denominador (no inflan ni castigan el %).
+   */
+  const evaluables = counts.OK + counts.FAIL + counts.WARNING;
+  const acceptance = evaluables > 0 ? Math.round((counts.OK / evaluables) * 100) : null;
   const coverageReady = Boolean(run.coverage_ready);
 
   const defectsFor = (flow: ExploratoryFlow) => {
@@ -323,7 +329,10 @@ export function SessionDetail({
       {total > 0 || hallazgos.length > 0 ? (
         <div className="flex shrink-0 flex-wrap items-center gap-4 border-b border-border bg-surface-2 px-5 py-2">
           {total > 0 ? (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2" title="Avance = tests ejecutados / total de flujos">
+              <span className="text-caption font-semibold uppercase tracking-wide text-fg-subtle">
+                Avance
+              </span>
               <div className="h-1.5 w-32 overflow-hidden rounded-full bg-fill">
                 <div
                   className={cn('h-full rounded-full', progress === 100 ? 'bg-ok' : 'bg-brand')}
@@ -336,13 +345,15 @@ export function SessionDetail({
             </div>
           ) : null}
 
-          {tested > 0 ? (
+          {evaluables > 0 ? (
             <div
               className="flex items-center gap-1.5"
               title={
-                coverageReady
-                  ? 'Porcentaje de tests ejecutados con resultado OK'
-                  : 'Cobertura de TC sin declarar: la aceptación no representa al regresivo'
+                'Aceptación = OK / (OK + FAIL + WARNING). ' +
+                'BLOCK y SKIP no se evalúan; PENDIENTE tampoco. ' +
+                (coverageReady
+                  ? ''
+                  : 'Cobertura de TC sin declarar: no representa al regresivo completo.')
               }
             >
               <span className="text-caption font-semibold uppercase tracking-wide text-fg-subtle">
@@ -354,7 +365,10 @@ export function SessionDetail({
                   coverageReady ? 'text-ok' : 'text-warn',
                 )}
               >
-                {acceptance}%
+                {acceptance === null ? '—' : `${acceptance}%`}
+              </span>
+              <span className="text-caption text-fg-subtle">
+                ({counts.OK}/{evaluables})
               </span>
             </div>
           ) : null}
