@@ -31,6 +31,33 @@ frágil: si se borra la carpeta `data/` o se cambia de máquina, se pierde.
    - archivo faltante pero recuperable desde PG,
    - archivo faltante sin copia (sólo está en la máquina donde se subió).
 
+## ¿Funciona sin copia en Supabase?
+
+Sí. El respaldo en Postgres es **opcional para leer**; la lectura es
+local-first:
+
+- **UI**: `GET /api/evidence/:id` resuelve `qa_attachments.storage_path`
+  contra `data/evidences/` de esa máquina y hace stream del archivo. No
+  necesita `file_data` ni el índice SQLite.
+- **Reportes**: `getEvidenceBase64()` lee primero el archivo local y sólo si
+  no existe usa `file_data`.
+
+Probado con una fila `storage_kind='local'`, `file_data = NULL` y el archivo
+presente en disco: `GET` devolvió `200 image/png` y el reporte devolvió la
+imagen. Es decir, **cada integrante sigue viendo y reportando sus propias
+evidencias** aunque nunca se hayan respaldado en Supabase.
+
+El límite aparece cuando el reporte se genera en una máquina que **no tiene
+el archivo** y no hay copia en PG: esa evidencia se omite. Para cubrir ese
+caso está el respaldo (`--publish`) y la doble escritura de las nuevas.
+
+### ¿Un `git pull` puede borrar las evidencias?
+
+No. `data/evidences/` y `data/evidences.sqlite*` están en `.gitignore` y no
+se trackean (0 archivos de `data/` en git), así que pull/checkout no los
+tocan. Sólo se pierden si alguien borra la carpeta manualmente o cambia de
+máquina sin respaldo en PG.
+
 ## Comandos
 
 ```bash
