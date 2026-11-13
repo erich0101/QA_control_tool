@@ -262,6 +262,8 @@ export function FlowDetail({
         />
       </div>
 
+      <StatusHistoryTimeline entries={statusHistory} title="Histórico de estados del TC" />
+
       {defects.length > 0 ? (
         <div className="space-y-2">
           <span className="text-caption font-bold uppercase tracking-wide text-fg-subtle">
@@ -310,28 +312,45 @@ export function FlowDetail({
                   </p>
                 ) : (
                   <>
-                    {defect.description ? (
-                      <ReadField label="Descripción" value={defect.description} />
+                    {execution?.status && !['FAIL', 'WARNING'].includes(execution.status) ? (
+                      <p className="text-caption text-fg-subtle">
+                        Reportado en un intento anterior. El TC hoy está en {execution.status}; el
+                        detalle del bug queda colapsado.
+                      </p>
                     ) : null}
-                    {defect.steps_to_reproduce ? (
-                      <ReadField label="Pasos para reproducir" value={defect.steps_to_reproduce} mono />
-                    ) : null}
-                    {defect.expected_result ? (
-                      <ReadField label="Resultado esperado" value={defect.expected_result} />
-                    ) : null}
-                    {defect.actual_result ? (
-                      <ReadField label="Resultado real" value={defect.actual_result} />
-                    ) : null}
-                    {defect.frequency ? (
-                      <ReadField label="Frecuencia" value={defect.frequency} />
-                    ) : null}
-                    {defect.business_impact ? (
-                      <ReadField label="Impacto de negocio" value={defect.business_impact} />
-                    ) : null}
-                    {defect.observations ? (
-                      <ReadField label="Observaciones" value={defect.observations} />
-                    ) : null}
-                    <DefectHistory defectId={defect.id} />
+                    <details className="rounded-md border border-border bg-surface px-2.5 py-1.5">
+                      <summary className="cursor-pointer select-none text-caption font-medium text-fg-muted">
+                        Ver detalle del bug
+                      </summary>
+                      <div className="mt-2 space-y-2">
+                        {defect.description ? (
+                          <ReadField label="Descripción" value={defect.description} />
+                        ) : null}
+                        {defect.steps_to_reproduce ? (
+                          <ReadField
+                            label="Pasos para reproducir"
+                            value={defect.steps_to_reproduce}
+                            mono
+                          />
+                        ) : null}
+                        {defect.expected_result ? (
+                          <ReadField label="Resultado esperado" value={defect.expected_result} />
+                        ) : null}
+                        {defect.actual_result ? (
+                          <ReadField label="Resultado real" value={defect.actual_result} />
+                        ) : null}
+                        {defect.frequency ? (
+                          <ReadField label="Frecuencia" value={defect.frequency} />
+                        ) : null}
+                        {defect.business_impact ? (
+                          <ReadField label="Impacto de negocio" value={defect.business_impact} />
+                        ) : null}
+                        {defect.observations ? (
+                          <ReadField label="Observaciones" value={defect.observations} />
+                        ) : null}
+                        <DefectHistory defectId={defect.id} />
+                      </div>
+                    </details>
                   </>
                 )}
               </div>
@@ -588,8 +607,6 @@ export function FlowDetail({
           </Field>
         </div>
       ) : null}
-
-      <StatusHistoryTimeline entries={statusHistory} />
 
       <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
         <span className="text-caption font-bold uppercase tracking-wide text-fg-subtle">

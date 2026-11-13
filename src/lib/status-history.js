@@ -80,7 +80,7 @@ async function getTcStatusHistory(tcId, limit = 200) {
            FROM qa_status_history h
            LEFT JOIN qa_users u ON u.id = h.changed_by
            LEFT JOIN qa_test_runs r ON r.id = h.run_id
-          WHERE h.tc_id = ?
+          WHERE h.entity_type = 'execution' AND h.tc_id = ?
           ORDER BY h.changed_at DESC, h.id DESC
           LIMIT ${Number(limit) || 200}`,
         [tcId]
