@@ -70,6 +70,7 @@ export function useHallazgoMutations(projectId: number | null) {
       hallazgosApi.setStatus(id, status),
     onSuccess: async () => {
       await invalidate();
+      await queryClient.invalidateQueries({ queryKey: ['hallazgo-status-history'] });
       toast.success('Estado actualizado');
     },
     onError: (error: Error) => toast.error(error.message),

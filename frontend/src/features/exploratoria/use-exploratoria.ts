@@ -48,6 +48,7 @@ export function useExploratoriaMutations(projectId: number | null, runId: number
     await queryClient.invalidateQueries({
       queryKey: ['exploratory-sessions', projectId],
     });
+    await queryClient.invalidateQueries({ queryKey: ['tc-status-history'] });
   };
 
   const startSession = useMutation({

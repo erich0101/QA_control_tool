@@ -11,7 +11,10 @@ import { queryKeys } from '@/lib/query-keys';
 export function useExecutionMutations(projectId: number | null) {
   const queryClient = useQueryClient();
   const invalidate = () =>
-    queryClient.invalidateQueries({ queryKey: queryKeys.testSuites(projectId) });
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: queryKeys.testSuites(projectId) }),
+      queryClient.invalidateQueries({ queryKey: ['tc-status-history'] }),
+    ]);
 
   const pause = useMutation({
     mutationFn: (runId: number) => executionApi.pauseRun(runId),

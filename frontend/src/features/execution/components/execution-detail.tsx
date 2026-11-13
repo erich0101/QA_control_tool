@@ -9,6 +9,8 @@ import { Textarea } from '@/components/ui/input';
 import type { BugDraft, ExecutionStatus, TestCase } from '@/lib/api/types';
 import { cn } from '@/lib/utils';
 import { useExecutionMutations } from '../use-execution';
+import { useTcStatusHistory } from '../use-status-history';
+import { StatusHistoryTimeline } from './status-history-timeline';
 import { BugDrafts, emptyBugDraft } from './bug-drafts';
 import { EvidenceSection } from './evidence-section';
 
@@ -58,6 +60,7 @@ const STATUS_BUTTONS: Array<{
  */
 export function ExecutionDetail({ testCase, projectId }: ExecutionDetailProps) {
   const { saveResult, uploadEvidence, deleteEvidence } = useExecutionMutations(projectId);
+  const { data: statusHistory = [] } = useTcStatusHistory(testCase.id);
 
   const initialStatus = (testCase.status as ExecutionStatus) || 'PENDING';
   const [status, setStatus] = useState<ExecutionStatus>(initialStatus);
@@ -185,6 +188,8 @@ export function ExecutionDetail({ testCase, projectId }: ExecutionDetailProps) {
           />
         )
       ) : null}
+
+      <StatusHistoryTimeline entries={statusHistory} />
 
       <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
         <span className="text-caption font-bold uppercase tracking-wide text-fg-subtle">

@@ -5,6 +5,7 @@ const { query } = require('../../db');
 const { requireAuth } = require('../middleware/auth');
 const { upload } = require('../lib/upload');
 const { generateKey, getProjectIdFromSuite } = require('../lib/sequences');
+const { recordStatusChange } = require('../lib/status-history');
 const { saveAttachment } = require('../lib/report-evidence');
 
 const router = express.Router();
@@ -42,10 +43,30 @@ router.post('/issue', requireAuth, upload.any(), async (req, res) => {
                 }
 
                 let execId;
-                const execRes = await query(`SELECT id FROM qa_executions WHERE tc_id = ? ORDER BY id DESC LIMIT 1`, [tcId]);
+                const execRes = await query(`SELECT id, status FROM qa_executions WHERE tc_id = ? ORDER BY id DESC LIMIT 1`, [tcId]);
                 if (execRes.rows.length > 0) {
                     execId = execRes.rows[0].id;
+                    const previousStatus = execRes.rows[0].status ?? null;
                     await query(`UPDATE qa_executions SET status = ? WHERE id = ?`, [t.status || 'PENDING', execId]);
+                    try {
+                        if (previousStatus !== (t.status || 'PENDING')) {
+                            const projectId = await getProjectIdFromSuite(suiteId);
+                            const runRes = await query(`SELECT run_id FROM qa_executions WHERE id = ?`, [execId]);
+                            await recordStatusChange({
+                                projectId,
+                                entityType: 'execution',
+                                entityId: execId,
+                                runId: runRes.rows[0]?.run_id ?? null,
+                                tcId,
+                                fromStatus: previousStatus,
+                                toStatus: t.status || 'PENDING',
+                                reason: t.observations ? String(t.observations).trim() : null,
+                                changedBy: req.user?.id ?? null,
+                            });
+                        }
+                    } catch (historyErr) {
+                        console.error('No se pudo registrar el histórico de estado:', historyErr.message);
+                    }
                 } else {
                     const newExecRes = await query(`INSERT INTO qa_executions (tc_id, status) VALUES (?, ?)`, [tcId, t.status || 'PENDING']);
                     execId = newExecRes.lastID;

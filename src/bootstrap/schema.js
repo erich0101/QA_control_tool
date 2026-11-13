@@ -108,6 +108,79 @@ await query(`ALTER TABLE qa_defects ADD COLUMN IF NOT EXISTS observations TEXT`)
             CREATE INDEX IF NOT EXISTS idx_qa_exploratory_blocks_run
                 ON qa_exploratory_blocks (run_id)
         `);
+        // Histórico temporal de estados de TCs (ejecuciones) y hallazgos.
+        // Permite analizar re-tests: OK→FAIL, FAIL→OK, etc., con motivo,
+        // autor y fecha. `from_status` NULL identifica el evento inicial.
+        await query(`
+            CREATE TABLE IF NOT EXISTS qa_status_history (
+                id SERIAL PRIMARY KEY,
+                project_id INTEGER REFERENCES qa_projects(id) ON DELETE CASCADE,
+                entity_type VARCHAR(20) NOT NULL,
+                entity_id INTEGER NOT NULL,
+                run_id INTEGER REFERENCES qa_test_runs(id) ON DELETE CASCADE,
+                tc_id INTEGER REFERENCES qa_test_cases(id) ON DELETE SET NULL,
+                from_status VARCHAR(30),
+                to_status VARCHAR(30) NOT NULL,
+                reason TEXT,
+                changed_by INTEGER REFERENCES qa_users(id) ON DELETE SET NULL,
+                changed_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+        await query(`
+            CREATE INDEX IF NOT EXISTS idx_qa_status_history_entity
+                ON qa_status_history (entity_type, entity_id, changed_at)
+        `);
+        await query(`
+            CREATE INDEX IF NOT EXISTS idx_qa_status_history_tc
+                ON qa_status_history (tc_id, changed_at)
+        `);
+        await query(`
+            CREATE INDEX IF NOT EXISTS idx_qa_status_history_project
+                ON qa_status_history (project_id, changed_at)
+        `);
+        // Backfill: evento inicial con el estado actual de cada ejecución y
+        // hallazgo existente (solo si todavía no tiene histórico).
+        await query(`
+            INSERT INTO qa_status_history
+                (project_id, entity_type, entity_id, run_id, tc_id,
+                 from_status, to_status, reason, changed_by, changed_at)
+            SELECT r.project_id, 'execution', e.id, e.run_id, e.tc_id,
+                   NULL, e.status,
+                   CASE WHEN e.status IN ('SKIP', 'BLOCK')
+                        THEN NULLIF(TRIM(COALESCE(e.observations, '')), '')
+                        ELSE NULLIF(TRIM(COALESCE(e.obtained_result, '')), '')
+                   END,
+                   e.tester_id,
+                   COALESCE(e.executed_at, CURRENT_TIMESTAMP)
+              FROM qa_executions e
+              JOIN qa_test_runs r ON r.id = e.run_id
+             WHERE e.status IS NOT NULL
+               AND NOT EXISTS (
+                   SELECT 1 FROM qa_status_history h
+                    WHERE h.entity_type = 'execution' AND h.entity_id = e.id
+               )
+        `);
+        await query(`
+            INSERT INTO qa_status_history
+                (project_id, entity_type, entity_id, run_id, tc_id,
+                 from_status, to_status, reason, changed_by, changed_at)
+            SELECT d.project_id, 'hallazgo', d.id, d.exploratory_run_id, NULL,
+                   NULL, d.status,
+                   NULLIF(TRIM(
+                       COALESCE(d.title, '') ||
+                       CASE WHEN COALESCE(d.description, '') <> ''
+                            THEN ' — ' || d.description ELSE '' END
+                   ), ''),
+                   d.created_by,
+                   COALESCE(d.created_at, CURRENT_TIMESTAMP)
+              FROM qa_defects d
+             WHERE d.execution_id IS NULL
+               AND d.status IS NOT NULL
+               AND NOT EXISTS (
+                   SELECT 1 FROM qa_status_history h
+                    WHERE h.entity_type = 'hallazgo' AND h.entity_id = d.id
+               )
+        `);
         // Migración de columnas creadas como TIMESTAMP (sin zona) a TIMESTAMPTZ.
         // Se consulta el tipo y se altera solo si hace falta (idempotente, sin DO).
         const deadlineType = await query(`

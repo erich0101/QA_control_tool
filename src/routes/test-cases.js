@@ -2,6 +2,7 @@ const express = require('express');
 const { query } = require('../../db');
 const { requireAuth, requireAdmin } = require('../middleware/auth');
 const { checkPermission, generateKey, getProjectIdFromSuite } = require('../lib/sequences');
+const { buildStatusReason, recordStatusChange } = require('../lib/status-history');
 
 const router = express.Router();
 
@@ -194,9 +195,11 @@ router.put('/:id', requireAuth, async (req, res) => {
             }
 
             let execId = null;
-            const execRes = await query(`SELECT id FROM qa_executions WHERE tc_id = ? AND run_id = ?`, [tcId, runId]);
+            let previousStatus = null;
+            const execRes = await query(`SELECT id, status FROM qa_executions WHERE tc_id = ? AND run_id = ?`, [tcId, runId]);
             if (execRes.rows.length > 0) {
                 execId = execRes.rows[0].id;
+                previousStatus = execRes.rows[0].status ?? null;
                 const execFields = [];
                 const execParams = [];
                 if (status !== undefined) { execFields.push('status = ?'); execParams.push(status); }
@@ -211,6 +214,34 @@ router.put('/:id', requireAuth, async (req, res) => {
                 const insertRes = await query(`INSERT INTO qa_executions (tc_id, run_id, tester, tester_id, status, observations, obtained_result) VALUES (?, ?, ?, ?, ?, ?, ?)`,
                     [tcId, runId, req.user.name, req.user.id, status || 'PENDING', observations || '', obtained_result || '']);
                 execId = insertRes.lastID;
+            }
+
+            // Histórico temporal del estado del TC.
+            if (status !== undefined) {
+                try {
+                    const runProjectRes = await query(`SELECT project_id FROM qa_test_runs WHERE id = ?`, [runId]);
+                    const historyReason = buildStatusReason({
+                        status,
+                        observations,
+                        obtained: obtained_result,
+                        bugs: req.body.bugs,
+                        bug_title: req.body.bug_title,
+                        bug_description: req.body.bug_description,
+                    });
+                    await recordStatusChange({
+                        projectId: runProjectRes.rows[0]?.project_id ?? null,
+                        entityType: 'execution',
+                        entityId: execId,
+                        runId,
+                        tcId,
+                        fromStatus: previousStatus,
+                        toStatus: status,
+                        reason: historyReason,
+                        changedBy: req.user.id,
+                    });
+                } catch (historyErr) {
+                    console.error('No se pudo registrar el histórico de estado:', historyErr.message);
+                }
             }
             const { bug_title, bug_description, bug_severity, bug_steps_to_reproduce, bug_expected_result, bug_actual_result, bug_frequency, bug_business_impact, bug_observations, bugs } = req.body;
 

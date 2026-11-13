@@ -7,6 +7,8 @@ import { useConfirm } from '@/components/ui/confirm-provider';
 import { SelectField } from '@/components/ui/select-field';
 import { HALLZGO_STATUSES, type Hallazgo, type TestSuite, type User } from '@/lib/api/types';
 import { useEvidence, useEvidenceMutations, useHallazgoMutations } from '../use-hallazgos';
+import { useHallazgoStatusHistory } from '@/features/execution/use-status-history';
+import { StatusHistoryTimeline } from '@/features/execution/components/status-history-timeline';
 import {
   buildHallazgoPatch,
   buildHallazgoPayload,
@@ -48,6 +50,7 @@ export function HallazgoPane({
     hallazgo?.id ?? null,
   );
   const evidenceMutations = useEvidenceMutations(projectId, 'defect', hallazgo?.id ?? null);
+  const { data: statusHistory = [] } = useHallazgoStatusHistory(hallazgo?.id ?? null);
   const [convertOpen, setConvertOpen] = useState(false);
   const [jiraOpen, setJiraOpen] = useState(false);
 
@@ -216,6 +219,10 @@ export function HallazgoPane({
                   onDelete={(item) => evidenceMutations.removeEvidence.mutate(item.id)}
                 />
               </div>
+            ) : null}
+
+            {isEdit && hallazgo ? (
+              <StatusHistoryTimeline entries={statusHistory} title="Historial de estados del hallazgo" />
             ) : null}
           </form>
         </FormProvider>

@@ -19,6 +19,8 @@ import type {
 import { FREQUENCIES, IMPACTS } from '@/lib/api/types';
 import { cn } from '@/lib/utils';
 import { useExploratoriaMutations } from '../use-exploratoria';
+import { useTcStatusHistory } from '@/features/execution/use-status-history';
+import { StatusHistoryTimeline } from '@/features/execution/components/status-history-timeline';
 
 interface FlowDetailProps {
   flow: ExploratoryFlow;
@@ -128,6 +130,7 @@ export function FlowDetail({
 }: FlowDetailProps) {
   const confirm = useConfirm();
   const { executeFlow, uploadEvidence, deleteEvidence } = useExploratoriaMutations(projectId, runId);
+  const { data: statusHistory = [] } = useTcStatusHistory(flow.id);
 
   const [status, setStatus] = useState<ExploratoryStatus>(
     (execution?.status as ExploratoryStatus) || 'OK',
@@ -418,8 +421,7 @@ export function FlowDetail({
       </Field>
 
       {allowsBug ? (
-        <div className="space-y-2 rounded-lg border border-fail/30 bg-fail-soft/40 p-3">
-          <div className="flex flex-wrap items-center gap-2">
+        <div className="space-y-2 rounded-lg border border-fail/30 bg-fail-soft/40 p-3">          <div className="flex flex-wrap items-center gap-2">
             <span className="text-caption font-bold uppercase tracking-wide text-fail">
               Reporte de defecto
             </span>
@@ -525,6 +527,8 @@ export function FlowDetail({
           </Field>
         </div>
       ) : null}
+
+      <StatusHistoryTimeline entries={statusHistory} />
 
       <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
         <span className="text-caption font-bold uppercase tracking-wide text-fg-subtle">

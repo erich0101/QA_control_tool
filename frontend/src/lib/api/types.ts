@@ -306,6 +306,22 @@ export interface EvidenceItem {
 
 export type ExecutionStatus = 'PENDING' | 'PASS' | 'FAIL' | 'BLOCK' | 'SKIP';
 
+/** Evento del histórico temporal de estados de un TC o hallazgo. */
+export interface StatusHistoryEntry {
+  id: number;
+  entity_type: 'execution' | 'hallazgo';
+  entity_id: number;
+  run_id?: number | null;
+  tc_id?: number | null;
+  from_status?: string | null;
+  to_status: string;
+  reason?: string | null;
+  changed_at?: string;
+  changed_by_name?: string | null;
+  run_name?: string | null;
+  run_type?: string | null;
+}
+
 // ── Testing exploratorio ──────────────────────────────────────
 export interface ExploratorySession {
   id: number;

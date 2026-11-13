@@ -2,6 +2,7 @@ const express = require('express');
 const { query } = require('../../db');
 const { requireAuth, requireAdmin } = require('../middleware/auth');
 const { checkPermission, generateKey } = require('../lib/sequences');
+const { recordStatusChange } = require('../lib/status-history');
 
 const router = express.Router();
 
@@ -80,6 +81,19 @@ router.post('/', requireAuth, async (req, res) => {
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?, ?)`,
             [project_id, title, description || '', severity || 'Media', steps_to_reproduce || '', expected_result || '', actual_result || '', frequency || 'Siempre', business_impact || '', preconditions || '', observations || '', assigned_to || null, jira_epic_key || '', component || '', req.user.id, runId]
         );
+        try {
+            await recordStatusChange({
+                projectId: project_id,
+                entityType: 'hallazgo',
+                entityId: result.lastID,
+                runId,
+                toStatus: 'OPEN',
+                reason: [title, description].filter((part) => part && String(part).trim()).join(' — ') || null,
+                changedBy: req.user.id,
+            });
+        } catch (historyErr) {
+            console.error('No se pudo registrar el histórico del hallazgo:', historyErr.message);
+        }
         res.json({ ok: true, id: result.lastID });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -108,6 +122,7 @@ router.put('/:id', requireAuth, async (req, res) => {
 
 router.delete('/:id', requireAuth, requireAdmin, async (req, res) => {
     try {
+        await query(`DELETE FROM qa_status_history WHERE entity_type = 'hallazgo' AND entity_id = ?`, [req.params.id]);
         await query(`DELETE FROM qa_defects WHERE id = ? AND execution_id IS NULL`, [req.params.id]);
         res.json({ ok: true });
     } catch (err) {
@@ -117,9 +132,37 @@ router.delete('/:id', requireAuth, requireAdmin, async (req, res) => {
 
 router.put('/:id/status', requireAuth, async (req, res) => {
     try {
-        const { status } = req.body;
+        const { status, reason } = req.body;
         if (!status) return res.status(400).json({ error: 'status requerido' });
+
+        const currentRes = await query(
+            `SELECT id, project_id, status, title, description, exploratory_run_id
+               FROM qa_defects WHERE id = ? AND execution_id IS NULL`,
+            [req.params.id]
+        );
+        if (currentRes.rows.length === 0) return res.status(404).json({ error: 'Hallazgo no encontrado' });
+        const current = currentRes.rows[0];
+
         await query(`UPDATE qa_defects SET status = ? WHERE id = ? AND execution_id IS NULL`, [status, req.params.id]);
+
+        try {
+            const historyReason = String(reason || '').trim()
+                || [current.title, current.description].filter((part) => part && String(part).trim()).join(' — ')
+                || null;
+            await recordStatusChange({
+                projectId: current.project_id,
+                entityType: 'hallazgo',
+                entityId: current.id,
+                runId: current.exploratory_run_id,
+                fromStatus: current.status,
+                toStatus: status,
+                reason: historyReason,
+                changedBy: req.user.id,
+            });
+        } catch (historyErr) {
+            console.error('No se pudo registrar el histórico del hallazgo:', historyErr.message);
+        }
+
         res.json({ ok: true });
     } catch (err) {
         res.status(500).json({ error: err.message });

@@ -15,6 +15,7 @@ const XLSX = require('xlsx');
 const { query } = require('../../db');
 const { requireAdmin } = require('../../src/middleware/auth');
 const { getEvidenceBase64, evidenceHTML, lightboxHTML } = require('../../src/lib/report-evidence');
+const { buildStatusReason, recordStatusChange } = require('../../src/lib/status-history');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -384,10 +385,12 @@ router.post('/flows/:tcId/execute', async (req, res) => {
         );
 
         let execId;
+        let previousStatus = null;
         if (existing.rows.length > 0) {
             execId = existing.rows[0].id;
             // Si la ejecución era PENDING, asignar el tester correcto
             const existingExec = await query(`SELECT status, tester_id FROM qa_executions WHERE id = ?`, [execId]);
+            previousStatus = existingExec.rows[0]?.status ?? null;
             let updateTester = '';
             let updateTesterId = null;
             if (existingExec.rows[0]?.status === 'PENDING' || !existingExec.rows[0]?.tester_id) {
@@ -437,6 +440,25 @@ router.post('/flows/:tcId/execute', async (req, res) => {
                 [tcId, run_id, testerName, testerId, status || 'PENDING', observations || '', obtained_result || '', runRes.rows[0].project_id]
             );
             execId = ins.rows[0].id;
+        }
+
+        // Trazabilidad temporal del estado del TC. El motivo se compone con
+        // título+descripción (FAIL/WARNING) o la justificación (SKIP/BLOCK).
+        try {
+            const reason = buildStatusReason({ status: status || 'PENDING', observations, obtained: obtained_result, bugs });
+            await recordStatusChange({
+                projectId: runRes.rows[0].project_id,
+                entityType: 'execution',
+                entityId: execId,
+                runId: run_id,
+                tcId,
+                fromStatus: previousStatus,
+                toStatus: status || 'PENDING',
+                reason,
+                changedBy: req.user.id,
+            });
+        } catch (historyErr) {
+            console.error('No se pudo registrar el histórico de estado:', historyErr.message);
         }
 
         // Si FAIL o WARNING, crear o ACTUALIZAR defectos.
@@ -1446,6 +1468,81 @@ router.get('/reports/status', async (req, res) => {
             return acc + Math.max(0, to - from);
         }, 0);
         const totalBlockedDays = Math.round((totalBlockedMs / 86_400_000) * 10) / 10;
+
+        // Evolución temporal de estados (re-tests). Se calcula por TC
+        // (a través de todos sus runs) y por hallazgo, usando LAG sobre el
+        // histórico. Se excluye PENDING para no ensuciar las transiciones.
+        let historyUserFilter = '';
+        const historyParams = [projectId];
+        if (testerId) {
+            historyUserFilter = 'AND h.changed_by = ?';
+            historyParams.push(testerId);
+        } else if (testerName) {
+            historyUserFilter = 'AND hu.name = ?';
+            historyParams.push(testerName);
+        }
+        const historyRangeParams = [...historyParams, from, to];
+        const transitionsRes = await query(`
+            WITH ev AS (
+                SELECT h.entity_type, h.tc_id, h.entity_id, h.changed_at, h.to_status,
+                       LAG(h.to_status) OVER (
+                           PARTITION BY h.entity_type,
+                               CASE WHEN h.entity_type = 'execution' THEN h.tc_id ELSE h.entity_id END
+                           ORDER BY h.changed_at, h.id
+                       ) AS prev_status
+                  FROM qa_status_history h
+                  LEFT JOIN qa_users hu ON hu.id = h.changed_by
+                 WHERE h.project_id = ? AND h.to_status <> 'PENDING'
+                   ${historyUserFilter}
+            )
+            SELECT entity_type, prev_status, to_status, count(*)::int AS total
+              FROM ev
+             WHERE prev_status IS NOT NULL AND prev_status <> to_status
+               AND (changed_at AT TIME ZONE '${REPORT_TZ}')::date BETWEEN ? AND ?
+             GROUP BY entity_type, prev_status, to_status
+             ORDER BY entity_type, total DESC
+        `, historyRangeParams);
+        const totalTransitions = transitionsRes.rows.reduce((acc, row) => acc + row.total, 0);
+
+        // Historial por TC/hallazgo para mostrarlo dentro de cada ficha.
+        const execTcIds = [...new Set(execs.rows.map(e => e.tc_id))];
+        const execHistoryRes = execTcIds.length === 0 ? { rows: [] } : await query(`
+            SELECT h.entity_type, h.entity_id, h.tc_id, h.run_id, h.changed_at,
+                   h.from_status, h.to_status, h.reason, u.name AS changed_by_name
+              FROM qa_status_history h
+              LEFT JOIN qa_users u ON u.id = h.changed_by
+              LEFT JOIN qa_users hu ON hu.id = h.changed_by
+             WHERE h.entity_type = 'execution'
+               AND h.tc_id IN (${execTcIds.map(() => '?').join(',')})
+               AND (h.changed_at AT TIME ZONE '${REPORT_TZ}')::date BETWEEN ? AND ?
+               ${historyUserFilter}
+             ORDER BY h.changed_at ASC, h.id ASC
+        `, [...execTcIds, from, to, ...(testerId ? [testerId] : testerName ? [testerName] : [])]);
+        const execHistoryByTc = new Map();
+        for (const row of execHistoryRes.rows) {
+            if (!execHistoryByTc.has(row.tc_id)) execHistoryByTc.set(row.tc_id, []);
+            execHistoryByTc.get(row.tc_id).push(row);
+        }
+
+        const hallazgoIds = hallazgos.rows.map(h => h.id);
+        const hallazgoHistoryRes = hallazgoIds.length === 0 ? { rows: [] } : await query(`
+            SELECT h.entity_type, h.entity_id, h.changed_at, h.from_status, h.to_status,
+                   h.reason, u.name AS changed_by_name
+              FROM qa_status_history h
+              LEFT JOIN qa_users u ON u.id = h.changed_by
+              LEFT JOIN qa_users hu ON hu.id = h.changed_by
+             WHERE h.entity_type = 'hallazgo'
+               AND h.entity_id IN (${hallazgoIds.map(() => '?').join(',')})
+               AND (h.changed_at AT TIME ZONE '${REPORT_TZ}')::date BETWEEN ? AND ?
+               ${historyUserFilter}
+             ORDER BY h.changed_at ASC, h.id ASC
+        `, [...hallazgoIds, from, to, ...(testerId ? [testerId] : testerName ? [testerName] : [])]);
+        const hallazgoHistoryById = new Map();
+        for (const row of hallazgoHistoryRes.rows) {
+            if (!hallazgoHistoryById.has(row.entity_id)) hallazgoHistoryById.set(row.entity_id, []);
+            hallazgoHistoryById.get(row.entity_id).push(row);
+        }
+
         const sessionTotals = runTotalsRes.rows.reduce(
             (acc, row) => ({
                 total: acc.total + row.total,
@@ -1597,6 +1694,54 @@ router.get('/reports/status', async (req, res) => {
             </div>
         </div>`;
 
+        const TRANSITION_ORDER = ['OK', 'PASS', 'FAIL', 'WARNING', 'BLOCK', 'SKIP', 'OPEN', 'IN_PROGRESS', 'FIXED', 'CLOSED', 'WONT_FIX'];
+        const transitionsTable = (entityType) => {
+            const rows = transitionsRes.rows.filter((row) => row.entity_type === entityType);
+            if (rows.length === 0) {
+                return '<div style="font-size:.72rem;color:#6b7280;">Sin cambios de estado registrados en el rango.</div>';
+            }
+            const orderIndex = (status) => {
+                const index = TRANSITION_ORDER.indexOf(status);
+                return index === -1 ? TRANSITION_ORDER.length : index;
+            };
+            const froms = [...new Set(rows.map((row) => row.prev_status))].sort((a, b) => orderIndex(a) - orderIndex(b));
+            const tos = [...new Set(rows.map((row) => row.to_status))].sort((a, b) => orderIndex(a) - orderIndex(b));
+            const cell = (from, to) => rows.find((row) => row.prev_status === from && row.to_status === to)?.total || 0;
+            return `<table style="width:100%;border-collapse:collapse;font-size:.66rem;">
+                <thead>
+                    <tr>
+                        <th style="text-align:left;padding:4px 6px;color:#6b7280;font-weight:700;border-bottom:1px solid #e5e7eb;">Desde / Hacia</th>
+                        ${tos.map((to) => `<th style="padding:4px 6px;color:#6b7280;font-weight:700;border-bottom:1px solid #e5e7eb;">${htmlEscape(to)}</th>`).join('')}
+                    </tr>
+                </thead>
+                <tbody>
+                    ${froms.map((from) => `<tr>
+                        <td style="padding:4px 6px;font-weight:700;border-bottom:1px solid #f3f4f6;">${htmlEscape(from)}</td>
+                        ${tos.map((to) => {
+                            const value = cell(from, to);
+                            return `<td style="padding:4px 6px;text-align:center;border-bottom:1px solid #f3f4f6;${value ? 'font-weight:700;color:#111827;' : 'color:#d1d5db;'}">${value || '·'}</td>`;
+                        }).join('')}
+                    </tr>`).join('')}
+                </tbody>
+            </table>`;
+        };
+        const transitionsHTML = `<div class="chart-card" style="margin-bottom:18px;">
+            <div class="chart-title">Evolución de estados (re-tests)</div>
+            <div style="font-size:.7rem;color:#6b7280;margin-bottom:10px;">
+                Transiciones registradas en el rango. Incluye cambios entre re-tests del mismo TC.
+            </div>
+            <div style="display:flex;gap:18px;flex-wrap:wrap;">
+                <div style="flex:1;min-width:280px;">
+                    <div style="font-size:.66rem;font-weight:800;color:#4b5563;text-transform:uppercase;margin-bottom:4px;">TC / ejecuciones</div>
+                    ${transitionsTable('execution')}
+                </div>
+                <div style="flex:1;min-width:280px;">
+                    <div style="font-size:.66rem;font-weight:800;color:#4b5563;text-transform:uppercase;margin-bottom:4px;">Hallazgos</div>
+                    ${transitionsTable('hallazgo')}
+                </div>
+            </div>
+        </div>`;
+
         let sessionsHTML = '';
         for (const runId of runIds) {
             const run = runsById.get(runId);
@@ -1619,6 +1764,17 @@ router.get('/reports/status', async (req, res) => {
                 const color = STATUS_STYLE[e.status] || { bg: '#e5e7eb', fg: '#4b5563' };
                 const execDefects = defectsByExec.get(e.id) || [];
                 const evidHTML = (evidByExec[e.id] || []).map(ev => evidenceHTML(ev, 180)).join('');
+                const history = execHistoryByTc.get(e.tc_id) || [];
+                const historyHTML = history.length === 0 ? '' : `<details style="margin-top:6px;">
+                    <summary style="cursor:pointer;font-size:.66rem;font-weight:700;color:#6b7280;text-transform:uppercase;">Historial de estados (${history.length})</summary>
+                    <ol style="margin:4px 0 0 16px;padding:0;font-size:.66rem;color:#4b5563;">
+                        ${history.map((row) => `<li style="margin-bottom:2px;">
+                            <strong>${row.from_status ? htmlEscape(row.from_status) + ' → ' : 'Inicial: '}${htmlEscape(row.to_status)}</strong>
+                            ${row.reason ? ` · <em>${htmlEscape(row.reason)}</em>` : ''}
+                            · ${htmlEscape(row.changed_by_name || '—')} · ${fmtReportDate(row.changed_at)}
+                        </li>`).join('')}
+                    </ol>
+                </details>`;
                 const defectsHTML = execDefects.map(d => {
                     const defEvid = (evidByDef[d.id] || []).map(ev => evidenceHTML(ev, 160)).join('');
                     return `<div style="padding:7px 9px;background:rgba(220,38,38,.05);border-radius:6px;margin-top:5px;">
@@ -1639,6 +1795,7 @@ router.get('/reports/status', async (req, res) => {
                     ${e.observations ? `<div style="font-size:.74rem;margin-top:2px;"><strong>Observaciones:</strong> ${htmlEscape(e.observations)}</div>` : ''}
                     ${evidHTML ? `<div style="margin-top:5px;">${evidHTML}</div>` : ''}
                     ${execDefects.length > 0 ? `<div style="margin-top:6px;"><div style="font-size:.66rem;font-weight:700;color:#6b7280;text-transform:uppercase;">Defectos (${execDefects.length})</div>${defectsHTML}</div>` : ''}
+                    ${historyHTML}
                 </div>`;
             };
 
@@ -1654,11 +1811,23 @@ router.get('/reports/status', async (req, res) => {
                 </div>`;
             }).join('');
 
-            const hallazgosHTML = runHallazgos.map(h => `
-                <div style="padding:7px 9px;background:#fffbeb;border-radius:6px;margin-top:5px;border-left:3px solid #d97706;">
+            const hallazgosHTML = runHallazgos.map(h => {
+                const history = hallazgoHistoryById.get(h.id) || [];
+                return `<div style="padding:7px 9px;background:#fffbeb;border-radius:6px;margin-top:5px;border-left:3px solid #d97706;">
                     <div style="font-weight:700;font-size:.78rem;">H-${h.id} · ${htmlEscape(h.title)}</div>
                     <div style="font-size:.7rem;color:#6b7280;">Severidad: ${htmlEscape(h.severity || 'Media')} · Estado: ${htmlEscape(h.status)} · ${htmlEscape(h.reporter_name)} · ${fmtReportDate(h.created_at)}</div>
-                </div>`).join('');
+                    ${history.length === 0 ? '' : `<details style="margin-top:4px;">
+                        <summary style="cursor:pointer;font-size:.64rem;font-weight:700;color:#6b7280;text-transform:uppercase;">Historial de estados (${history.length})</summary>
+                        <ol style="margin:3px 0 0 16px;padding:0;font-size:.64rem;color:#4b5563;">
+                            ${history.map((row) => `<li style="margin-bottom:2px;">
+                                <strong>${row.from_status ? htmlEscape(row.from_status) + ' → ' : 'Inicial: '}${htmlEscape(row.to_status)}</strong>
+                                ${row.reason ? ` · <em>${htmlEscape(row.reason)}</em>` : ''}
+                                · ${htmlEscape(row.changed_by_name || '—')} · ${fmtReportDate(row.changed_at)}
+                            </li>`).join('')}
+                        </ol>
+                    </details>`}
+                </div>`;
+            }).join('');
 
             sessionsHTML += `<div style="margin-bottom:18px;">
                 <div style="background:#eef2ff;border-radius:8px;padding:12px 14px;margin-bottom:8px;border-left:4px solid #4f46e5;">
@@ -1753,6 +1922,7 @@ router.get('/reports/status', async (req, res) => {
             <div class="kpi" title="Cambios de inicio/fin planificado registrados con justificación"><div class="kpi-val">${totalPlanChanges}</div><div class="kpi-lab">Cambios de plan</div></div>
             <div class="kpi" title="Bloqueos de testing por fuerza mayor (no modifican las fechas)"><div class="kpi-val">${totalBlocks}</div><div class="kpi-lab">Bloqueos</div></div>
             <div class="kpi" title="Tiempo total bloqueado por fuerza mayor en el rango"><div class="kpi-val">${totalBlockedDays}</div><div class="kpi-lab">Días bloqueados</div></div>
+            <div class="kpi" title="Transiciones de estado registradas en el rango (incluye re-tests)"><div class="kpi-val">${totalTransitions}</div><div class="kpi-lab">Re-tests</div></div>
             <div class="kpi"><div class="kpi-val">${hallazgos.rows.length}</div><div class="kpi-lab">Hallazgos</div></div>
             <div class="kpi"><div class="kpi-val">${defects.rows.length}</div><div class="kpi-lab">Defectos</div></div>
         </div>
@@ -1763,6 +1933,7 @@ router.get('/reports/status', async (req, res) => {
         </div>
         ${coverageAlertHTML}
         ${chartsHTML}
+        ${transitionsHTML}
         ${sessionsHTML || '<div style="text-align:center;padding:40px;color:#6b7280;">Sin actividad en el rango seleccionado.</div>'}
         ${omittedEvidence > 0 ? `<div style="text-align:center;padding:8px;color:#b45309;font-size:.72rem;">${omittedEvidence} evidencia(s) no disponible(s) en esta máquina: se omitieron del reporte.</div>` : ''}
         <div class="footer">Reporte generado automáticamente | ${new Date().toLocaleString('es-AR', { timeZone: REPORT_TZ })}</div>
