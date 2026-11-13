@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button';
 import { ReadField } from '@/components/ui/read-field';
 import type { Defect } from '@/lib/api/types';
 import { cn } from '@/lib/utils';
+import { useDefectStatusHistory } from '@/features/execution/use-status-history';
+import { StatusHistoryTimeline } from '@/features/execution/components/status-history-timeline';
 
 interface BugRowProps {
   bug: Defect;
@@ -27,6 +29,7 @@ const STATUS_TONE: Record<string, 'ok' | 'warn' | 'neutral'> = {
 
 export function BugRow({ bug, onDismiss, isBusy }: BugRowProps) {
   const [expanded, setExpanded] = useState(false);
+  const { data: statusHistory = [] } = useDefectStatusHistory(bug.id, expanded);
   const isDismissed = bug.status === 'DISMISSED';
 
   const createdAt = bug.created_at
@@ -113,6 +116,10 @@ export function BugRow({ bug, onDismiss, isBusy }: BugRowProps) {
           {bug.observations ? (
             <ReadField label="Observaciones" value={bug.observations} />
           ) : null}
+
+          <div className="md:col-span-2">
+            <StatusHistoryTimeline entries={statusHistory} title="Historial del bug" />
+          </div>
 
           <div className="md:col-span-2 flex flex-wrap gap-4 border-t border-border pt-2 text-caption text-fg-subtle">
             <span>TC: {bug.tc_key ?? '—'}</span>

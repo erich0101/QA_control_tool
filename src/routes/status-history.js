@@ -1,6 +1,6 @@
 const express = require('express');
 const { requireAuth } = require('../middleware/auth');
-const { getTcStatusHistory, getHallazgoStatusHistory } = require('../lib/status-history');
+const { getTcStatusHistory, getHallazgoStatusHistory, getDefectStatusHistory } = require('../lib/status-history');
 
 const router = express.Router();
 
@@ -22,6 +22,18 @@ router.get('/hallazgo/:id', requireAuth, async (req, res) => {
         const id = parseInt(req.params.id, 10);
         if (!id) return res.status(400).json({ error: 'id inválido' });
         const history = await getHallazgoStatusHistory(id);
+        res.json({ history });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Histórico de estados de un bug/defecto de ejecución.
+router.get('/defect/:id', requireAuth, async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+        if (!id) return res.status(400).json({ error: 'id inválido' });
+        const history = await getDefectStatusHistory(id);
         res.json({ history });
     } catch (err) {
         res.status(500).json({ error: err.message });

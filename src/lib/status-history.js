@@ -103,9 +103,25 @@ async function getHallazgoStatusHistory(hallazgoId, limit = 200) {
     return res.rows;
 }
 
+/** Histórico de estados de un bug/defecto de ejecución. */
+async function getDefectStatusHistory(defectId, limit = 200) {
+    const res = await query(
+        `SELECT h.id, h.entity_type, h.entity_id, h.from_status, h.to_status,
+                h.reason, h.changed_at, u.name AS changed_by_name
+           FROM qa_status_history h
+           LEFT JOIN qa_users u ON u.id = h.changed_by
+          WHERE h.entity_type = 'defect' AND h.entity_id = ?
+          ORDER BY h.changed_at DESC, h.id DESC
+          LIMIT ${Number(limit) || 200}`,
+        [defectId]
+    );
+    return res.rows;
+}
+
 module.exports = {
     buildStatusReason,
     recordStatusChange,
     getTcStatusHistory,
     getHallazgoStatusHistory,
+    getDefectStatusHistory,
 };

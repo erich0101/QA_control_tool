@@ -72,6 +72,7 @@ export function useHistoryMutations(projectId: number | null) {
       defectsApi.dismiss(id, dismissed),
     onSuccess: async (_data, variables) => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.defects(projectId) });
+      await queryClient.invalidateQueries({ queryKey: ['defect-status-history'] });
       toast.success(variables.dismissed ? 'Bug descartado' : 'Bug reabierto');
     },
     onError: (error: Error) => toast.error(error.message),

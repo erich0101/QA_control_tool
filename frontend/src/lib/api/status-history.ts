@@ -7,4 +7,7 @@ export const statusHistoryApi = {
 
   forHallazgo: (id: number) =>
     apiFetch<{ history: StatusHistoryEntry[] }>(`/api/status-history/hallazgo/${id}`),
+
+  forDefect: (id: number) =>
+    apiFetch<{ history: StatusHistoryEntry[] }>(`/api/status-history/defect/${id}`),
 };

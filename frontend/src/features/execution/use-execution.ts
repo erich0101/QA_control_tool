@@ -14,6 +14,7 @@ export function useExecutionMutations(projectId: number | null) {
     Promise.all([
       queryClient.invalidateQueries({ queryKey: queryKeys.testSuites(projectId) }),
       queryClient.invalidateQueries({ queryKey: ['tc-status-history'] }),
+      queryClient.invalidateQueries({ queryKey: ['defect-status-history'] }),
     ]);
 
   const pause = useMutation({

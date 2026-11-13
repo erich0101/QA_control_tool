@@ -181,6 +181,30 @@ await query(`ALTER TABLE qa_defects ADD COLUMN IF NOT EXISTS observations TEXT`)
                     WHERE h.entity_type = 'hallazgo' AND h.entity_id = d.id
                )
         `);
+        // Bugs (defectos de ejecución) creados desde Exploratoria o suites:
+        // también se versiona su estado con la misma línea base.
+        await query(`
+            INSERT INTO qa_status_history
+                (project_id, entity_type, entity_id, run_id, tc_id,
+                 from_status, to_status, reason, changed_by, changed_at)
+            SELECT d.project_id, 'defect', d.id, e.run_id, e.tc_id,
+                   NULL, d.status,
+                   NULLIF(TRIM(
+                       COALESCE(d.title, '') ||
+                       CASE WHEN COALESCE(d.description, '') <> ''
+                            THEN ' — ' || d.description ELSE '' END
+                   ), ''),
+                   d.created_by,
+                   COALESCE(d.created_at, CURRENT_TIMESTAMP)
+              FROM qa_defects d
+              JOIN qa_executions e ON e.id = d.execution_id
+             WHERE d.execution_id IS NOT NULL
+               AND d.status IS NOT NULL
+               AND NOT EXISTS (
+                   SELECT 1 FROM qa_status_history h
+                    WHERE h.entity_type = 'defect' AND h.entity_id = d.id
+               )
+        `);
         // Migración de columnas creadas como TIMESTAMP (sin zona) a TIMESTAMPTZ.
         // Se consulta el tipo y se altera solo si hace falta (idempotente, sin DO).
         const deadlineType = await query(`

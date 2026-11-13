@@ -89,6 +89,16 @@ export function BugDrafts({ drafts, baseSteps, baseExpected, onChange }: BugDraf
             </Field>
           </div>
 
+          <Field label="Descripción" htmlFor={`bug-desc-${index}`}>
+            <Textarea
+              id={`bug-desc-${index}`}
+              className="min-h-16"
+              placeholder="Contexto adicional (opcional)"
+              value={draft.description}
+              onChange={(event) => update(index, { description: event.target.value })}
+            />
+          </Field>
+
           <Field label="Pasos para reproducir" htmlFor={`bug-steps-${index}`}>
             <div className="flex items-start gap-2">
               <Textarea
@@ -129,16 +139,6 @@ export function BugDrafts({ drafts, baseSteps, baseExpected, onChange }: BugDraf
               />
             </Field>
           </div>
-
-          <Field label="Descripción" htmlFor={`bug-desc-${index}`}>
-            <Textarea
-              id={`bug-desc-${index}`}
-              className="min-h-16"
-              placeholder="Contexto adicional (opcional)"
-              value={draft.description}
-              onChange={(event) => update(index, { description: event.target.value })}
-            />
-          </Field>
         </div>
       ))}
 

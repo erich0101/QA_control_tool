@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Bug, CircleCheck, CircleSlash, CircleX, Save, SkipForward, TriangleAlert, X } from 'lucide-react';
+import { Bug, CircleCheck, CircleSlash, CircleX, Pencil, Save, SkipForward, TriangleAlert, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -19,7 +19,7 @@ import type {
 import { FREQUENCIES, IMPACTS } from '@/lib/api/types';
 import { cn } from '@/lib/utils';
 import { useExploratoriaMutations } from '../use-exploratoria';
-import { useTcStatusHistory } from '@/features/execution/use-status-history';
+import { useTcStatusHistory, useDefectStatusHistory } from '@/features/execution/use-status-history';
 import { StatusHistoryTimeline } from '@/features/execution/components/status-history-timeline';
 
 interface FlowDetailProps {
@@ -118,6 +118,11 @@ function bugFromDefect(defect: Defect): BugDraft {
  * Un solo guardado persiste status + justificación + resultado + bug,
  * y después sube las evidencias pendientes contra el execution_id.
  */
+function DefectHistory({ defectId }: { defectId: number }) {
+  const { data: history = [] } = useDefectStatusHistory(defectId);
+  return <StatusHistoryTimeline entries={history} title="Historial del bug" />;
+}
+
 export function FlowDetail({
   flow,
   execution,
@@ -138,20 +143,34 @@ export function FlowDetail({
   const [observations, setObservations] = useState(execution?.observations ?? '');
   const [obtained, setObtained] = useState(execution?.obtained_result ?? '');
   const [bug, setBug] = useState<BugDraft>(emptyBug(flow.expected_result ?? ''));
+  const [editingDefectId, setEditingDefectId] = useState<number | null>(null);
   const [category, setCategory] = useState('GENERAL');
   const [pending, setPending] = useState<File[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
-  const loadedDefectKey = useRef('');
 
-  // Al abrir el flujo, o cuando se guarda un defecto, precargamos el formulario
-  // con los datos persistidos para que no se "pierdan" los detalles.
+  // El formulario de defecto arranca vacío: editar un bug existente es una
+  // acción explícita desde su tarjeta de "Defectos reportados". Así no se
+  // duplica la misma información en la tarjeta y en el formulario.
   useEffect(() => {
-    const latest = defects[defects.length - 1];
-    const key = `${flow.id}:${latest?.id ?? 'none'}`;
-    if (loadedDefectKey.current === key) return;
-    loadedDefectKey.current = key;
-    setBug(latest ? bugFromDefect(latest) : emptyBug(flow.expected_result ?? ''));
-  }, [defects, flow.id, flow.expected_result]);
+    setEditingDefectId(null);
+    setBug(emptyBug(flow.expected_result ?? ''));
+  }, [flow.id, flow.expected_result]);
+
+  useEffect(() => {
+    if (editingDefectId == null) return;
+    const defect = defects.find((item) => item.id === editingDefectId);
+    if (defect) setBug(bugFromDefect(defect));
+  }, [defects, editingDefectId]);
+
+  const cancelEditing = () => {
+    setEditingDefectId(null);
+    setBug(emptyBug(flow.expected_result ?? ''));
+  };
+
+  const startEditing = (defect: Defect) => {
+    setEditingDefectId(defect.id);
+    setBug(bugFromDefect(defect));
+  };
 
   const needsJustification = status === 'BLOCK' || status === 'SKIP';
   const allowsBug = status === 'FAIL' || status === 'WARNING';
@@ -199,6 +218,10 @@ export function FlowDetail({
       },
     });
 
+    // Tras guardar, el formulario vuelve a "nuevo defecto": el bug ya vive en
+    // "Defectos reportados" y no se duplica como edición abierta.
+    cancelEditing();
+
     if (result.execution_id && pending.length > 0) {
       for (const file of pending) {
         await uploadEvidence.mutateAsync({
@@ -244,52 +267,76 @@ export function FlowDetail({
           <span className="text-caption font-bold uppercase tracking-wide text-fg-subtle">
             Defectos reportados ({defects.length})
           </span>
-          {defects.map((defect) => (
-            <div
-              key={defect.id}
-              className="space-y-2 rounded-md border border-fail/30 bg-fail-soft/40 p-3"
-            >
-              <div className="flex flex-wrap items-center gap-2">
-                <Bug className="size-3.5 shrink-0 text-fail" />
-                <span className="text-footnote font-semibold text-fg">{defect.title}</span>
-                <Badge
-                  tone={
-                    defect.severity === 'Crítica' || defect.severity === 'Alta'
-                      ? 'fail'
-                      : defect.severity === 'Baja'
-                        ? 'ok'
-                        : 'warn'
-                  }
-                >
-                  {defect.severity ?? 'Media'}
-                </Badge>
-                <Badge tone="outline">{defect.status ?? 'OPEN'}</Badge>
-                <span className="text-caption text-fg-subtle">#{defect.id}</span>
-              </div>
+          {defects.map((defect) => {
+            const isEditing = editingDefectId === defect.id;
+            return (
+              <div
+                key={defect.id}
+                className="space-y-2 rounded-md border border-fail/30 bg-fail-soft/40 p-3"
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <Bug className="size-3.5 shrink-0 text-fail" />
+                  <span className="text-footnote font-semibold text-fg">{defect.title}</span>
+                  <Badge
+                    tone={
+                      defect.severity === 'Crítica' || defect.severity === 'Alta'
+                        ? 'fail'
+                        : defect.severity === 'Baja'
+                          ? 'ok'
+                          : 'warn'
+                    }
+                  >
+                    {defect.severity ?? 'Media'}
+                  </Badge>
+                  <Badge tone="outline">{defect.status ?? 'OPEN'}</Badge>
+                  <span className="text-caption text-fg-subtle">#{defect.id}</span>
+                  {!isFinished ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="ml-auto h-7"
+                      onClick={() => startEditing(defect)}
+                    >
+                      <Pencil />
+                      Editar
+                    </Button>
+                  ) : null}
+                </div>
 
-              {defect.description ? (
-                <ReadField label="Descripción" value={defect.description} />
-              ) : null}
-              {defect.steps_to_reproduce ? (
-                <ReadField label="Pasos para reproducir" value={defect.steps_to_reproduce} mono />
-              ) : null}
-              {defect.expected_result ? (
-                <ReadField label="Resultado esperado" value={defect.expected_result} />
-              ) : null}
-              {defect.actual_result ? (
-                <ReadField label="Resultado real" value={defect.actual_result} />
-              ) : null}
-              {defect.frequency ? (
-                <ReadField label="Frecuencia" value={defect.frequency} />
-              ) : null}
-              {defect.business_impact ? (
-                <ReadField label="Impacto de negocio" value={defect.business_impact} />
-              ) : null}
-              {defect.observations ? (
-                <ReadField label="Observaciones" value={defect.observations} />
-              ) : null}
-            </div>
-          ))}
+                {isEditing ? (
+                  <p className="rounded-md border border-brand/30 bg-brand-soft px-2.5 py-1.5 text-caption text-fg-muted">
+                    Editando este bug en el formulario inferior. Guardá o cancelá para volver a la
+                    vista de lectura.
+                  </p>
+                ) : (
+                  <>
+                    {defect.description ? (
+                      <ReadField label="Descripción" value={defect.description} />
+                    ) : null}
+                    {defect.steps_to_reproduce ? (
+                      <ReadField label="Pasos para reproducir" value={defect.steps_to_reproduce} mono />
+                    ) : null}
+                    {defect.expected_result ? (
+                      <ReadField label="Resultado esperado" value={defect.expected_result} />
+                    ) : null}
+                    {defect.actual_result ? (
+                      <ReadField label="Resultado real" value={defect.actual_result} />
+                    ) : null}
+                    {defect.frequency ? (
+                      <ReadField label="Frecuencia" value={defect.frequency} />
+                    ) : null}
+                    {defect.business_impact ? (
+                      <ReadField label="Impacto de negocio" value={defect.business_impact} />
+                    ) : null}
+                    {defect.observations ? (
+                      <ReadField label="Observaciones" value={defect.observations} />
+                    ) : null}
+                    <DefectHistory defectId={defect.id} />
+                  </>
+                )}
+              </div>
+            );
+          })}
         </div>
       ) : null}
 
@@ -421,12 +468,26 @@ export function FlowDetail({
       </Field>
 
       {allowsBug ? (
-        <div className="space-y-2 rounded-lg border border-fail/30 bg-fail-soft/40 p-3">          <div className="flex flex-wrap items-center gap-2">
+        <div className="space-y-2 rounded-lg border border-fail/30 bg-fail-soft/40 p-3">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="text-caption font-bold uppercase tracking-wide text-fail">
-              Reporte de defecto
+              {editingDefectId ? `Editando bug #${editingDefectId}` : 'Reporte de defecto'}
             </span>
-            {bug.id ? (
-              <span className="text-caption text-fg-subtle">Editando #{bug.id}</span>
+            {editingDefectId ? (
+              <span className="text-caption text-fg-subtle">
+                Guardá para actualizar el bug reportado
+              </span>
+            ) : null}
+            {editingDefectId ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="ml-auto h-7"
+                onClick={cancelEditing}
+                disabled={isFinished}
+              >
+                Cancelar edición
+              </Button>
             ) : null}
           </div>
 
@@ -462,6 +523,16 @@ export function FlowDetail({
             />
           </Field>
 
+          <Field label="Pasos para reproducir" htmlFor={`flow-bug-steps-${flow.id}`}>
+            <Textarea
+              id={`flow-bug-steps-${flow.id}`}
+              className="min-h-16"
+              value={bug.steps_to_reproduce}
+              onChange={(event) => setBug({ ...bug, steps_to_reproduce: event.target.value })}
+              disabled={isFinished}
+            />
+          </Field>
+
           <div className="grid gap-2 md:grid-cols-2">
             <Field label="Resultado esperado" htmlFor={`flow-bug-expected-${flow.id}`}>
               <Textarea
@@ -482,16 +553,6 @@ export function FlowDetail({
               />
             </Field>
           </div>
-
-          <Field label="Pasos para reproducir" htmlFor={`flow-bug-steps-${flow.id}`}>
-            <Textarea
-              id={`flow-bug-steps-${flow.id}`}
-              className="min-h-16"
-              value={bug.steps_to_reproduce}
-              onChange={(event) => setBug({ ...bug, steps_to_reproduce: event.target.value })}
-              disabled={isFinished}
-            />
-          </Field>
 
           <div className="grid gap-2 md:grid-cols-2">
             <Field label="Frecuencia" htmlFor={`flow-bug-frequency-${flow.id}`}>

@@ -3,6 +3,7 @@ const { query } = require('../../db');
 const { requireAuth } = require('../middleware/auth');
 const { getJiraUserCredentials } = require('../lib/jira-credentials');
 const JiraService = require('../../jira-service');
+const { recordStatusChange } = require('../lib/status-history');
 
 const router = express.Router();
 
@@ -26,6 +27,28 @@ router.post('/', requireAuth, async (req, res) => {
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?, ?, ?)`,
             [execution_id, title, description || '', severity || 'Media', steps_to_reproduce || '', expected_result || '', actual_result || '', frequency || 'Siempre', business_impact || '', jira_epic_key, req.user.id, req.body.project_id || null]
         );
+        try {
+            const ctxRes = await query(
+                `SELECT e.run_id, e.tc_id, r.project_id
+                   FROM qa_executions e
+                   LEFT JOIN qa_test_runs r ON r.id = e.run_id
+                  WHERE e.id = ?`,
+                [execution_id]
+            );
+            const ctx = ctxRes.rows[0] || {};
+            await recordStatusChange({
+                projectId: ctx.project_id || req.body.project_id || null,
+                entityType: 'defect',
+                entityId: result.lastID,
+                runId: ctx.run_id ?? null,
+                tcId: ctx.tc_id ?? null,
+                toStatus: 'OPEN',
+                reason: [title, description].filter((part) => part && String(part).trim()).join(' — ') || null,
+                changedBy: req.user.id,
+            });
+        } catch (historyErr) {
+            console.error('No se pudo registrar el histórico del bug:', historyErr.message);
+        }
         res.json({ ok: true, defect_id: result.lastID });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -36,7 +59,35 @@ router.put('/:id/status', requireAuth, async (req, res) => {
     try {
         const { status } = req.body;
         if (!status) return res.status(400).json({ error: 'status requerido' });
+
+        const currentRes = await query(
+            `SELECT d.id, d.status, d.title, d.description, d.project_id, e.run_id, e.tc_id
+               FROM qa_defects d
+               LEFT JOIN qa_executions e ON e.id = d.execution_id
+              WHERE d.id = ?`,
+            [req.params.id]
+        );
+        if (currentRes.rows.length === 0) return res.status(404).json({ error: 'Bug no encontrado' });
+        const current = currentRes.rows[0];
+
         await query(`UPDATE qa_defects SET status = ? WHERE id = ?`, [status, req.params.id]);
+
+        try {
+            await recordStatusChange({
+                projectId: current.project_id,
+                entityType: 'defect',
+                entityId: current.id,
+                runId: current.run_id,
+                tcId: current.tc_id,
+                fromStatus: current.status,
+                toStatus: status,
+                reason: [current.title, current.description].filter((part) => part && String(part).trim()).join(' — ') || null,
+                changedBy: req.user.id,
+            });
+        } catch (historyErr) {
+            console.error('No se pudo registrar el histórico del bug:', historyErr.message);
+        }
+
         res.json({ ok: true });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -47,10 +98,37 @@ router.post('/:id/dismiss', requireAuth, async (req, res) => {
     try {
         const { dismissed } = req.body;
         const newStatus = dismissed ? 'DISMISSED' : 'OPEN';
-        const upd = await query(`UPDATE qa_defects SET status = ? WHERE id = ?`, [newStatus, req.params.id]);
-        if (upd.changes === 0) {
+
+        const currentRes = await query(
+            `SELECT d.id, d.status, d.title, d.description, d.project_id, e.run_id, e.tc_id
+               FROM qa_defects d
+               LEFT JOIN qa_executions e ON e.id = d.execution_id
+              WHERE d.id = ?`,
+            [req.params.id]
+        );
+        if (currentRes.rows.length === 0) {
             return res.status(404).json({ error: 'Bug no encontrado' });
         }
+        const current = currentRes.rows[0];
+
+        await query(`UPDATE qa_defects SET status = ? WHERE id = ?`, [newStatus, req.params.id]);
+
+        try {
+            await recordStatusChange({
+                projectId: current.project_id,
+                entityType: 'defect',
+                entityId: current.id,
+                runId: current.run_id,
+                tcId: current.tc_id,
+                fromStatus: current.status,
+                toStatus: newStatus,
+                reason: [current.title, current.description].filter((part) => part && String(part).trim()).join(' — ') || null,
+                changedBy: req.user.id,
+            });
+        } catch (historyErr) {
+            console.error('No se pudo registrar el histórico del bug:', historyErr.message);
+        }
+
         res.json({ ok: true, status: newStatus });
     } catch (err) {
         res.status(500).json({ error: err.message });

@@ -23,3 +23,14 @@ export function useHallazgoStatusHistory(hallazgoId: number | null) {
     staleTime: 15_000,
   });
 }
+
+/** Histórico de estados de un bug/defecto de ejecución. */
+export function useDefectStatusHistory(defectId: number | null, enabled = true) {
+  return useQuery({
+    queryKey: ['defect-status-history', defectId] as const,
+    queryFn: () => statusHistoryApi.forDefect(defectId as number),
+    enabled: defectId != null && enabled,
+    select: (data) => data.history ?? [],
+    staleTime: 15_000,
+  });
+}
