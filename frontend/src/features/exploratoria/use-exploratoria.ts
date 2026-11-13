@@ -125,6 +125,51 @@ export function useExploratoriaMutations(projectId: number | null, runId: number
     onError: (error: Error) => toast.error(error.message),
   });
 
+  /** Cambia las fechas de la sesión (plan y/o límite) con justificación. */
+  const updateDates = useMutation({
+    mutationFn: ({
+      id,
+      plannedStartAt,
+      plannedEndAt,
+      deadlineAt,
+      reason,
+    }: {
+      id: number;
+      plannedStartAt: string;
+      plannedEndAt: string;
+      deadlineAt: string;
+      reason: string;
+    }) =>
+      exploratoriaApi.updateDates(id, { plannedStartAt, plannedEndAt, deadlineAt, reason }),
+    onSuccess: async () => {
+      await invalidateAll();
+      toast.success('Fechas actualizadas');
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  /** Registra un bloqueo de testing por fuerza mayor. */
+  const startBlock = useMutation({
+    mutationFn: ({ id, reason, blockedFrom }: { id: number; reason: string; blockedFrom?: string }) =>
+      exploratoriaApi.startBlock(id, { reason, blockedFrom }),
+    onSuccess: async () => {
+      await invalidateAll();
+      toast.success('Bloqueo registrado');
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  /** Finaliza el bloqueo activo y retoma el testing. */
+  const endBlock = useMutation({
+    mutationFn: ({ id, blockId }: { id: number; blockId: number }) =>
+      exploratoriaApi.endBlock(id, blockId),
+    onSuccess: async () => {
+      await invalidateAll();
+      toast.success('Bloqueo finalizado: testing retomado');
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
   /** Declara (o quita) que los TC de cobertura están cargados. */
   const setCoverage = useMutation({
     mutationFn: ({ id, ready }: { id: number; ready: boolean }) =>
@@ -279,6 +324,9 @@ export function useExploratoriaMutations(projectId: number | null, runId: number
     deleteSession,
     setCoverage,
     extendDeadline,
+    updateDates,
+    startBlock,
+    endBlock,
     uploadEvidence,
     deleteEvidence,
     assignTester,

@@ -59,6 +59,49 @@ export const exploratoriaApi = {
       { method: 'PUT', body: { deadline_at: input.deadlineAt, reason: input.reason } },
     ),
 
+  /** Cambia inicio/fin planificado y/o fecha límite, con justificación. */
+  updateDates: (
+    runId: number,
+    input: {
+      plannedStartAt: string;
+      plannedEndAt: string;
+      deadlineAt: string;
+      reason: string;
+    },
+  ) =>
+    apiFetch<{
+      ok: true;
+      planned_start_at: string;
+      planned_end_at: string;
+      deadline_at: string;
+      changed: string[];
+    }>(`/api/explorations/sessions/${runId}/dates`, {
+      method: 'PUT',
+      body: {
+        planned_start_at: input.plannedStartAt,
+        planned_end_at: input.plannedEndAt,
+        deadline_at: input.deadlineAt,
+        reason: input.reason,
+      },
+    }),
+
+  /** Registra un bloqueo de testing por fuerza mayor (no cambia fechas). */
+  startBlock: (runId: number, input: { reason: string; blockedFrom?: string }) =>
+    apiFetch<{ ok: true; block_id: number; blocked_from: string }>(
+      `/api/explorations/sessions/${runId}/blocks`,
+      {
+        method: 'POST',
+        body: { reason: input.reason, blocked_from: input.blockedFrom },
+      },
+    ),
+
+  /** Finaliza el bloqueo activo y retoma el testing. */
+  endBlock: (runId: number, blockId: number, blockedTo?: string) =>
+    apiFetch<{ ok: true; block_id: number; blocked_to: string }>(
+      `/api/explorations/sessions/${runId}/blocks/${blockId}/end`,
+      { method: 'PUT', body: { blocked_to: blockedTo } },
+    ),
+
   /** Declara (o quita) que los TC de cobertura funcional/negocio están cargados. */
   setCoverage: (runId: number, ready: boolean) =>
     apiFetch<{ ok: true; coverage_ready: boolean }>(

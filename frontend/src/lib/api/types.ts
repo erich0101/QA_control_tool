@@ -326,6 +326,8 @@ export interface ExploratorySession {
   total_flows?: number;
   /** Hallazgos creados dentro de la sesión. */
   hallazgo_count?: number;
+  /** La sesión tiene un bloqueo por fuerza mayor activo. */
+  is_blocked?: boolean;
   suite_id?: number;
   project_id?: number;
   accumulated_seconds?: number;
@@ -381,17 +383,33 @@ export interface ExploratoryDetail {
   attachments: ExploratoryAttachment[];
   /** Hallazgos (qa_defects sin ejecución) creados en la sesión. */
   hallazgos: ExploratoryHallazgo[];
-  /** Extensiones de fecha límite registradas. */
+  /** Histórico de cambios de fechas (límite y plan). */
   extensions: ExploratoryExtension[];
+  /** Bloqueos de testing por fuerza mayor. */
+  blocks: ExploratoryBlock[];
+  /** Bloqueo vigente, si la sesión está bloqueada. */
+  active_block?: ExploratoryBlock | null;
 }
 
 export interface ExploratoryExtension {
   id: number;
+  /** Fecha modificada: deadline | planned_start | planned_end. */
+  field: 'deadline' | 'planned_start' | 'planned_end';
   previous_deadline?: string | null;
   new_deadline: string;
   reason: string;
   created_at?: string;
   created_by_name?: string | null;
+}
+
+export interface ExploratoryBlock {
+  id: number;
+  blocked_from: string;
+  blocked_to?: string | null;
+  reason: string;
+  created_at?: string;
+  created_by_name?: string | null;
+  ended_by_name?: string | null;
 }
 
 export interface ExploratoryHallazgo {

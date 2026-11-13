@@ -1,12 +1,15 @@
 import { useState } from 'react';
 import {
+  Ban,
   Bug,
   CalendarClock,
+  CalendarDays,
   ChevronRight,
   ClipboardCheck,
   ExternalLink,
   FileText,
   Pencil,
+  Play,
   Plus,
   Square,
   Ticket,
@@ -43,6 +46,8 @@ interface SessionDetailProps {
   isHallazgoPending: boolean;
   isFlowPending: boolean;
   isCoveragePending: boolean;
+  isDatesPending: boolean;
+  isBlockPending: boolean;
   canDelete: boolean;
   canDeleteSession: boolean;
   canAddHallazgo: boolean;
@@ -53,6 +58,9 @@ interface SessionDetailProps {
   onDeleteSession: () => void;
   onToggleCoverage: (ready: boolean) => void;
   onExtendDeadline: () => void;
+  onEditDates: () => void;
+  onBlock: () => void;
+  onEndBlock: (blockId: number) => void;
   onAssignTester: (tcId: number, userId: number | null) => void;
   onHallazgoStatus: (id: number, status: string) => void;
   onHallazgoAssign: (id: number, userId: number | null) => void;
@@ -89,6 +97,8 @@ export function SessionDetail({
   isHallazgoPending,
   isFlowPending,
   isCoveragePending,
+  isDatesPending,
+  isBlockPending,
   canDelete,
   canDeleteSession,
   canAddHallazgo,
@@ -99,6 +109,9 @@ export function SessionDetail({
   onDeleteSession,
   onToggleCoverage,
   onExtendDeadline,
+  onEditDates,
+  onBlock,
+  onEndBlock,
   onAssignTester,
   onHallazgoStatus,
   onHallazgoAssign,
@@ -110,7 +123,7 @@ export function SessionDetail({
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
   const [jiraHallazgoId, setJiraHallazgoId] = useState<number | null>(null);
   const [reportOpen, setReportOpen] = useState(false);
-  const { run, flows, executions, defects, attachments, hallazgos = [], extensions = [] } = detail;
+  const { run, flows, executions, defects, attachments, hallazgos = [], extensions = [], blocks = [], active_block: activeBlock = null } = detail;
   const isFinished = run.status === 'FINISHED';
   const jiraHallazgo = hallazgos.find((hallazgo) => hallazgo.id === jiraHallazgoId) ?? null;
 
@@ -301,6 +314,33 @@ export function SessionDetail({
 
           {!isFinished ? (
             <>
+              <Button variant="secondary" size="sm" onClick={onEditDates} loading={isDatesPending}>
+                <CalendarDays />
+                Editar fechas
+              </Button>
+              {activeBlock ? (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="text-warn"
+                  onClick={() => onEndBlock(activeBlock.id)}
+                  loading={isBlockPending}
+                >
+                  <Play />
+                  Retomar testing
+                </Button>
+              ) : (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="text-warn"
+                  onClick={onBlock}
+                  loading={isBlockPending}
+                >
+                  <Ban />
+                  Bloquear sesión
+                </Button>
+              )}
               <Button variant="secondary" size="sm" onClick={onAddFlow}>
                 <Plus />
                 Agregar flujo
@@ -364,6 +404,7 @@ export function SessionDetail({
               {new Date(extensions[0].new_deadline).toLocaleDateString('es-AR')}
             </span>
           ) : null}
+          {activeBlock ? <span className="font-semibold text-fail">🚫 Testing bloqueado</span> : null}
           <span>👤 {run.creator_name ?? '—'}</span>
           {run.started_at ? <span>🟢 {new Date(run.started_at).toLocaleString('es-AR')}</span> : null}
           {run.finished_at ? (
@@ -371,6 +412,30 @@ export function SessionDetail({
           ) : null}
         </div>
       </header>
+
+      {activeBlock ? (
+        <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-fail/30 bg-fail-soft px-5 py-2 text-caption text-fail">
+          <Ban className="size-3.5 shrink-0" />
+          <span className="flex-1">
+            <strong>Testing bloqueado por fuerza mayor</strong> desde{' '}
+            {new Date(activeBlock.blocked_from).toLocaleString('es-AR', {
+              dateStyle: 'short',
+              timeStyle: 'short',
+            })}
+            : {activeBlock.reason}. Las fechas no se modificaron.
+          </span>
+          <Button
+            variant="secondary"
+            size="sm"
+            className="h-7"
+            onClick={() => onEndBlock(activeBlock.id)}
+            loading={isBlockPending}
+          >
+            <Play />
+            Retomar testing
+          </Button>
+        </div>
+      ) : null}
 
       {!isFinished && (deadlineOverdue || deadlineNear || !deadline) ? (
         <div
@@ -419,64 +484,147 @@ export function SessionDetail({
         </div>
       ) : null}
 
-      {extensions.length > 0 ? (
+      {extensions.length > 0 || blocks.length > 0 ? (
         <details className="shrink-0 border-b border-border bg-surface px-5 py-2 text-caption">
           <summary className="cursor-pointer select-none font-medium text-fg-muted">
-            Trazabilidad de fecha límite · {extensions.length} postergación
-            {extensions.length === 1 ? '' : 'es'}
+            Trazabilidad de fechas y bloqueos
+            {extensions.length > 0
+              ? ` · ${extensions.length} cambio${extensions.length === 1 ? '' : 's'} de fecha`
+              : ''}
+            {blocks.length > 0
+              ? ` · ${blocks.length} bloqueo${blocks.length === 1 ? '' : 's'}`
+              : ''}
           </summary>
-          <div className="mt-2 space-y-2">
-            <p className="text-fg-subtle">
-              Original:{' '}
-              <strong className="text-fg-muted">
-                {new Date(
-                  [...extensions].reverse()[0]?.previous_deadline ??
-                    run.planned_end_at ??
-                    run.deadline_at ??
-                    '',
-                ).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })}
-              </strong>{' '}
-              · Actual:{' '}
-              <strong className="text-fg-muted">
-                {new Date(
-                  extensions[0]?.new_deadline ?? run.deadline_at ?? '',
-                ).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })}
-              </strong>
-            </p>
-            <ol className="space-y-1.5">
-              {[...extensions].reverse().map((extension) => (
-                <li
-                  key={extension.id}
-                  className="rounded-md border border-border bg-surface-2 px-2.5 py-1.5"
-                >
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-medium text-fg">
-                      {extension.previous_deadline
-                        ? new Date(extension.previous_deadline).toLocaleString('es-AR', {
+          <div className="mt-2 space-y-3">
+            {extensions.length > 0 ? (
+              <div className="space-y-2">
+                <p className="text-fg-subtle">
+                  {(() => {
+                    const deadlineChanges = [...extensions]
+                      .reverse()
+                      .filter((extension) => (extension.field ?? 'deadline') === 'deadline');
+                    const original =
+                      deadlineChanges[0]?.previous_deadline ??
+                      run.planned_end_at ??
+                      run.deadline_at;
+                    const current =
+                      deadlineChanges[deadlineChanges.length - 1]?.new_deadline ??
+                      run.deadline_at;
+                    return (
+                      <>
+                        Límite original:{' '}
+                        <strong className="text-fg-muted">
+                          {original
+                            ? new Date(original).toLocaleString('es-AR', {
+                                dateStyle: 'short',
+                                timeStyle: 'short',
+                              })
+                            : '—'}
+                        </strong>{' '}
+                        · Actual:{' '}
+                        <strong className="text-fg-muted">
+                          {current
+                            ? new Date(current).toLocaleString('es-AR', {
+                                dateStyle: 'short',
+                                timeStyle: 'short',
+                              })
+                            : '—'}
+                        </strong>
+                      </>
+                    );
+                  })()}
+                </p>
+                <ol className="space-y-1.5">
+                  {[...extensions].reverse().map((extension) => (
+                    <li
+                      key={extension.id}
+                      className="rounded-md border border-border bg-surface-2 px-2.5 py-1.5"
+                    >
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge tone={(extension.field ?? 'deadline') === 'deadline' ? 'warn' : 'brand'}>
+                          {(extension.field ?? 'deadline') === 'deadline'
+                            ? 'Fecha límite'
+                            : extension.field === 'planned_start'
+                              ? 'Inicio planificado'
+                              : 'Fin planificado'}
+                        </Badge>
+                        <span className="font-medium text-fg">
+                          {extension.previous_deadline
+                            ? new Date(extension.previous_deadline).toLocaleString('es-AR', {
+                                dateStyle: 'short',
+                                timeStyle: 'short',
+                              })
+                            : '—'}{' '}
+                          →{' '}
+                          {new Date(extension.new_deadline).toLocaleString('es-AR', {
                             dateStyle: 'short',
                             timeStyle: 'short',
-                          })
-                        : '—'}{' '}
-                      →{' '}
-                      {new Date(extension.new_deadline).toLocaleString('es-AR', {
-                        dateStyle: 'short',
-                        timeStyle: 'short',
-                      })}
-                    </span>
-                    <span className="text-fg-subtle">
-                      por {extension.created_by_name ?? '—'}
-                      {extension.created_at
-                        ? ` · ${new Date(extension.created_at).toLocaleString('es-AR', {
-                            dateStyle: 'short',
-                            timeStyle: 'short',
-                          })}`
-                        : ''}
-                    </span>
-                  </div>
-                  <p className="mt-0.5 text-fg-muted">{extension.reason}</p>
-                </li>
-              ))}
-            </ol>
+                          })}
+                        </span>
+                        <span className="text-fg-subtle">
+                          por {extension.created_by_name ?? '—'}
+                          {extension.created_at
+                            ? ` · ${new Date(extension.created_at).toLocaleString('es-AR', {
+                                dateStyle: 'short',
+                                timeStyle: 'short',
+                              })}`
+                            : ''}
+                        </span>
+                      </div>
+                      <p className="mt-0.5 text-fg-muted">{extension.reason}</p>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            ) : null}
+
+            {blocks.length > 0 ? (
+              <div className="space-y-2">
+                <p className="text-fg-subtle">Bloqueos por fuerza mayor</p>
+                <ol className="space-y-1.5">
+                  {[...blocks].reverse().map((block) => {
+                    const from = new Date(block.blocked_from).getTime();
+                    const to = block.blocked_to ? new Date(block.blocked_to).getTime() : Date.now();
+                    const days = Math.max(0, to - from) / 86_400_000;
+                    return (
+                      <li
+                        key={block.id}
+                        className="rounded-md border border-border bg-surface-2 px-2.5 py-1.5"
+                      >
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge tone={block.blocked_to ? 'neutral' : 'fail'}>
+                            {block.blocked_to ? 'Finalizado' : 'Bloqueo activo'}
+                          </Badge>
+                          <span className="font-medium text-fg">
+                            {new Date(block.blocked_from).toLocaleString('es-AR', {
+                              dateStyle: 'short',
+                              timeStyle: 'short',
+                            })}{' '}
+                            →{' '}
+                            {block.blocked_to
+                              ? new Date(block.blocked_to).toLocaleString('es-AR', {
+                                  dateStyle: 'short',
+                                  timeStyle: 'short',
+                                })
+                              : 'activo'}
+                          </span>
+                          <span className="text-fg-subtle">
+                            {days < 1
+                              ? `${Math.max(1, Math.round(days * 24 * 60))} min`
+                              : `${Math.round(days * 10) / 10} día(s)`}
+                          </span>
+                        </div>
+                        <p className="mt-0.5 text-fg-muted">{block.reason}</p>
+                        <p className="mt-0.5 text-fg-subtle">
+                          Registró {block.created_by_name ?? '—'}
+                          {block.ended_by_name ? ` · retomó ${block.ended_by_name}` : ''}
+                        </p>
+                      </li>
+                    );
+                  })}
+                </ol>
+              </div>
+            ) : null}
           </div>
         </details>
       ) : null}

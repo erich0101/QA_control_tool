@@ -98,7 +98,9 @@ router.get('/sessions', async (req, res) => {
                     r.skip_count, r.pending_count, r.coverage_ready, r.deadline_at,
                     r.planned_start_at, r.planned_end_at,
                     (SELECT COUNT(*) FROM qa_defects d
-                      WHERE d.exploratory_run_id = r.id AND d.execution_id IS NULL) AS hallazgo_count
+                      WHERE d.exploratory_run_id = r.id AND d.execution_id IS NULL) AS hallazgo_count,
+                    EXISTS (SELECT 1 FROM qa_exploratory_blocks b
+                             WHERE b.run_id = r.id AND b.blocked_to IS NULL) AS is_blocked
                FROM qa_test_runs r
                LEFT JOIN qa_users u ON u.id = r.created_by
               WHERE r.project_id = ? AND r.run_type = 'EXPLORATORY' ${statusFilter}
@@ -182,7 +184,7 @@ router.get('/sessions/:runId', async (req, res) => {
         const run = runRes.rows[0];
 
         const extRes = await query(
-            `SELECT e.id, e.previous_deadline, e.new_deadline, e.reason, e.created_at,
+            `SELECT e.id, e.field, e.previous_deadline, e.new_deadline, e.reason, e.created_at,
                     u.name AS created_by_name
                FROM qa_exploratory_extensions e
                LEFT JOIN qa_users u ON u.id = e.created_by
@@ -191,6 +193,21 @@ router.get('/sessions/:runId', async (req, res) => {
             [runId]
         );
         const extensions = extRes.rows;
+
+        // Bloqueos por fuerza mayor (histórico completo; el último sin
+        // `blocked_to` es el bloqueo activo).
+        const blocksRes = await query(
+            `SELECT b.id, b.blocked_from, b.blocked_to, b.reason, b.created_at,
+                    c.name AS created_by_name, e.name AS ended_by_name
+               FROM qa_exploratory_blocks b
+               LEFT JOIN qa_users c ON c.id = b.created_by
+               LEFT JOIN qa_users e ON e.id = b.ended_by
+              WHERE b.run_id = ?
+              ORDER BY b.id DESC`,
+            [runId]
+        );
+        const blocks = blocksRes.rows;
+        const activeBlock = blocks.find((block) => !block.blocked_to) || null;
 
         // Flujos = TCs vinculados a este run via qa_executions. La pertenencia se
         // deriva de la tabla de ejecuciones (no del project_id del TC) para que
@@ -224,7 +241,7 @@ router.get('/sessions/:runId', async (req, res) => {
         const hallazgos = hallazgosRes.rows;
 
         if (flows.length === 0) {
-            return res.json({ run, flows: [], executions: [], defects: [], attachments: [], hallazgos, extensions });
+            return res.json({ run, flows: [], executions: [], defects: [], attachments: [], hallazgos, extensions, blocks, active_block: activeBlock });
         }
 
         const flowIds = flows.map(f => f.id);
@@ -263,7 +280,7 @@ router.get('/sessions/:runId', async (req, res) => {
             attachments = attRes.rows;
         }
 
-        res.json({ run, flows, executions, defects, attachments, hallazgos, extensions });
+        res.json({ run, flows, executions, defects, attachments, hallazgos, extensions, blocks, active_block: activeBlock });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -343,6 +360,21 @@ router.post('/flows/:tcId/execute', async (req, res) => {
         if (runRes.rows.length === 0) return res.status(404).json({ error: 'Sesión no encontrada' });
         if (runRes.rows[0].status !== 'RUNNING') {
             return res.status(400).json({ error: 'La sesión ya fue finalizada' });
+        }
+
+        // Bloqueo activo por fuerza mayor: no se permiten ejecuciones hasta
+        // finalizarlo (las fechas no se tocan automáticamente).
+        const activeBlockRes = await query(
+            `SELECT id, reason FROM qa_exploratory_blocks
+              WHERE run_id = ? AND blocked_to IS NULL
+              ORDER BY id DESC LIMIT 1`,
+            [run_id]
+        );
+        if (activeBlockRes.rows.length > 0) {
+            return res.status(400).json({
+                error: 'La sesión está bloqueada. Finalizá el bloqueo para continuar.',
+                active_block: activeBlockRes.rows[0],
+            });
         }
 
         // Buscar o crear la ejecución
@@ -696,13 +728,185 @@ router.put('/sessions/:runId/deadline', async (req, res) => {
         }
 
         const ins = await query(
-            `INSERT INTO qa_exploratory_extensions (run_id, previous_deadline, new_deadline, reason, created_by)
-             VALUES (?, ?, ?, ?, ?) RETURNING id`,
+            `INSERT INTO qa_exploratory_extensions (run_id, field, previous_deadline, new_deadline, reason, created_by)
+             VALUES (?, 'deadline', ?, ?, ?, ?) RETURNING id`,
             [runId, run.deadline_at || null, newDeadline, justification, req.user.id]
         );
         await query(`UPDATE qa_test_runs SET deadline_at = ? WHERE id = ?`, [newDeadline, runId]);
 
         res.json({ ok: true, deadline_at: newDeadline, extension_id: ins.rows[0]?.id ?? ins.lastID });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ── PUT /api/explorations/sessions/:runId/dates ──────────────────────────────
+// Permite reprogramar la ventana planificada y/o la fecha límite vigente.
+// Cada fecha modificada se guarda como una fila del histórico con su motivo.
+router.put('/sessions/:runId/dates', async (req, res) => {
+    try {
+        const runId = parseInt(req.params.runId, 10);
+        const { planned_start_at, planned_end_at, deadline_at, reason } = req.body;
+        if (!runId) return res.status(400).json({ error: 'runId inválido' });
+
+        const runRes = await query(
+            `SELECT id, status, planned_start_at, planned_end_at, deadline_at
+               FROM qa_test_runs WHERE id = ? AND run_type = 'EXPLORATORY'`,
+            [runId]
+        );
+        if (runRes.rows.length === 0) return res.status(404).json({ error: 'Sesión no encontrada' });
+        const run = runRes.rows[0];
+        if (run.status !== 'RUNNING') {
+            return res.status(400).json({ error: 'La sesión ya fue finalizada' });
+        }
+
+        const newStart = new Date(planned_start_at);
+        const newEnd = new Date(planned_end_at);
+        const newDeadline = new Date(deadline_at);
+        if (Number.isNaN(newStart.getTime())) {
+            return res.status(400).json({ error: 'El inicio planificado no es válido' });
+        }
+        if (Number.isNaN(newEnd.getTime())) {
+            return res.status(400).json({ error: 'El fin planificado no es válido' });
+        }
+        if (newEnd.getTime() <= newStart.getTime()) {
+            return res.status(400).json({ error: 'El fin planificado debe ser posterior al inicio planificado' });
+        }
+        if (Number.isNaN(newDeadline.getTime())) {
+            return res.status(400).json({ error: 'La fecha límite no es válida' });
+        }
+        if (newDeadline.getTime() <= Date.now()) {
+            return res.status(400).json({ error: 'La fecha límite debe ser futura' });
+        }
+
+        const same = (a, b) => {
+            if (!a && !b) return true;
+            if (!a || !b) return false;
+            return new Date(a).getTime() === new Date(b).getTime();
+        };
+        const changes = [];
+        if (!same(run.planned_start_at, newStart)) changes.push(['planned_start', run.planned_start_at, newStart]);
+        if (!same(run.planned_end_at, newEnd)) changes.push(['planned_end', run.planned_end_at, newEnd]);
+        if (!same(run.deadline_at, newDeadline)) changes.push(['deadline', run.deadline_at, newDeadline]);
+
+        if (changes.length === 0) {
+            return res.status(400).json({ error: 'No hay cambios de fechas para registrar' });
+        }
+        const justification = String(reason || '').trim();
+        if (justification.length < 5) {
+            return res.status(400).json({ error: 'Justificá el cambio de fechas (mínimo 5 caracteres)' });
+        }
+
+        const insertedIds = [];
+        for (const [field, previous, next] of changes) {
+            const ins = await query(
+                `INSERT INTO qa_exploratory_extensions (run_id, field, previous_deadline, new_deadline, reason, created_by)
+                 VALUES (?, ?, ?, ?, ?, ?) RETURNING id`,
+                [runId, field, previous || null, next, justification, req.user.id]
+            );
+            insertedIds.push(ins.rows[0]?.id ?? ins.lastID);
+        }
+        await query(
+            `UPDATE qa_test_runs
+                SET planned_start_at = ?, planned_end_at = ?, deadline_at = ?
+              WHERE id = ?`,
+            [newStart, newEnd, newDeadline, runId]
+        );
+
+        res.json({
+            ok: true,
+            planned_start_at: newStart,
+            planned_end_at: newEnd,
+            deadline_at: newDeadline,
+            changed: changes.map(([field]) => field),
+            change_ids: insertedIds,
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ── POST /api/explorations/sessions/:runId/blocks ────────────────────────────
+// Registra un bloqueo del testing por fuerza mayor. No modifica ninguna fecha:
+// el bloqueo y la reprogramación son decisiones independientes y trazables.
+router.post('/sessions/:runId/blocks', async (req, res) => {
+    try {
+        const runId = parseInt(req.params.runId, 10);
+        const { reason, blocked_from } = req.body;
+        if (!runId) return res.status(400).json({ error: 'runId inválido' });
+
+        const runRes = await query(
+            `SELECT id, status FROM qa_test_runs WHERE id = ? AND run_type = 'EXPLORATORY'`,
+            [runId]
+        );
+        if (runRes.rows.length === 0) return res.status(404).json({ error: 'Sesión no encontrada' });
+        if (runRes.rows[0].status !== 'RUNNING') {
+            return res.status(400).json({ error: 'La sesión ya fue finalizada' });
+        }
+
+        const activeRes = await query(
+            `SELECT id FROM qa_exploratory_blocks WHERE run_id = ? AND blocked_to IS NULL`,
+            [runId]
+        );
+        if (activeRes.rows.length > 0) {
+            return res.status(400).json({ error: 'La sesión ya tiene un bloqueo activo' });
+        }
+
+        const from = blocked_from ? new Date(blocked_from) : new Date();
+        if (Number.isNaN(from.getTime())) {
+            return res.status(400).json({ error: 'La fecha de inicio del bloqueo no es válida' });
+        }
+        const justification = String(reason || '').trim();
+        if (justification.length < 5) {
+            return res.status(400).json({ error: 'Indicá el motivo del bloqueo (mínimo 5 caracteres)' });
+        }
+
+        const ins = await query(
+            `INSERT INTO qa_exploratory_blocks (run_id, blocked_from, reason, created_by)
+             VALUES (?, ?, ?, ?) RETURNING id`,
+            [runId, from, justification, req.user.id]
+        );
+        res.json({ ok: true, block_id: ins.rows[0]?.id ?? ins.lastID, blocked_from: from });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ── PUT /api/explorations/sessions/:runId/blocks/:blockId/end ────────────────
+// Finaliza un bloqueo (retoma el testing) sin tocar las fechas de la sesión.
+router.put('/sessions/:runId/blocks/:blockId/end', async (req, res) => {
+    try {
+        const runId = parseInt(req.params.runId, 10);
+        const blockId = parseInt(req.params.blockId, 10);
+        const { blocked_to } = req.body;
+        if (!runId || !blockId) return res.status(400).json({ error: 'Parámetros inválidos' });
+
+        const blockRes = await query(
+            `SELECT id, blocked_from, blocked_to FROM qa_exploratory_blocks
+              WHERE id = ? AND run_id = ?`,
+            [blockId, runId]
+        );
+        if (blockRes.rows.length === 0) return res.status(404).json({ error: 'Bloqueo no encontrado' });
+        const block = blockRes.rows[0];
+        if (block.blocked_to) {
+            return res.status(400).json({ error: 'El bloqueo ya está finalizado' });
+        }
+
+        const until = blocked_to ? new Date(blocked_to) : new Date();
+        if (Number.isNaN(until.getTime())) {
+            return res.status(400).json({ error: 'La fecha de fin del bloqueo no es válida' });
+        }
+        if (until.getTime() < new Date(block.blocked_from).getTime()) {
+            return res.status(400).json({ error: 'El fin del bloqueo no puede ser anterior al inicio' });
+        }
+
+        await query(
+            `UPDATE qa_exploratory_blocks
+                SET blocked_to = ?, ended_by = ?
+              WHERE id = ?`,
+            [until, req.user.id, blockId]
+        );
+        res.json({ ok: true, block_id: blockId, blocked_to: until });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -1126,9 +1330,54 @@ router.get('/reports/status', async (req, res) => {
              ORDER BY d.created_at ASC
         `, hallazgoParams);
 
+        // Sesiones con bloqueos o cambios de fechas en el rango: deben
+        // aparecer en el informe aunque no tengan tests ejecutados (por
+        // ejemplo, una sesión que estuvo bloqueada todo el período).
+        const traceParams = [projectId, to, from];
+        const extTraceParams = [projectId, from, to];
+        let blockAuthor = '';
+        let extAuthor = '';
+        if (testerId && testerName) {
+            blockAuthor = 'AND (b.created_by = ? OR bu.name = ?)';
+            extAuthor = 'AND (e.created_by = ? OR eu.name = ?)';
+            traceParams.push(testerId, testerName);
+            extTraceParams.push(testerId, testerName);
+        } else if (testerId) {
+            blockAuthor = 'AND b.created_by = ?';
+            extAuthor = 'AND e.created_by = ?';
+            traceParams.push(testerId);
+            extTraceParams.push(testerId);
+        } else if (testerName) {
+            blockAuthor = 'AND bu.name = ?';
+            extAuthor = 'AND eu.name = ?';
+            traceParams.push(testerName);
+            extTraceParams.push(testerName);
+        }
+        const traceRunsRes = await query(`
+            SELECT DISTINCT x.run_id FROM (
+                SELECT b.run_id
+                  FROM qa_exploratory_blocks b
+                  JOIN qa_test_runs r ON r.id = b.run_id
+                  LEFT JOIN qa_users bu ON bu.id = b.created_by
+                 WHERE r.project_id = ? AND r.run_type = 'EXPLORATORY'
+                   AND (b.blocked_from AT TIME ZONE '${REPORT_TZ}')::date <= ?
+                   AND (COALESCE(b.blocked_to, CURRENT_TIMESTAMP) AT TIME ZONE '${REPORT_TZ}')::date >= ?
+                   ${blockAuthor}
+                UNION
+                SELECT e.run_id
+                  FROM qa_exploratory_extensions e
+                  JOIN qa_test_runs r ON r.id = e.run_id
+                  LEFT JOIN qa_users eu ON eu.id = e.created_by
+                 WHERE r.project_id = ? AND r.run_type = 'EXPLORATORY'
+                   AND (e.created_at AT TIME ZONE '${REPORT_TZ}')::date BETWEEN ? AND ?
+                   ${extAuthor}
+            ) x
+        `, [...traceParams, ...extTraceParams]);
+
         const runIds = [...new Set([
             ...execs.rows.map(e => e.run_id),
             ...hallazgos.rows.map(h => h.exploratory_run_id),
+            ...traceRunsRes.rows.map(r => r.run_id),
         ])];
         const runsRes = runIds.length === 0 ? { rows: [] } : await query(`
             SELECT id, name, charter, started_at, finished_at, status, coverage_ready, deadline_at,
@@ -1156,9 +1405,9 @@ router.get('/reports/status', async (req, res) => {
         const totalsByRun = new Map(runTotalsRes.rows.map(r => [r.run_id, r]));
         const totalPending = runTotalsRes.rows.reduce((acc, row) => acc + row.pending, 0);
 
-        // Trazabilidad de la fecha límite: todas las postergaciones.
+        // Trazabilidad de fechas: postergaciones del límite y cambios de plan.
         const extRes = runIds.length === 0 ? { rows: [] } : await query(`
-            SELECT e.run_id, e.previous_deadline, e.new_deadline, e.reason, e.created_at,
+            SELECT e.run_id, e.field, e.previous_deadline, e.new_deadline, e.reason, e.created_at,
                    u.name AS created_by_name
               FROM qa_exploratory_extensions e
               LEFT JOIN qa_users u ON u.id = e.created_by
@@ -1166,11 +1415,37 @@ router.get('/reports/status', async (req, res) => {
              ORDER BY e.run_id, e.id ASC
         `, runIds);
         const extensionsByRun = new Map();
+        const planChangesByRun = new Map();
         for (const ext of extRes.rows) {
-            if (!extensionsByRun.has(ext.run_id)) extensionsByRun.set(ext.run_id, []);
-            extensionsByRun.get(ext.run_id).push(ext);
+            const target = ext.field === 'deadline' ? extensionsByRun : planChangesByRun;
+            if (!target.has(ext.run_id)) target.set(ext.run_id, []);
+            target.get(ext.run_id).push(ext);
         }
-        const totalExtensions = extRes.rows.length;
+        const totalExtensions = extRes.rows.filter(ext => ext.field === 'deadline').length;
+        const totalPlanChanges = extRes.rows.length - totalExtensions;
+
+        // Bloqueos por fuerza mayor (no modifican fechas).
+        const blocksRes = runIds.length === 0 ? { rows: [] } : await query(`
+            SELECT b.run_id, b.blocked_from, b.blocked_to, b.reason, b.created_at,
+                   c.name AS created_by_name, e.name AS ended_by_name
+              FROM qa_exploratory_blocks b
+              LEFT JOIN qa_users c ON c.id = b.created_by
+              LEFT JOIN qa_users e ON e.id = b.ended_by
+             WHERE b.run_id IN (${runIds.map(() => '?').join(',')})
+             ORDER BY b.run_id, b.id ASC
+        `, runIds);
+        const blocksByRun = new Map();
+        for (const block of blocksRes.rows) {
+            if (!blocksByRun.has(block.run_id)) blocksByRun.set(block.run_id, []);
+            blocksByRun.get(block.run_id).push(block);
+        }
+        const totalBlocks = blocksRes.rows.length;
+        const totalBlockedMs = blocksRes.rows.reduce((acc, block) => {
+            const from = new Date(block.blocked_from).getTime();
+            const to = block.blocked_to ? new Date(block.blocked_to).getTime() : Date.now();
+            return acc + Math.max(0, to - from);
+        }, 0);
+        const totalBlockedDays = Math.round((totalBlockedMs / 86_400_000) * 10) / 10;
         const sessionTotals = runTotalsRes.rows.reduce(
             (acc, row) => ({
                 total: acc.total + row.total,
@@ -1410,13 +1685,29 @@ router.get('/reports/status', async (req, res) => {
                         return `<strong style="color:${acceptanceColor(pct)}">${pct === null ? '—' : pct + '%'}</strong>`;
                     })()}</div>
                     ${(() => {
+                        const FIELD_LABEL = {
+                            planned_start: 'Inicio planificado',
+                            planned_end: 'Fin planificado',
+                            deadline: 'Fecha límite',
+                        };
                         const runExts = extensionsByRun.get(run.id) || [];
+                        const runPlanChanges = planChangesByRun.get(run.id) || [];
+                        const runBlocks = blocksByRun.get(run.id) || [];
                         const original = runExts[0]?.previous_deadline || run.planned_end_at || run.deadline_at;
                         const current = runExts[runExts.length - 1]?.new_deadline || run.deadline_at;
+                        const changeRows = [...runPlanChanges, ...runExts].sort((a, b) => a.id - b.id);
+                        const blocksRows = runBlocks.map((block) => {
+                            const from = new Date(block.blocked_from).getTime();
+                            const to = block.blocked_to ? new Date(block.blocked_to).getTime() : Date.now();
+                            const days = Math.round((Math.max(0, to - from) / 86_400_000) * 10) / 10;
+                            return `<li style="margin-bottom:2px;">${fmtReportDate(block.blocked_from)} → ${block.blocked_to ? fmtReportDate(block.blocked_to) : '<strong>activo</strong>'} · ${days} día(s) · <em>${htmlEscape(block.reason)}</em> · ${htmlEscape(block.created_by_name || '—')}${block.ended_by_name ? ` · retomó ${htmlEscape(block.ended_by_name)}` : ''}</li>`;
+                        }).join('');
                         return `<div style="margin-top:6px;border-top:1px dashed #e5e7eb;padding-top:6px;">
-                            <div style="font-size:.64rem;font-weight:700;color:#6b7280;text-transform:uppercase;">Trazabilidad de fecha límite</div>
+                            <div style="font-size:.64rem;font-weight:700;color:#6b7280;text-transform:uppercase;">Trazabilidad de fechas</div>
                             <div style="font-size:.68rem;color:#4b5563;margin-top:2px;">Original: ${original ? fmtReportDate(original) : 'sin definir'} · Actual: ${current ? fmtReportDate(current) : 'sin definir'}${runExts.length ? ` · ${runExts.length} postergación(es)` : ''}</div>
-                            ${runExts.length ? `<ol style="margin:4px 0 0 16px;padding:0;font-size:.66rem;color:#4b5563;">${runExts.map((ext) => `<li style="margin-bottom:2px;">${ext.previous_deadline ? fmtReportDate(ext.previous_deadline) : '—'} → ${fmtReportDate(ext.new_deadline)} · <em>${htmlEscape(ext.reason)}</em> · ${htmlEscape(ext.created_by_name || '—')} · ${fmtReportDate(ext.created_at)}</li>`).join('')}</ol>` : '<div style="font-size:.66rem;color:#6b7280;">Sin postergaciones.</div>'}
+                            ${changeRows.length ? `<ol style="margin:4px 0 0 16px;padding:0;font-size:.66rem;color:#4b5563;">${changeRows.map((ext) => `<li style="margin-bottom:2px;"><strong>${FIELD_LABEL[ext.field] || ext.field}</strong>: ${ext.previous_deadline ? fmtReportDate(ext.previous_deadline) : '—'} → ${fmtReportDate(ext.new_deadline)} · <em>${htmlEscape(ext.reason)}</em> · ${htmlEscape(ext.created_by_name || '—')} · ${fmtReportDate(ext.created_at)}</li>`).join('')}</ol>` : '<div style="font-size:.66rem;color:#6b7280;">Sin cambios de fechas.</div>'}
+                            <div style="font-size:.64rem;font-weight:700;color:#6b7280;text-transform:uppercase;margin-top:6px;">Bloqueos por fuerza mayor${runBlocks.length ? ` · ${runBlocks.length}` : ''}</div>
+                            ${runBlocks.length ? `<ol style="margin:4px 0 0 16px;padding:0;font-size:.66rem;color:#4b5563;">${blocksRows}</ol>` : '<div style="font-size:.66rem;color:#6b7280;">Sin bloqueos registrados.</div>'}
                         </div>`;
                     })()}
                     <div style="margin-top:4px;">${run.coverage_ready
@@ -1459,6 +1750,9 @@ router.get('/reports/status', async (req, res) => {
             <div class="kpi"><div class="kpi-val">${counts.SKIP}</div><div class="kpi-lab">SKIP</div></div>
             <div class="kpi" title="Flujos sin ejecutar en las sesiones del reporte"><div class="kpi-val">${totalPending}</div><div class="kpi-lab">Pendientes</div></div>
             <div class="kpi" title="Cambios de fecha límite registrados con justificación"><div class="kpi-val">${totalExtensions}</div><div class="kpi-lab">Postergaciones</div></div>
+            <div class="kpi" title="Cambios de inicio/fin planificado registrados con justificación"><div class="kpi-val">${totalPlanChanges}</div><div class="kpi-lab">Cambios de plan</div></div>
+            <div class="kpi" title="Bloqueos de testing por fuerza mayor (no modifican las fechas)"><div class="kpi-val">${totalBlocks}</div><div class="kpi-lab">Bloqueos</div></div>
+            <div class="kpi" title="Tiempo total bloqueado por fuerza mayor en el rango"><div class="kpi-val">${totalBlockedDays}</div><div class="kpi-lab">Días bloqueados</div></div>
             <div class="kpi"><div class="kpi-val">${hallazgos.rows.length}</div><div class="kpi-lab">Hallazgos</div></div>
             <div class="kpi"><div class="kpi-val">${defects.rows.length}</div><div class="kpi-lab">Defectos</div></div>
         </div>

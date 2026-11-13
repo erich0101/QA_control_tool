@@ -78,12 +78,35 @@ await query(`ALTER TABLE qa_defects ADD COLUMN IF NOT EXISTS observations TEXT`)
             CREATE TABLE IF NOT EXISTS qa_exploratory_extensions (
                 id SERIAL PRIMARY KEY,
                 run_id INTEGER NOT NULL REFERENCES qa_test_runs(id) ON DELETE CASCADE,
+                field VARCHAR(20) NOT NULL DEFAULT 'deadline',
                 previous_deadline TIMESTAMPTZ,
                 new_deadline TIMESTAMPTZ NOT NULL,
                 reason TEXT NOT NULL,
                 created_by INTEGER REFERENCES qa_users(id) ON DELETE SET NULL,
                 created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
             )
+        `);
+        // El histórico cubre las tres fechas: inicio planificado, fin
+        // planificado y fecha límite vigente. `previous_deadline` /
+        // `new_deadline` guardan el valor anterior y nuevo del campo indicado.
+        await query(`ALTER TABLE qa_exploratory_extensions ADD COLUMN IF NOT EXISTS field VARCHAR(20) NOT NULL DEFAULT 'deadline'`);
+        // Bloqueos de testing por fuerza mayor (independientes de las fechas:
+        // bloquear no extiende automáticamente el fin planificado).
+        await query(`
+            CREATE TABLE IF NOT EXISTS qa_exploratory_blocks (
+                id SERIAL PRIMARY KEY,
+                run_id INTEGER NOT NULL REFERENCES qa_test_runs(id) ON DELETE CASCADE,
+                blocked_from TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                blocked_to TIMESTAMPTZ,
+                reason TEXT NOT NULL,
+                created_by INTEGER REFERENCES qa_users(id) ON DELETE SET NULL,
+                ended_by INTEGER REFERENCES qa_users(id) ON DELETE SET NULL,
+                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+        await query(`
+            CREATE INDEX IF NOT EXISTS idx_qa_exploratory_blocks_run
+                ON qa_exploratory_blocks (run_id)
         `);
         // Migración de columnas creadas como TIMESTAMP (sin zona) a TIMESTAMPTZ.
         // Se consulta el tipo y se altera solo si hace falta (idempotente, sin DO).

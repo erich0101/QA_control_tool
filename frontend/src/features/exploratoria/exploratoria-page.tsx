@@ -15,6 +15,8 @@ import { useTeam } from '@/features/team/use-team';
 import { AddFlowDialog, AddHallazgoDialog, StartSessionDialog } from './components/session-dialogs';
 import { StatusReportDialog } from './components/status-report-dialog';
 import { ExtendDeadlineDialog } from './components/extend-deadline-dialog';
+import { EditDatesDialog } from './components/edit-dates-dialog';
+import { BlockSessionDialog } from './components/block-session-dialog';
 import { SessionDetail } from './components/session-detail';
 import { useExploratoriaMutations, useExploratorySession, useExploratorySessions } from './use-exploratoria';
 
@@ -32,6 +34,8 @@ export function ExploratoriaPage() {
   const [startOpen, setStartOpen] = useState(false);
   const [statusReportOpen, setStatusReportOpen] = useState(false);
   const [deadlineOpen, setDeadlineOpen] = useState(false);
+  const [datesOpen, setDatesOpen] = useState(false);
+  const [blockOpen, setBlockOpen] = useState(false);
   const [flowForm, setFlowForm] = useState<{
     mode: 'create' | 'edit';
     flow?: ExploratoryFlow;
@@ -269,6 +273,22 @@ export function ExploratoriaPage() {
                 mutations.setCoverage.mutate({ id: detail.run.id, ready })
               }
               onExtendDeadline={() => setDeadlineOpen(true)}
+              onEditDates={() => setDatesOpen(true)}
+              onBlock={() => setBlockOpen(true)}
+              onEndBlock={(blockId) => {
+                void (async () => {
+                  const ok = await confirm({
+                    title: 'Finalizar bloqueo',
+                    description:
+                      '¿Retomar el testing? Se registra la fecha y el usuario que finaliza el bloqueo. Las fechas de la sesión no cambian.',
+                    confirmLabel: 'Retomar testing',
+                  });
+                  if (!ok) return;
+                  await mutations.endBlock.mutateAsync({ id: detail.run.id, blockId });
+                })();
+              }}
+              isDatesPending={mutations.updateDates.isPending}
+              isBlockPending={mutations.startBlock.isPending || mutations.endBlock.isPending}
               onBack={() => patchParams({ run: null })}
               onAddFlow={() => setFlowForm({ mode: 'create' })}
               onAddHallazgo={() => setHallazgoForm({ mode: 'create' })}
@@ -393,6 +413,32 @@ export function ExploratoriaPage() {
         />
       ) : null}
 
+      {detail ? (
+        <EditDatesDialog
+          open={datesOpen}
+          onOpenChange={setDatesOpen}
+          current={{
+            planned_start_at: detail.run.planned_start_at,
+            planned_end_at: detail.run.planned_end_at,
+            deadline_at: detail.run.deadline_at,
+          }}
+          isPending={mutations.updateDates.isPending}
+          onSubmit={async (values) => {
+            await mutations.updateDates.mutateAsync({ id: detail.run.id, ...values });
+          }}
+        />
+      ) : null}
+
+      <BlockSessionDialog
+        open={blockOpen}
+        onOpenChange={setBlockOpen}
+        isPending={mutations.startBlock.isPending}
+        onSubmit={async (values) => {
+          if (!detail) return;
+          await mutations.startBlock.mutateAsync({ id: detail.run.id, ...values });
+        }}
+      />
+
       <StatusReportDialog
         open={statusReportOpen}
         onOpenChange={setStatusReportOpen}
@@ -463,6 +509,7 @@ function SessionRow({
               {session.hallazgo_count} hallazgo{session.hallazgo_count === 1 ? '' : 's'}
             </span>
           ) : null}
+          {session.is_blocked ? <span className="font-semibold text-fail">⏸ bloqueada</span> : null}
           {!session.coverage_ready ? (
             <span className="text-warn">⚠ sin cobertura TC</span>
           ) : null}

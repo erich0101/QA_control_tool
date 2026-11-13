@@ -433,6 +433,27 @@ export const ApiService = {
     async finishExploratorySession(runId) {
         return fetch(`/api/explorations/sessions/${runId}/finish`, { method: 'POST' }).then(json);
     },
+    async updateExploratoryDates(runId, data) {
+        return fetch(`/api/explorations/sessions/${runId}/dates`, {
+            method: 'PUT',
+            body: JSON.stringify(data),
+            headers
+        }).then(json);
+    },
+    async startExploratoryBlock(runId, data) {
+        return fetch(`/api/explorations/sessions/${runId}/blocks`, {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers
+        }).then(json);
+    },
+    async endExploratoryBlock(runId, blockId) {
+        return fetch(`/api/explorations/sessions/${runId}/blocks/${blockId}/end`, {
+            method: 'PUT',
+            body: JSON.stringify({}),
+            headers
+        }).then(json);
+    },
     async deleteEvidence(attachmentId) {
         return fetch(`/api/evidence/${attachmentId}`, { method: 'DELETE' }).then(json);
     }

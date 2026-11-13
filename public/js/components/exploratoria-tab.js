@@ -309,6 +309,8 @@ export const ExploratoriaTab = {
         }
         this.sessionDetail = detail;
         const { run, flows, executions, defects, attachments } = detail;
+        const activeBlock = detail.active_block || null;
+        const blocks = detail.blocks || [];
 
         // Pre-index por [C11]
         const execByTc = new Map();
@@ -414,12 +416,21 @@ export const ExploratoriaTab = {
                             ${isFinished ? `<span style="display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 20px; background: var(--apple-green-soft); color: var(--apple-green); font-size: 0.62rem; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase;">✅ Sesión finalizada</span>` : ''}
                             <button class="btn btn-ghost btn-sm" id="expl-btn-back" style="padding: 5px 12px; font-size: 0.72rem; font-weight: 500; border-radius: var(--apple-radius-sm);">← Sesiones</button>
                             <button onclick="window.open('/api/explorations/sessions/${run.id}/bugs-report','_blank')" style="padding:5px 12px; border-radius:6px; border:none; background:#dc2626; color:white; font-size:0.7rem; font-weight:600; cursor:pointer;">Reporte Bugs</button>
+                            ${!isFinished ? `<button class="btn btn-ghost btn-sm" id="expl-btn-edit-dates" style="padding: 5px 12px; font-size: 0.7rem; font-weight: 600; border-radius: var(--apple-radius-sm);">📅 Editar fechas</button>` : ''}
+                            ${!isFinished ? (activeBlock
+                                ? `<button class="btn btn-ghost btn-sm" id="expl-btn-end-block" style="padding: 5px 12px; font-size: 0.7rem; font-weight: 600; border-radius: var(--apple-radius-sm);">▶️ Retomar testing</button>`
+                                : `<button class="btn btn-ghost btn-sm" id="expl-btn-block" style="padding: 5px 12px; font-size: 0.7rem; font-weight: 600; border-radius: var(--apple-radius-sm);">⏸ Bloquear sesión</button>`) : ''}
                             ${!isFinished ? `<button class="btn btn-primary btn-sm" id="expl-btn-add-flow" style="padding: 5px 12px; font-size: 0.7rem; font-weight: 600; border-radius: var(--apple-radius-sm);">+ Agregar flujo</button>` : ''}
                             ${!isFinished ? `<button class="btn btn-ghost btn-sm" id="expl-btn-import-flows" style="padding: 5px 12px; font-size: 0.7rem; font-weight: 600; border-radius: var(--apple-radius-sm);">📥 Importar flujos</button>` : ''}
                             ${!isFinished ? `<button class="btn btn-danger btn-sm" id="expl-btn-finish" style="padding: 5px 12px; font-size: 0.7rem; font-weight: 600; border-radius: var(--apple-radius-sm);">🏁 Finalizar sesión</button>` : ''}
                         </div>
                     </div>
                     ${this._renderMetricsBar(run)}
+                    ${activeBlock ? `
+                        <div style="background: var(--apple-red-soft, #fee2e2); color: var(--apple-red, #dc2626); padding: 8px 24px; font-size: 0.74rem; display: flex; gap: 8px; align-items: center;">
+                            <span>⏸ <strong>Testing bloqueado por fuerza mayor</strong> desde ${UI.escapeHTML(new Date(activeBlock.blocked_from).toLocaleString())}: ${UI.escapeHTML(activeBlock.reason)}. Las fechas no se modificaron.</span>
+                        </div>
+                    ` : ''}
                     <div id="expl-flow-list" style="flex: 1; overflow-y: auto; padding: 20px 24px;">
                         ${flows.length === 0 ? `
                             <div class="expl-empty-state">
@@ -1033,6 +1044,36 @@ export const ExploratoriaTab = {
             this.showAddFlowModal(container);
         });
 
+        container.querySelector('#expl-btn-edit-dates')?.addEventListener('click', () => {
+            this.showEditDatesModal(container);
+        });
+
+        container.querySelector('#expl-btn-block')?.addEventListener('click', () => {
+            this.showBlockSessionModal(container);
+        });
+
+        container.querySelector('#expl-btn-end-block')?.addEventListener('click', async () => {
+            const activeBlock = this.sessionDetail?.active_block;
+            if (!activeBlock) return;
+            const ok = await this.openLocalConfirm(
+                'Retomar testing',
+                'Se registra la fecha y el usuario que finaliza el bloqueo. Las fechas de la sesión no cambian. ¿Continuar?'
+            );
+            if (!ok) return;
+            try {
+                UI.showLoading();
+                await ApiService.endExploratoryBlock(this.selectedRunId, activeBlock.id);
+                invalidateTabCache('exploratoria::detail', Store.state.activeProjectId);
+                invalidateTabCache('exploratoria::active', Store.state.activeProjectId);
+                UI.toast('✅ Testing retomado');
+                await this.render(container);
+            } catch (err) {
+                UI.toast(err.message, 'error');
+            } finally {
+                UI.hideLoading();
+            }
+        });
+
         container.querySelector('#expl-btn-import-flows')?.addEventListener('click', () => {
             this.showImportFlowsModal(container);
         });
@@ -1624,6 +1665,115 @@ export const ExploratoriaTab = {
                 this.selectedRunId = res.run_id;
                 this.sessionDetail = null;
                 this.flowDrafts.clear();
+                await this.render(container);
+            } catch (err) {
+                UI.toast(err.message, 'error');
+            } finally {
+                UI.hideLoading();
+            }
+            return true;
+        });
+    },
+
+    showEditDatesModal(container) {
+        const run = this.sessionDetail?.run;
+        if (!run) return;
+        const pad = (v) => String(v).padStart(2, '0');
+        const toLocalInput = (value) => {
+            const d = value ? new Date(value) : new Date();
+            if (Number.isNaN(d.getTime())) return '';
+            return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+        };
+        const fmt = (value) => value ? new Date(value).toLocaleString() : '—';
+        this.openLocalModal('Cambiar fechas de la sesión', `
+            <div style="display: flex; flex-direction: column; gap: 14px; margin-top: 14px;">
+                <div style="font-size: 0.72rem; color: var(--apple-label-secondary);">
+                    Actual: inicio ${UI.escapeHTML(fmt(run.planned_start_at))} · fin ${UI.escapeHTML(fmt(run.planned_end_at))} · límite ${UI.escapeHTML(fmt(run.deadline_at))}.<br>
+                    Cada fecha modificada queda registrada con su justificación, autor y fecha.
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div class="field-group">
+                        <label class="field-label">Inicio planificado *</label>
+                        <input type="datetime-local" id="expl-ed-start" value="${toLocalInput(run.planned_start_at)}" style="width: 100%;" />
+                    </div>
+                    <div class="field-group">
+                        <label class="field-label">Fin planificado *</label>
+                        <input type="datetime-local" id="expl-ed-end" value="${toLocalInput(run.planned_end_at)}" style="width: 100%;" />
+                    </div>
+                </div>
+                <div class="field-group">
+                    <label class="field-label">Fecha límite vigente *</label>
+                    <input type="datetime-local" id="expl-ed-deadline" value="${toLocalInput(run.deadline_at)}" style="width: 100%;" />
+                </div>
+                <div class="field-group">
+                    <label class="field-label">Justificación del cambio *</label>
+                    <textarea id="expl-ed-reason" placeholder="Ej: se reprograma por indisponibilidad del ambiente" style="width: 100%; min-height: 70px;"></textarea>
+                </div>
+            </div>
+        `, async (dialog) => {
+            const startRaw = dialog.querySelector('#expl-ed-start').value;
+            const endRaw = dialog.querySelector('#expl-ed-end').value;
+            const deadlineRaw = dialog.querySelector('#expl-ed-deadline').value;
+            const reason = dialog.querySelector('#expl-ed-reason').value.trim();
+            if (!startRaw || !endRaw || !deadlineRaw) { UI.toast('⚠️ Completá las tres fechas', 'error'); return false; }
+            if (new Date(endRaw).getTime() <= new Date(startRaw).getTime()) {
+                UI.toast('⚠️ El fin planificado debe ser posterior al inicio', 'error');
+                return false;
+            }
+            if (reason.length < 5) { UI.toast('⚠️ Justificá el cambio (mínimo 5 caracteres)', 'error'); return false; }
+            try {
+                UI.showLoading();
+                await ApiService.updateExploratoryDates(this.selectedRunId, {
+                    planned_start_at: new Date(startRaw).toISOString(),
+                    planned_end_at: new Date(endRaw).toISOString(),
+                    deadline_at: new Date(deadlineRaw).toISOString(),
+                    reason
+                });
+                invalidateTabCache('exploratoria::detail', Store.state.activeProjectId);
+                invalidateTabCache('exploratoria::active', Store.state.activeProjectId);
+                UI.toast('✅ Fechas actualizadas');
+                await this.render(container);
+            } catch (err) {
+                UI.toast(err.message, 'error');
+            } finally {
+                UI.hideLoading();
+            }
+            return true;
+        });
+    },
+
+    showBlockSessionModal(container) {
+        const pad = (v) => String(v).padStart(2, '0');
+        const now = new Date();
+        const fromDefault = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+        this.openLocalModal('Bloquear testing por fuerza mayor', `
+            <div style="display: flex; flex-direction: column; gap: 14px; margin-top: 14px;">
+                <div style="font-size: 0.72rem; color: var(--apple-label-secondary);">
+                    Se registra el período bloqueado y el motivo. Las fechas planificadas y la fecha límite no se modifican automáticamente.
+                </div>
+                <div class="field-group">
+                    <label class="field-label">Inicio del bloqueo *</label>
+                    <input type="datetime-local" id="expl-bl-from" value="${fromDefault}" style="width: 100%;" />
+                </div>
+                <div class="field-group">
+                    <label class="field-label">Motivo (fuerza mayor) *</label>
+                    <textarea id="expl-bl-reason" placeholder="Ej: ambiente caído por incidente del proveedor" style="width: 100%; min-height: 70px;"></textarea>
+                </div>
+            </div>
+        `, async (dialog) => {
+            const fromRaw = dialog.querySelector('#expl-bl-from').value;
+            const reason = dialog.querySelector('#expl-bl-reason').value.trim();
+            if (!fromRaw) { UI.toast('⚠️ Indicá el inicio del bloqueo', 'error'); return false; }
+            if (reason.length < 5) { UI.toast('⚠️ Indicá el motivo (mínimo 5 caracteres)', 'error'); return false; }
+            try {
+                UI.showLoading();
+                await ApiService.startExploratoryBlock(this.selectedRunId, {
+                    blocked_from: new Date(fromRaw).toISOString(),
+                    reason
+                });
+                invalidateTabCache('exploratoria::detail', Store.state.activeProjectId);
+                invalidateTabCache('exploratoria::active', Store.state.activeProjectId);
+                UI.toast('✅ Bloqueo registrado');
                 await this.render(container);
             } catch (err) {
                 UI.toast(err.message, 'error');
