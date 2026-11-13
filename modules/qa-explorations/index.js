@@ -1567,14 +1567,109 @@ router.get('/reports/status', async (req, res) => {
 
         const uncoveredRuns = [...runsById.values()].filter(r => !r.coverage_ready);
         const coveredCount = runsById.size - uncoveredRuns.length;
-        const coverageAlertHTML = uncoveredRuns.length === 0 ? '' : `
-            <div style="background:#fffbeb;border:1px solid #f59e0b;border-left:5px solid #d97706;border-radius:8px;padding:12px 14px;margin-bottom:16px;">
-                <div style="font-weight:800;color:#b45309;font-size:.85rem;">⚠ Cobertura de TC no declarada</div>
-                <div style="font-size:.74rem;color:#92400e;margin-top:3px;">
-                    ${uncoveredRuns.length} de ${runsById.size} sesión(es) no tienen marcados los TC de cobertura funcional/negocio.
-                    Los resultados reflejan ejecución, no aceptación del regresivo.
+        const coveragePct = runsById.size > 0 ? Math.round((coveredCount / runsById.size) * 100) : null;
+
+        // Señales para la toma de decisiones: qué requiere atención hoy.
+        const now = Date.now();
+        const activeBlockRuns = [...blocksByRun.entries()]
+            .filter(([, list]) => list.some(block => !block.blocked_to))
+            .map(([runId]) => runId);
+        const overdueRuns = [...runsById.values()].filter(
+            run => run.status === 'RUNNING' && run.deadline_at && new Date(run.deadline_at).getTime() < now,
+        );
+        const pendingRuns = runTotalsRes.rows.filter(row => row.pending > 0);
+        const regressions = transitionsRes.rows.filter(
+            row => row.entity_type === 'execution'
+                && row.prev_status === 'OK'
+                && ['FAIL', 'WARNING', 'BLOCK'].includes(row.to_status),
+        );
+        const regressionTotal = regressions.reduce((acc, row) => acc + row.total, 0);
+
+        const alerts = [];
+        if (uncoveredRuns.length > 0) {
+            alerts.push({
+                tone: 'warn',
+                title: 'Cobertura del regresivo incompleta',
+                detail: `${uncoveredRuns.length} de ${runsById.size} sesión(es) no declararon los TC de cobertura. Los resultados muestran ejecución, no aceptación del regresivo.`,
+                refs: uncoveredRuns.map(run => `#${run.id}`).join(', '),
+            });
+        }
+        if (sessionTotals.fail > 0) {
+            alerts.push({
+                tone: 'fail',
+                title: `${sessionTotals.fail} TC en FAIL`,
+                detail: 'Hay resultados fallidos en las sesiones incluidas. Revisá los defectos y su estado antes de decidir la entrega.',
+                refs: '',
+            });
+        }
+        if (activeBlockRuns.length > 0) {
+            alerts.push({
+                tone: 'fail',
+                title: `${activeBlockRuns.length} sesión(es) bloqueada(s)`,
+                detail: 'El testing está detenido por fuerza mayor. El bloqueo no extiende la fecha límite automáticamente.',
+                refs: activeBlockRuns.map(id => `#${id}`).join(', '),
+            });
+        }
+        if (overdueRuns.length > 0) {
+            alerts.push({
+                tone: 'warn',
+                title: `${overdueRuns.length} sesión(es) vencida(s)`,
+                detail: 'La fecha límite pasó y la sesión sigue en curso. Requiere reprogramación o cierre.',
+                refs: overdueRuns.map(run => `#${run.id}`).join(', '),
+            });
+        }
+        if (sessionTotals.pending > 0) {
+            alerts.push({
+                tone: 'warn',
+                title: `${sessionTotals.pending} TC pendientes`,
+                detail: `Sin ejecutar en las sesiones incluidas. Afecta la aceptación total (${acceptanceTotalPct ?? '—'}%).`,
+                refs: pendingRuns.map(row => `#${row.run_id}`).join(', '),
+            });
+        }
+        if (regressionTotal > 0) {
+            alerts.push({
+                tone: 'warn',
+                title: `${regressionTotal} regresión(es) en re-tests`,
+                detail: 'TC que estaban OK y pasaron a FAIL/WARNING/BLOCK. Es la señal más importante para priorizar la revisión.',
+                refs: '',
+            });
+        }
+
+        const hasActivity = runIds.length > 0;
+        const verdictTone = !hasActivity
+            ? 'warn'
+            : uncoveredRuns.length > 0
+                || activeBlockRuns.length > 0
+                || (acceptanceTotalPct ?? 100) < 50
+                ? 'fail'
+                : alerts.length > 0 ? 'warn' : 'ok';
+        const verdictLabel = !hasActivity
+            ? 'Sin actividad en el rango'
+            : verdictTone === 'ok'
+                ? 'Listo para entrega'
+                : verdictTone === 'warn' ? 'Con observaciones' : 'No apto / requiere atención';
+        const verdictDetail = !hasActivity
+            ? 'No se encontraron sesiones con actividad ni cambios de fechas en el rango seleccionado.'
+            : `Aceptación total ${acceptanceTotalPct ?? '—'}% · Cobertura TC ${coveragePct ?? '—'}% · ${sessionTotals.executed}/${sessionTotals.total} TC ejecutados`;
+
+        const alertsHTML = alerts.length === 0 ? `
+            <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-left:5px solid #16a34a;border-radius:10px;padding:12px 14px;margin-bottom:18px;">
+                <div style="font-weight:800;color:#15803d;font-size:.82rem;">✓ Sin alertas críticas</div>
+                <div style="font-size:.72rem;color:#166534;margin-top:2px;">No hay riesgos abiertos detectados en el rango seleccionado.</div>
+            </div>` : `
+            <div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:14px 16px;margin-bottom:18px;">
+                <div style="font-size:.64rem;font-weight:800;color:#6b7280;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">Atención requerida</div>
+                <div style="display:flex;flex-direction:column;gap:8px;">
+                    ${alerts.map(alert => `
+                        <div style="display:flex;gap:8px;align-items:flex-start;border-left:3px solid ${alert.tone === 'fail' ? '#dc2626' : '#d97706'};background:${alert.tone === 'fail' ? '#fef2f2' : '#fffbeb'};border-radius:6px;padding:8px 10px;">
+                            <span style="font-size:.8rem;line-height:1.2;color:${alert.tone === 'fail' ? '#dc2626' : '#b45309'};">${alert.tone === 'fail' ? '✕' : '⚠'}</span>
+                            <div style="flex:1;">
+                                <div style="font-size:.75rem;font-weight:700;color:${alert.tone === 'fail' ? '#b91c1c' : '#92400e'};">${htmlEscape(alert.title)}</div>
+                                <div style="font-size:.68rem;color:${alert.tone === 'fail' ? '#991b1b' : '#92400e'};">${htmlEscape(alert.detail)}</div>
+                                ${alert.refs ? `<div style="font-size:.64rem;color:#6b7280;margin-top:2px;">${htmlEscape(alert.refs)}</div>` : ''}
+                            </div>
+                        </div>`).join('')}
                 </div>
-                <div style="font-size:.7rem;color:#92400e;margin-top:3px;">Sesiones: ${uncoveredRuns.map(r => '#' + r.id).join(', ')}</div>
             </div>`;
 
         const defectIds = defects.rows.map(d => d.id);
@@ -1628,73 +1723,41 @@ router.get('/reports/status', async (req, res) => {
             hallazgosByRun.get(h.exploratory_run_id).push(h);
         }
 
-        // ── Gráficos (SVG/CSS inline, sin dependencias externas) ──
-        function donutSVG() {
-            const radius = 54;
-            const circumference = 2 * Math.PI * radius;
-            let offset = 0;
-            const rings = STATUS_ORDER
-                .filter((status) => counts[status] > 0)
-                .map((status) => {
-                    const length = totalTests > 0 ? (counts[status] / totalTests) * circumference : 0;
-                    const ring = `<circle cx="70" cy="70" r="${radius}" fill="none" stroke="${STATUS_STYLE[status].chart}" stroke-width="18" stroke-dasharray="${length} ${circumference - length}" stroke-dashoffset="${-offset}" transform="rotate(-90 70 70)"></circle>`;
-                    offset += length;
-                    return ring;
-                })
-                .join('');
-            return `<svg width="140" height="140" viewBox="0 0 140 140" role="img" aria-label="Distribución de tests por estado">
-                <circle cx="70" cy="70" r="${radius}" fill="none" stroke="#eef2f7" stroke-width="18"></circle>
-                ${rings}
-                <text x="70" y="67" text-anchor="middle" font-size="22" font-weight="800" fill="#111827">${totalTests}</text>
-                <text x="70" y="84" text-anchor="middle" font-size="9" fill="#6b7280" letter-spacing="1">TESTS</text>
-            </svg>`;
-        }
-
-        const legendHTML = STATUS_ORDER
-            .filter((status) => counts[status] > 0)
-            .map((status) => {
-                const pct = totalTests > 0 ? Math.round((counts[status] / totalTests) * 100) : 0;
-                return `<div style="display:flex;align-items:center;gap:6px;font-size:.72rem;margin-bottom:5px;">
-                    <span style="width:9px;height:9px;border-radius:2px;background:${STATUS_STYLE[status].chart};display:inline-block;"></span>
-                    <span style="font-weight:700;min-width:62px;">${status}</span>
-                    <span style="color:#6b7280;">${counts[status]} (${pct}%)</span>
-                </div>`;
-            })
-            .join('');
-
-        const sessionBars = runIds.map((runId) => {
-            const run = runsById.get(runId);
-            const list = execByRun.get(runId) || [];
-            if (!run || list.length === 0) return '';
-            const perStatus = {};
-            for (const e of list) perStatus[e.status] = (perStatus[e.status] || 0) + 1;
-            const segments = STATUS_ORDER.map((status) => {
-                const n = perStatus[status] || 0;
-                if (!n) return '';
-                return `<div title="${status}: ${n}" style="width:${(n / list.length) * 100}%;background:${STATUS_STYLE[status].chart};height:100%;"></div>`;
-            }).join('');
-            return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:7px;">
-                <div style="width:150px;font-size:.68rem;color:#4b5563;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">#${run.id} · ${htmlEscape(run.name || 'Sesión')}</div>
-                <div style="flex:1;height:14px;border-radius:7px;background:#eef2f7;overflow:hidden;display:flex;">${segments}</div>
-                <div style="font-size:.66rem;color:#6b7280;width:28px;text-align:right;">${list.length}</div>
-            </div>`;
-        }).filter(Boolean).join('');
-
-        const chartsHTML = `<div class="charts">
-            <div class="chart-card chart-card--donut">
-                <div class="chart-title">Resultados por estado</div>
-                <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
-                    ${donutSVG()}
-                    <div>${legendHTML || '<span style="font-size:.72rem;color:#6b7280;">Sin datos</span>'}</div>
+        const statusTotal = STATUS_ORDER.reduce((acc, status) => acc + (counts[status] || 0), 0);
+        const distributionHTML = `<div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:14px 16px;margin-bottom:18px;">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:8px;">
+                <div style="font-size:.64rem;font-weight:800;color:#6b7280;text-transform:uppercase;letter-spacing:.06em;">Distribución de resultados</div>
+                <div style="font-size:.68rem;color:#6b7280;">${totalTests} ejecución(es) en el rango</div>
+            </div>
+            ${statusTotal === 0 ? '<div style="font-size:.72rem;color:#6b7280;">Sin ejecuciones en el rango.</div>' : `
+                <div style="display:flex;height:16px;border-radius:8px;overflow:hidden;background:#eef2f7;">
+                    ${STATUS_ORDER.map((status) => {
+                        const value = counts[status] || 0;
+                        if (!value) return '';
+                        return `<div title="${status}: ${value}" style="width:${(value / statusTotal) * 100}%;background:${STATUS_STYLE[status].chart};"></div>`;
+                    }).join('')}
                 </div>
-            </div>
-            <div class="chart-card chart-card--bars">
-                <div class="chart-title">Tests por sesión</div>
-                ${sessionBars || '<span style="font-size:.72rem;color:#6b7280;">Sin tests ejecutados en el rango.</span>'}
-            </div>
+                <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:10px;">
+                    ${STATUS_ORDER.map((status) => {
+                        const value = counts[status] || 0;
+                        const pct = statusTotal > 0 ? Math.round((value / statusTotal) * 100) : 0;
+                        return `<div style="display:flex;align-items:center;gap:6px;font-size:.7rem;color:#4b5563;">
+                            <span style="width:9px;height:9px;border-radius:50%;background:${STATUS_STYLE[status].chart};"></span>
+                            <strong style="color:#111827;">${value}</strong>
+                            <span>${status} (${pct}%)</span>
+                        </div>`;
+                    }).join('')}
+                </div>`}
         </div>`;
 
         const TRANSITION_ORDER = ['OK', 'PASS', 'FAIL', 'WARNING', 'BLOCK', 'SKIP', 'OPEN', 'IN_PROGRESS', 'FIXED', 'CLOSED', 'WONT_FIX'];
+        const transitionTone = (status) => {
+            if (status === 'OK' || status === 'PASS' || status === 'FIXED' || status === 'CLOSED') return { fg: '#15803d', bg: '#dcfce7' };
+            if (status === 'FAIL') return { fg: '#dc2626', bg: '#fee2e2' };
+            if (status === 'WARNING') return { fg: '#b45309', bg: '#fef3c7' };
+            if (status === 'BLOCK') return { fg: '#c2410c', bg: '#fff7ed' };
+            return { fg: '#4b5563', bg: '#f3f4f6' };
+        };
         const transitionsTable = (entityType) => {
             const rows = transitionsRes.rows.filter((row) => row.entity_type === entityType);
             if (rows.length === 0) {
@@ -1725,29 +1788,93 @@ router.get('/reports/status', async (req, res) => {
                 </tbody>
             </table>`;
         };
-        const transitionsHTML = `<div class="chart-card" style="margin-bottom:18px;">
-            <div class="chart-title">Evolución de estados (re-tests)</div>
-            <div style="font-size:.7rem;color:#6b7280;margin-bottom:10px;">
-                Transiciones registradas en el rango. Incluye cambios entre re-tests del mismo TC.
+        const execTransitions = transitionsRes.rows.filter((row) => row.entity_type === 'execution');
+        const transitionsHTML = `<div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:14px 16px;margin-bottom:18px;">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:8px;">
+                <div style="font-size:.64rem;font-weight:800;color:#6b7280;text-transform:uppercase;letter-spacing:.06em;">Evolución de re-tests</div>
+                <div style="font-size:.68rem;color:#6b7280;">${totalTransitions} transición(es) en el rango</div>
             </div>
-            <div style="display:flex;gap:18px;flex-wrap:wrap;">
-                <div style="flex:1;min-width:280px;">
-                    <div style="font-size:.66rem;font-weight:800;color:#4b5563;text-transform:uppercase;margin-bottom:4px;">TC / ejecuciones</div>
-                    ${transitionsTable('execution')}
+            ${execTransitions.length === 0 ? '<div style="font-size:.72rem;color:#6b7280;">Sin cambios de estado de TC en el rango.</div>' : `
+                <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                    ${execTransitions.map((row) => {
+                        const tone = transitionTone(row.to_status);
+                        return `<span style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:20px;font-size:.7rem;font-weight:700;background:${tone.bg};color:${tone.fg};">
+                            ${htmlEscape(row.prev_status)} → ${htmlEscape(row.to_status)}
+                            <span style="font-size:.62rem;background:rgba(0,0,0,.06);border-radius:10px;padding:1px 6px;">${row.total}</span>
+                        </span>`;
+                    }).join('')}
+                </div>`}
+            <details style="margin-top:10px;">
+                <summary style="cursor:pointer;font-size:.66rem;font-weight:700;color:#6b7280;text-transform:uppercase;">Ver matriz completa</summary>
+                <div style="display:flex;gap:18px;flex-wrap:wrap;margin-top:8px;">
+                    <div style="flex:1;min-width:280px;">
+                        <div style="font-size:.64rem;font-weight:800;color:#4b5563;text-transform:uppercase;margin-bottom:4px;">TC / ejecuciones</div>
+                        ${transitionsTable('execution')}
+                    </div>
+                    <div style="flex:1;min-width:280px;">
+                        <div style="font-size:.64rem;font-weight:800;color:#4b5563;text-transform:uppercase;margin-bottom:4px;">Hallazgos</div>
+                        ${transitionsTable('hallazgo')}
+                    </div>
                 </div>
-                <div style="flex:1;min-width:280px;">
-                    <div style="font-size:.66rem;font-weight:800;color:#4b5563;text-transform:uppercase;margin-bottom:4px;">Hallazgos</div>
-                    ${transitionsTable('hallazgo')}
-                </div>
-            </div>
+            </details>
         </div>`;
 
         let sessionsHTML = '';
+        let summaryRows = '';
         for (const runId of runIds) {
             const run = runsById.get(runId);
             if (!run) continue;
             const runExecs = execByRun.get(runId) || [];
             const runHallazgos = hallazgosByRun.get(runId) || [];
+
+            // Resumen por sesión para la tabla de decisión.
+            const st = totalsByRun.get(run.id) || {
+                total: 0, ok: 0, fail: 0, warning: 0, block: 0, skip: 0, pending: 0, executed: 0,
+            };
+            const runAcceptance = st.total > 0 ? Math.round((st.ok / st.total) * 100) : null;
+            const runEvaluables = st.ok + st.fail + st.warning;
+            const runAcceptanceEval = runEvaluables > 0 ? Math.round((st.ok / runEvaluables) * 100) : null;
+            const runProgress = st.total > 0 ? Math.round((st.executed / st.total) * 100) : 0;
+            const runDeadline = run.deadline_at ? new Date(run.deadline_at) : null;
+            const runOverdue = run.status === 'RUNNING' && runDeadline && runDeadline.getTime() < now;
+            const runNear = run.status === 'RUNNING' && runDeadline && !runOverdue
+                && runDeadline.getTime() - now <= 86_400_000;
+            summaryRows += `<tr>
+                <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;vertical-align:top;">
+                    <div style="font-weight:700;font-size:.74rem;color:#111827;">#${run.id} · ${htmlEscape(run.name || 'Sesión')}</div>
+                    <div style="font-size:.64rem;color:#6b7280;margin-top:1px;">${htmlEscape(run.charter || 'Sin charter')}</div>
+                </td>
+                <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;font-size:.68rem;color:#4b5563;white-space:nowrap;">
+                    ${run.planned_start_at ? new Date(run.planned_start_at).toLocaleDateString('es-AR', { timeZone: REPORT_TZ }) : '—'}
+                    →
+                    ${run.planned_end_at ? new Date(run.planned_end_at).toLocaleDateString('es-AR', { timeZone: REPORT_TZ }) : '—'}
+                </td>
+                <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;font-size:.68rem;white-space:nowrap;color:${runOverdue ? '#dc2626' : '#4b5563'};font-weight:${runOverdue || runNear ? 700 : 400};">
+                    ${runDeadline ? runDeadline.toLocaleDateString('es-AR', { timeZone: REPORT_TZ }) : '—'}
+                    ${runOverdue ? '<div style="font-size:.6rem;color:#dc2626;">VENCIDA</div>' : runNear ? '<div style="font-size:.6rem;color:#b45309;">VENCE PRONTO</div>' : ''}
+                </td>
+                <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;font-size:.68rem;color:#4b5563;white-space:nowrap;">
+                    <strong style="color:#111827;">${runProgress}%</strong>
+                    <div style="font-size:.62rem;color:#6b7280;">${st.executed}/${st.total} · ${st.pending} pend.</div>
+                </td>
+                <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;font-size:.66rem;white-space:nowrap;">
+                    <span style="color:#15803d;font-weight:700;">${st.ok} OK</span> ·
+                    <span style="color:#dc2626;font-weight:700;">${st.fail} F</span> ·
+                    <span style="color:#b45309;font-weight:700;">${st.warning} W</span> ·
+                    <span style="color:#c2410c;font-weight:700;">${st.block} B</span> ·
+                    <span style="color:#4b5563;font-weight:700;">${st.skip} S</span>
+                </td>
+                <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;font-size:.72rem;white-space:nowrap;">
+                    <strong style="color:${acceptanceColor(runAcceptance)};">${runAcceptance === null ? '—' : `${runAcceptance}%`}</strong>
+                    <div style="font-size:.62rem;color:#6b7280;">evaluada ${runAcceptanceEval === null ? '—' : `${runAcceptanceEval}%`}</div>
+                </td>
+                <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;font-size:.68rem;text-align:center;">
+                    ${run.coverage_ready
+                        ? '<span style="color:#15803d;font-weight:700;">✓</span>'
+                        : '<span style="color:#b45309;font-weight:700;">⚠</span>'}
+                </td>
+                <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;font-size:.68rem;text-align:center;color:#4b5563;font-weight:700;">${runHallazgos.length}</td>
+            </tr>`;
 
             // Agrupación por estado de resultado dentro de la sesión.
             const byStatus = new Map();
@@ -1763,7 +1890,12 @@ router.get('/reports/status', async (req, res) => {
             const testCard = (e) => {
                 const color = STATUS_STYLE[e.status] || { bg: '#e5e7eb', fg: '#4b5563' };
                 const execDefects = defectsByExec.get(e.id) || [];
-                const evidHTML = (evidByExec[e.id] || []).map(ev => evidenceHTML(ev, 180)).join('');
+                const evidList = evidByExec[e.id] || [];
+                const evidHTML = evidList.map(ev => evidenceHTML(ev, 180)).join('');
+                const evidBlock = evidHTML ? `<details style="margin-top:5px;">
+                    <summary style="cursor:pointer;font-size:.66rem;font-weight:700;color:#6b7280;text-transform:uppercase;">Evidencias (${evidList.length})</summary>
+                    <div style="margin-top:4px;">${evidHTML}</div>
+                </details>` : '';
                 const history = execHistoryByTc.get(e.tc_id) || [];
                 const historyHTML = history.length === 0 ? '' : `<details style="margin-top:6px;">
                     <summary style="cursor:pointer;font-size:.66rem;font-weight:700;color:#6b7280;text-transform:uppercase;">Historial de estados (${history.length})</summary>
@@ -1776,12 +1908,17 @@ router.get('/reports/status', async (req, res) => {
                     </ol>
                 </details>`;
                 const defectsHTML = execDefects.map(d => {
-                    const defEvid = (evidByDef[d.id] || []).map(ev => evidenceHTML(ev, 160)).join('');
+                    const defEvidList = evidByDef[d.id] || [];
+                    const defEvid = defEvidList.map(ev => evidenceHTML(ev, 160)).join('');
+                    const defEvidBlock = defEvid ? `<details style="margin-top:4px;">
+                        <summary style="cursor:pointer;font-size:.64rem;font-weight:700;color:#6b7280;text-transform:uppercase;">Evidencias (${defEvidList.length})</summary>
+                        <div style="margin-top:3px;">${defEvid}</div>
+                    </details>` : '';
                     return `<div style="padding:7px 9px;background:rgba(220,38,38,.05);border-radius:6px;margin-top:5px;">
                         <div style="font-weight:700;font-size:.78rem;">${htmlEscape(d.title)}</div>
                         <div style="font-size:.7rem;color:#6b7280;">Severidad: ${htmlEscape(d.severity)} · Estado: ${htmlEscape(d.status)}${d.jira_key ? ' · Jira: ' + (d.jira_url ? `<a href="${htmlEscape(d.jira_url)}" target="_blank" style="color:#2563eb;font-weight:600;text-decoration:none;">${htmlEscape(d.jira_key)} ↗</a>` : htmlEscape(d.jira_key)) : ''}</div>
                         ${d.actual_result ? `<div style="font-size:.72rem;margin-top:3px;"><strong>Obtenido:</strong> ${htmlEscape(d.actual_result)}</div>` : ''}
-                        ${defEvid ? `<div style="margin-top:4px;">${defEvid}</div>` : ''}
+                        ${defEvidBlock}
                     </div>`;
                 }).join('');
 
@@ -1793,7 +1930,7 @@ router.get('/reports/status', async (req, res) => {
                     <div style="font-size:.7rem;color:#6b7280;margin-top:2px;">Tester: ${htmlEscape(e.tester || '—')} · ${fmtReportDate(e.executed_at)}</div>
                     ${e.obtained_result ? `<div style="font-size:.74rem;margin-top:4px;"><strong>Obtenido:</strong> ${htmlEscape(e.obtained_result)}</div>` : ''}
                     ${e.observations ? `<div style="font-size:.74rem;margin-top:2px;"><strong>Observaciones:</strong> ${htmlEscape(e.observations)}</div>` : ''}
-                    ${evidHTML ? `<div style="margin-top:5px;">${evidHTML}</div>` : ''}
+                    ${evidBlock}
                     ${execDefects.length > 0 ? `<div style="margin-top:6px;"><div style="font-size:.66rem;font-weight:700;color:#6b7280;text-transform:uppercase;">Defectos (${execDefects.length})</div>${defectsHTML}</div>` : ''}
                     ${historyHTML}
                 </div>`;
@@ -1829,10 +1966,14 @@ router.get('/reports/status', async (req, res) => {
                 </div>`;
             }).join('');
 
-            sessionsHTML += `<div style="margin-bottom:18px;">
-                <div style="background:#eef2ff;border-radius:8px;padding:12px 14px;margin-bottom:8px;border-left:4px solid #4f46e5;">
-                    <div style="font-weight:800;font-size:.9rem;">#${run.id} · ${htmlEscape(run.name || 'Sesión exploratoria')}</div>
-                    <div style="font-size:.72rem;color:#4b5563;margin-top:2px;">${htmlEscape(run.charter || '')}</div>
+            sessionsHTML += `<details style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;margin-bottom:12px;">
+                <summary style="cursor:pointer;padding:10px 14px;font-size:.76rem;font-weight:700;color:#111827;">
+                    Detalle de la sesión #${run.id} · ${htmlEscape(run.name || 'Sesión exploratoria')}
+                    <span style="float:right;font-size:.64rem;font-weight:400;color:#6b7280;">${runExecs.length} test(s) en el rango · ${runHallazgos.length} hallazgo(s)</span>
+                </summary>
+                <div style="border-top:1px solid #e5e7eb;padding:12px 14px;">
+                <div style="background:#f8fafc;border-radius:8px;padding:10px 12px;margin-bottom:10px;border-left:3px solid #4f46e5;">
+                    <div style="font-size:.72rem;color:#4b5563;">${htmlEscape(run.charter || '')}</div>
                     <div style="font-size:.68rem;color:#6b7280;margin-top:2px;">${fmtReportDate(run.started_at)} → ${run.finished_at ? fmtReportDate(run.finished_at) : 'en curso'} · ${runExecs.length} tests en el rango · ${runHallazgos.length} hallazgos</div>
                     <div style="font-size:.68rem;color:#4b5563;margin-top:2px;">
                         Plan: ${run.planned_start_at ? fmtReportDate(run.planned_start_at) : 'sin definir'} → ${run.planned_end_at ? fmtReportDate(run.planned_end_at) : 'sin definir'}
@@ -1885,55 +2026,101 @@ router.get('/reports/status', async (req, res) => {
                 </div>
                 ${testsHTML || '<div style="font-size:.74rem;color:#6b7280;padding:4px 0;">Sin tests ejecutados en el rango.</div>'}
                 ${runHallazgos.length > 0 ? `<div style="margin-top:6px;"><div style="font-size:.66rem;font-weight:700;color:#6b7280;text-transform:uppercase;">Hallazgos (${runHallazgos.length})</div>${hallazgosHTML}</div>` : ''}
-            </div>`;
+                </div>
+            </details>`;
         }
+
+        const sessionsSummaryHTML = summaryRows === '' ? '' : `<div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:14px 16px;margin-bottom:18px;">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:8px;">
+                <div style="font-size:.64rem;font-weight:800;color:#6b7280;text-transform:uppercase;letter-spacing:.06em;">Resumen por sesión</div>
+                <div style="font-size:.66rem;color:#6b7280;">Aceptación total = OK / total de TC (pendientes incluidos)</div>
+            </div>
+            <div style="overflow-x:auto;">
+                <table style="width:100%;border-collapse:collapse;font-size:.7rem;">
+                    <thead>
+                        <tr style="background:#f9fafb;">
+                            <th style="text-align:left;padding:6px 10px;font-size:.6rem;text-transform:uppercase;color:#6b7280;border-bottom:1px solid #e5e7eb;">Sesión</th>
+                            <th style="text-align:left;padding:6px 10px;font-size:.6rem;text-transform:uppercase;color:#6b7280;border-bottom:1px solid #e5e7eb;">Plan</th>
+                            <th style="text-align:left;padding:6px 10px;font-size:.6rem;text-transform:uppercase;color:#6b7280;border-bottom:1px solid #e5e7eb;">Límite</th>
+                            <th style="text-align:left;padding:6px 10px;font-size:.6rem;text-transform:uppercase;color:#6b7280;border-bottom:1px solid #e5e7eb;">Avance</th>
+                            <th style="text-align:left;padding:6px 10px;font-size:.6rem;text-transform:uppercase;color:#6b7280;border-bottom:1px solid #e5e7eb;">Resultados</th>
+                            <th style="text-align:left;padding:6px 10px;font-size:.6rem;text-transform:uppercase;color:#6b7280;border-bottom:1px solid #e5e7eb;">Aceptación</th>
+                            <th style="text-align:center;padding:6px 10px;font-size:.6rem;text-transform:uppercase;color:#6b7280;border-bottom:1px solid #e5e7eb;">Cob. TC</th>
+                            <th style="text-align:center;padding:6px 10px;font-size:.6rem;text-transform:uppercase;color:#6b7280;border-bottom:1px solid #e5e7eb;">Hallazgos</th>
+                        </tr>
+                    </thead>
+                    <tbody>${summaryRows}</tbody>
+                </table>
+            </div>
+        </div>`;
 
         const testerLabel = testerName || 'Todos los testers';
         const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Reporte de estatus - Exploratoria</title>
         <style>body{font-family:'Segoe UI',system-ui,sans-serif;background:#f3f4f6;margin:0;padding:20px;color:#111827}
-        .header{background:linear-gradient(135deg,#4f46e5,#3730a3);color:#fff;border-radius:12px;padding:24px;margin-bottom:20px}
-        .header h1{margin:0 0 4px;font-size:1.3rem}.header p{margin:0;opacity:.9;font-size:.85rem}
-        .kpi{background:#fff;border-radius:8px;padding:12px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.1);border-top:3px solid #e5e7eb}
-        .kpi-val{font-size:1.35rem;font-weight:700}.kpi-lab{font-size:.62rem;color:#6b7280;text-transform:uppercase}
-        .charts{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:18px}
-        .chart-card{background:#fff;border-radius:10px;padding:14px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
-        .chart-card--donut{flex:0 0 300px}
-        .chart-card--bars{flex:1;min-width:300px}
-        .chart-title{font-size:.66rem;font-weight:800;color:#6b7280;text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px}
+        .header{background:linear-gradient(135deg,#4f46e5,#3730a3);color:#fff;border-radius:12px;padding:22px 24px;margin-bottom:16px}
+        .header h1{margin:0 0 4px;font-size:1.25rem}.header p{margin:0;opacity:.9;font-size:.8rem}
+        .kpi{background:#fff;border-radius:10px;padding:14px;text-align:left;box-shadow:0 1px 3px rgba(0,0,0,.08);border-top:3px solid #e5e7eb}
+        .kpi-val{font-size:1.5rem;font-weight:800;line-height:1.1}.kpi-lab{font-size:.62rem;color:#6b7280;text-transform:uppercase;letter-spacing:.04em;margin-top:2px}
+        .kpi-sub{font-size:.66rem;color:#6b7280;margin-top:4px}
         .footer{text-align:center;padding:16px;color:#6b7280;font-size:.72rem}
-        @media print{body{background:#fff;padding:0}.kpi,.chart-card{box-shadow:none;border:1px solid #e5e7eb}}</style></head><body>
+        details summary::-webkit-details-marker{display:none}
+        @media print{body{background:#fff;padding:0}.kpi{box-shadow:none;border:1px solid #e5e7eb}}</style></head><body>
         <div class="header">
             <h1>Reporte de estatus — Exploratoria</h1>
-            <p>${htmlEscape(project.name)} · ${htmlEscape(testerLabel)} · ${from} → ${to}</p>
+            <p>${htmlEscape(project.name)} · ${htmlEscape(testerLabel)} · ${from} → ${to} · generado ${new Date().toLocaleString('es-AR', { timeZone: REPORT_TZ })}</p>
         </div>
-        <div style="display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap;">
-            <div class="kpi"><div class="kpi-val">${runIds.length}</div><div class="kpi-lab">Sesiones</div></div>
-            <div class="kpi"><div class="kpi-val">${coveredCount}/${runsById.size}</div><div class="kpi-lab">Cobertura TC</div></div>
-            <div class="kpi"><div class="kpi-val">${execs.rows.length}</div><div class="kpi-lab">Tests ejecutados</div></div>
-            <div class="kpi" title="OK / (OK + FAIL + WARNING) en las sesiones incluidas. Calidad de lo probado."><div class="kpi-val" style="color:${acceptanceColor(acceptanceEvaluatedPct)}">${acceptanceEvaluatedPct === null ? '—' : `${acceptanceEvaluatedPct}%`}</div><div class="kpi-lab">Aceptación evaluada</div></div>
-            <div class="kpi" title="OK / total de TC de las sesiones incluidas. Pendientes, BLOCK y SKIP cuentan como no aceptados."><div class="kpi-val" style="color:${acceptanceColor(acceptanceTotalPct)}">${acceptanceTotalPct === null ? '—' : `${acceptanceTotalPct}%`}</div><div class="kpi-lab">Aceptación total</div></div>
-            <div class="kpi"><div class="kpi-val">${counts.OK}</div><div class="kpi-lab">OK</div></div>
-            <div class="kpi"><div class="kpi-val">${counts.FAIL}</div><div class="kpi-lab">FAIL</div></div>
-            <div class="kpi"><div class="kpi-val">${counts.WARNING}</div><div class="kpi-lab">WARNING</div></div>
-            <div class="kpi"><div class="kpi-val">${counts.BLOCK}</div><div class="kpi-lab">BLOCK</div></div>
-            <div class="kpi"><div class="kpi-val">${counts.SKIP}</div><div class="kpi-lab">SKIP</div></div>
-            <div class="kpi" title="Flujos sin ejecutar en las sesiones del reporte"><div class="kpi-val">${totalPending}</div><div class="kpi-lab">Pendientes</div></div>
-            <div class="kpi" title="Cambios de fecha límite registrados con justificación"><div class="kpi-val">${totalExtensions}</div><div class="kpi-lab">Postergaciones</div></div>
-            <div class="kpi" title="Cambios de inicio/fin planificado registrados con justificación"><div class="kpi-val">${totalPlanChanges}</div><div class="kpi-lab">Cambios de plan</div></div>
-            <div class="kpi" title="Bloqueos de testing por fuerza mayor (no modifican las fechas)"><div class="kpi-val">${totalBlocks}</div><div class="kpi-lab">Bloqueos</div></div>
-            <div class="kpi" title="Tiempo total bloqueado por fuerza mayor en el rango"><div class="kpi-val">${totalBlockedDays}</div><div class="kpi-lab">Días bloqueados</div></div>
-            <div class="kpi" title="Transiciones de estado registradas en el rango (incluye re-tests)"><div class="kpi-val">${totalTransitions}</div><div class="kpi-lab">Re-tests</div></div>
-            <div class="kpi"><div class="kpi-val">${hallazgos.rows.length}</div><div class="kpi-lab">Hallazgos</div></div>
-            <div class="kpi"><div class="kpi-val">${defects.rows.length}</div><div class="kpi-lab">Defectos</div></div>
+
+        <div style="background:${verdictTone === 'ok' ? '#f0fdf4' : verdictTone === 'warn' ? '#fffbeb' : '#fef2f2'};border:1px solid ${verdictTone === 'ok' ? '#bbf7d0' : verdictTone === 'warn' ? '#fde68a' : '#fecaca'};border-left:6px solid ${verdictTone === 'ok' ? '#16a34a' : verdictTone === 'warn' ? '#d97706' : '#dc2626'};border-radius:10px;padding:14px 16px;margin-bottom:14px;">
+            <div style="font-size:.62rem;font-weight:800;color:#6b7280;text-transform:uppercase;letter-spacing:.06em;">Veredicto del período</div>
+            <div style="font-size:1.05rem;font-weight:800;color:${verdictTone === 'ok' ? '#15803d' : verdictTone === 'warn' ? '#b45309' : '#b91c1c'};margin-top:2px;">
+                ${verdictTone === 'ok' ? '✓' : verdictTone === 'warn' ? '⚠' : '✕'} ${htmlEscape(verdictLabel)}
+            </div>
+            <div style="font-size:.74rem;color:#4b5563;margin-top:2px;">${htmlEscape(verdictDetail)}</div>
         </div>
-        <div style="font-size:.68rem;color:#6b7280;margin:-8px 0 14px 2px;">
-            <strong>Aceptación evaluada</strong> = OK / (OK + FAIL + WARNING): calidad de lo ya probado.
-            <strong>Aceptación total</strong> = OK / total de TC: los pendientes, BLOCK y SKIP cuentan
-            como no aceptados, para no declarar 100% con el regresivo incompleto.
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-bottom:6px;">
+            <div class="kpi" style="border-top-color:${coveredCount === runsById.size ? '#16a34a' : '#d97706'};">
+                <div class="kpi-val" style="color:${coveredCount === runsById.size ? '#15803d' : '#b45309'};">${coveredCount}/${runsById.size}</div>
+                <div class="kpi-lab">Cobertura del regresivo</div>
+                <div class="kpi-sub">${coveragePct === null ? 'Sin sesiones' : `${coveragePct}% de sesiones con TC declarados`}</div>
+            </div>
+            <div class="kpi" style="border-top-color:${acceptanceColor(acceptanceTotalPct)};">
+                <div class="kpi-val" style="color:${acceptanceColor(acceptanceTotalPct)};">${acceptanceTotalPct === null ? '—' : `${acceptanceTotalPct}%`}</div>
+                <div class="kpi-lab">Aceptación total</div>
+                <div class="kpi-sub">${sessionTotals.ok} OK de ${sessionTotals.total} TC · pendientes incluidos</div>
+            </div>
+            <div class="kpi" style="border-top-color:${acceptanceColor(acceptanceEvaluatedPct)};">
+                <div class="kpi-val" style="color:${acceptanceColor(acceptanceEvaluatedPct)};">${acceptanceEvaluatedPct === null ? '—' : `${acceptanceEvaluatedPct}%`}</div>
+                <div class="kpi-lab">Aceptación evaluada</div>
+                <div class="kpi-sub">Calidad de lo ya probado</div>
+            </div>
+            <div class="kpi" style="border-top-color:${sessionTotals.pending > 0 ? '#d97706' : '#16a34a'};">
+                <div class="kpi-val" style="color:${sessionTotals.pending > 0 ? '#b45309' : '#15803d'};">${sessionTotals.pending}</div>
+                <div class="kpi-lab">TC pendientes</div>
+                <div class="kpi-sub">${sessionTotals.executed}/${sessionTotals.total} ejecutados</div>
+            </div>
+            <div class="kpi" style="border-top-color:${counts.FAIL > 0 ? '#dc2626' : '#16a34a'};">
+                <div class="kpi-val" style="color:${sessionTotals.fail > 0 ? '#dc2626' : '#15803d'};">${sessionTotals.fail}</div>
+                <div class="kpi-lab">TC en FAIL</div>
+                <div class="kpi-sub">${counts.FAIL} fallo(s) en el rango · estado actual de las sesiones</div>
+            </div>
+            <div class="kpi" style="border-top-color:#4f46e5;">
+                <div class="kpi-val" style="color:#4f46e5;">${hallazgos.rows.length}</div>
+                <div class="kpi-lab">Hallazgos</div>
+                <div class="kpi-sub">${defects.rows.length} defecto(s) de ejecución</div>
+            </div>
         </div>
-        ${coverageAlertHTML}
-        ${chartsHTML}
+        <div style="font-size:.64rem;color:#6b7280;margin:6px 0 16px 2px;">
+            <strong>Aceptación total</strong> = OK / total de TC (pendientes, BLOCK y SKIP cuentan como no aceptados).
+            <strong>Aceptación evaluada</strong> = OK / (OK + FAIL + WARNING): calidad de lo probado.
+        </div>
+
+        ${alertsHTML}
+        ${sessionsSummaryHTML}
+        ${distributionHTML}
         ${transitionsHTML}
+
+        <div style="font-size:.64rem;font-weight:800;color:#6b7280;text-transform:uppercase;letter-spacing:.06em;margin:4px 2px 8px;">Detalle por sesión</div>
         ${sessionsHTML || '<div style="text-align:center;padding:40px;color:#6b7280;">Sin actividad en el rango seleccionado.</div>'}
         ${omittedEvidence > 0 ? `<div style="text-align:center;padding:8px;color:#b45309;font-size:.72rem;">${omittedEvidence} evidencia(s) no disponible(s) en esta máquina: se omitieron del reporte.</div>` : ''}
         <div class="footer">Reporte generado automáticamente | ${new Date().toLocaleString('es-AR', { timeZone: REPORT_TZ })}</div>
