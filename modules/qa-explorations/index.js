@@ -96,6 +96,7 @@ router.get('/sessions', async (req, res) => {
                     r.total_flows AS flow_count,
                     r.ok_count, r.fail_count, r.warning_count, r.block_count,
                     r.skip_count, r.pending_count, r.coverage_ready, r.deadline_at,
+                    r.planned_start_at, r.planned_end_at,
                     (SELECT COUNT(*) FROM qa_defects d
                       WHERE d.exploratory_run_id = r.id AND d.execution_id IS NULL) AS hallazgo_count
                FROM qa_test_runs r
@@ -113,17 +114,30 @@ router.get('/sessions', async (req, res) => {
 // ── POST /api/explorations/sessions ───────────────────────────────────────────
 router.post('/sessions', async (req, res) => {
     try {
-        const { name, charter, timebox_minutes, use_case_id, deadline_at } = req.body;
+        const {
+            name, charter, timebox_minutes, use_case_id,
+            planned_start_at, planned_end_at, deadline_at,
+        } = req.body;
         const projectId = req.body.project_id;
         if (!projectId) return res.status(400).json({ error: 'project_id requerido' });
         if (!name || !name.trim()) return res.status(400).json({ error: 'name requerido' });
 
-        const deadline = deadline_at ? new Date(deadline_at) : null;
-        if (!deadline || Number.isNaN(deadline.getTime())) {
-            return res.status(400).json({ error: 'La fecha límite (deadline_at) es obligatoria' });
+        // Ventana planificada: inicio y fin definidos al crear la sesión.
+        // `deadline_at` se acepta como alias de `planned_end_at` para no
+        // romper clientes anteriores.
+        const plannedStart = planned_start_at ? new Date(planned_start_at) : new Date();
+        if (Number.isNaN(plannedStart.getTime())) {
+            return res.status(400).json({ error: 'El inicio planificado (planned_start_at) no es válido' });
         }
-        if (deadline.getTime() <= Date.now()) {
-            return res.status(400).json({ error: 'La fecha límite debe ser futura' });
+        const plannedEnd = planned_end_at || deadline_at ? new Date(planned_end_at || deadline_at) : null;
+        if (!plannedEnd || Number.isNaN(plannedEnd.getTime())) {
+            return res.status(400).json({ error: 'El fin planificado (planned_end_at) es obligatorio' });
+        }
+        if (plannedEnd.getTime() <= plannedStart.getTime()) {
+            return res.status(400).json({ error: 'El fin planificado debe ser posterior al inicio planificado' });
+        }
+        if (plannedEnd.getTime() <= Date.now()) {
+            return res.status(400).json({ error: 'El fin planificado debe ser futuro' });
         }
 
         const { suiteId } = await ensureExploratoriaSuite(projectId, use_case_id, req.user.id);
@@ -131,13 +145,23 @@ router.post('/sessions', async (req, res) => {
         const ins = await query(
             `INSERT INTO qa_test_runs
                 (suite_id, project_id, status, created_by, run_type, name, charter, timebox_minutes,
-                 deadline_at, last_resume_at, accumulated_seconds)
-             VALUES (?, ?, 'RUNNING', ?, 'EXPLORATORY', ?, ?, ?, ?, CURRENT_TIMESTAMP, 0)
+                 planned_start_at, planned_end_at, deadline_at, last_resume_at, accumulated_seconds)
+             VALUES (?, ?, 'RUNNING', ?, 'EXPLORATORY', ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, 0)
              RETURNING id`,
-            [suiteId, projectId, req.user.id, name.trim(), charter || '', timebox_minutes || null, deadline]
+            [
+                suiteId, projectId, req.user.id, name.trim(), charter || '', timebox_minutes || null,
+                plannedStart, plannedEnd, plannedEnd,
+            ]
         );
         const runId = ins.rows[0].id;
-        res.json({ ok: true, run_id: runId, suite_id: suiteId });
+        res.json({
+            ok: true,
+            run_id: runId,
+            suite_id: suiteId,
+            planned_start_at: plannedStart,
+            planned_end_at: plannedEnd,
+            deadline_at: plannedEnd,
+        });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -1107,7 +1131,8 @@ router.get('/reports/status', async (req, res) => {
             ...hallazgos.rows.map(h => h.exploratory_run_id),
         ])];
         const runsRes = runIds.length === 0 ? { rows: [] } : await query(`
-            SELECT id, name, charter, started_at, finished_at, status, coverage_ready, deadline_at
+            SELECT id, name, charter, started_at, finished_at, status, coverage_ready, deadline_at,
+                   planned_start_at, planned_end_at
               FROM qa_test_runs WHERE id IN (${runIds.map(() => '?').join(',')})
         `, runIds);
         const runsById = new Map(runsRes.rows.map(r => [r.id, r]));
@@ -1365,6 +1390,9 @@ router.get('/reports/status', async (req, res) => {
                     <div style="font-weight:800;font-size:.9rem;">#${run.id} · ${htmlEscape(run.name || 'Sesión exploratoria')}</div>
                     <div style="font-size:.72rem;color:#4b5563;margin-top:2px;">${htmlEscape(run.charter || '')}</div>
                     <div style="font-size:.68rem;color:#6b7280;margin-top:2px;">${fmtReportDate(run.started_at)} → ${run.finished_at ? fmtReportDate(run.finished_at) : 'en curso'} · ${runExecs.length} tests en el rango · ${runHallazgos.length} hallazgos</div>
+                    <div style="font-size:.68rem;color:#4b5563;margin-top:2px;">
+                        Plan: ${run.planned_start_at ? fmtReportDate(run.planned_start_at) : 'sin definir'} → ${run.planned_end_at ? fmtReportDate(run.planned_end_at) : 'sin definir'}
+                    </div>
                     <div style="font-size:.68rem;margin-top:2px;color:${run.deadline_at && new Date(run.deadline_at) < new Date() ? '#dc2626' : '#4b5563'};">
                         Límite: ${run.deadline_at ? fmtReportDate(run.deadline_at) : 'sin definir'}${run.deadline_at && new Date(run.deadline_at) < new Date() ? ' · VENCIDA' : ''}
                     </div>
@@ -1383,7 +1411,7 @@ router.get('/reports/status', async (req, res) => {
                     })()}</div>
                     ${(() => {
                         const runExts = extensionsByRun.get(run.id) || [];
-                        const original = runExts[0]?.previous_deadline || run.deadline_at;
+                        const original = runExts[0]?.previous_deadline || run.planned_end_at || run.deadline_at;
                         const current = runExts[runExts.length - 1]?.new_deadline || run.deadline_at;
                         return `<div style="margin-top:6px;border-top:1px dashed #e5e7eb;padding-top:6px;">
                             <div style="font-size:.64rem;font-weight:700;color:#6b7280;text-transform:uppercase;">Trazabilidad de fecha límite</div>

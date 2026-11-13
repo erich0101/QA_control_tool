@@ -334,8 +334,12 @@ export interface ExploratorySession {
   coverage_ready?: boolean;
   coverage_ready_at?: string | null;
   coverage_ready_by?: number | null;
-  /** Fecha límite de la sesión (obligatoria desde esta versión). */
+  /** Fecha límite vigente de la sesión (obligatoria desde esta versión). */
   deadline_at?: string | null;
+  /** Inicio planificado definido al crear la sesión. */
+  planned_start_at?: string | null;
+  /** Fin planificado original; no cambia al extender la fecha límite. */
+  planned_end_at?: string | null;
 }
 
 export interface ExploratoryFlow {

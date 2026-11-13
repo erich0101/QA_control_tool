@@ -203,6 +203,9 @@ export const ExploratoriaTab = {
         const timebox = s.timebox_minutes ? `<span class="expl-timebox-pill">⏱️ ${s.timebox_minutes} min</span>` : '';
         const creator = UI.escapeHTML(s.creator_name || '—');
         const startedAt = s.started_at ? new Date(s.started_at).toLocaleString() : '';
+        const plan = s.planned_start_at || s.planned_end_at
+            ? `<span title="Ventana planificada">🗓 ${s.planned_start_at ? new Date(s.planned_start_at).toLocaleDateString() : '—'} → ${s.planned_end_at ? new Date(s.planned_end_at).toLocaleDateString() : '—'}</span>`
+            : '';
 
         const selectedStyle = isActive ? `
             background: var(--apple-indigo-soft);
@@ -227,6 +230,7 @@ export const ExploratoriaTab = {
                     ${charter}${timebox}
                     <span style="color: var(--apple-label-tertiary);">·</span>
                     <span>👤 ${creator}</span>
+                    ${plan ? `<span style="color: var(--apple-label-tertiary);">·</span> ${plan}` : ''}
                     <span style="color: var(--apple-label-tertiary);">·</span>
                     <span style="color: var(--apple-blue);">🧪</span> ${s.flow_count || 0} flujos${(s.fail_count || 0) > 0 ? ` <span style="color: var(--apple-label-tertiary);">·</span> <span style="color: var(--apple-red); font-weight:700;">${s.fail_count} FAIL</span>` : ''}
                 </div>
@@ -338,6 +342,9 @@ export const ExploratoriaTab = {
         const creator = UI.escapeHTML(run.creator_name || '—');
         const startedAt = run.started_at ? new Date(run.started_at).toLocaleString() : '—';
         const finishedAt = run.finished_at ? new Date(run.finished_at).toLocaleString() : '—';
+        const plannedWindow = run.planned_start_at || run.planned_end_at
+            ? `<span style="font-size: 0.7rem; color: var(--apple-label-tertiary);" title="Ventana planificada">🗓 Plan: ${run.planned_start_at ? new Date(run.planned_start_at).toLocaleString() : '—'} → ${run.planned_end_at ? new Date(run.planned_end_at).toLocaleString() : '—'}</span>`
+            : '';
 
         // Cargar la lista de sesiones para el sidebar (necesaria para mantener la
         // navegación persistente mientras el usuario navega de detalle en detalle).
@@ -399,6 +406,7 @@ export const ExploratoriaTab = {
                             <span class="expl-status-badge ${statusCls}">${UI.escapeHTML(run.status)}</span>
                             ${charter}
                             ${timebox}
+                            ${plannedWindow}
                             <span style="font-size: 0.7rem; color: var(--apple-label-tertiary);">👤 ${creator}</span>
                             <span style="font-size: 0.7rem; color: var(--apple-label-tertiary);">🟢 ${UI.escapeHTML(startedAt)}</span>
                             ${isFinished ? `<span style="font-size: 0.7rem; color: var(--apple-label-tertiary);">🏁 ${UI.escapeHTML(finishedAt)}</span>` : ''}
@@ -1556,6 +1564,12 @@ export const ExploratoriaTab = {
 
     showStartSessionModal(container) {
         const projectId = Store.state.activeProjectId;
+        const pad = (v) => String(v).padStart(2, '0');
+        const toLocalInput = (d) =>
+            `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+        const now = new Date();
+        const endDefault = new Date(now.getTime() + 7 * 86400000);
+        endDefault.setHours(18, 0, 0, 0);
         this.openLocalModal('Nueva sesión de testing exploratorio', `
             <div style="display: flex; flex-direction: column; gap: 14px; margin-top: 14px;">
                 <div class="field-group">
@@ -1566,6 +1580,16 @@ export const ExploratoriaTab = {
                     <label class="field-label">Charter / misión</label>
                     <textarea id="expl-ms-charter" placeholder="¿Qué vas a explorar?" style="width: 100%; min-height: 70px;"></textarea>
                 </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div class="field-group">
+                        <label class="field-label">Inicio planificado *</label>
+                        <input type="datetime-local" id="expl-ms-start" value="${toLocalInput(now)}" style="width: 100%;" />
+                    </div>
+                    <div class="field-group">
+                        <label class="field-label">Fin planificado *</label>
+                        <input type="datetime-local" id="expl-ms-end" value="${toLocalInput(endDefault)}" style="width: 100%;" />
+                    </div>
+                </div>
                 <div class="field-group">
                     <label class="field-label">Timebox (minutos)</label>
                     <input type="number" id="expl-ms-timebox" placeholder="Opcional" min="1" style="width: 100%;" />
@@ -1575,14 +1599,24 @@ export const ExploratoriaTab = {
             const name = dialog.querySelector('#expl-ms-name').value.trim();
             const charter = dialog.querySelector('#expl-ms-charter').value.trim();
             const timeboxRaw = dialog.querySelector('#expl-ms-timebox').value.trim();
+            const startRaw = dialog.querySelector('#expl-ms-start').value;
+            const endRaw = dialog.querySelector('#expl-ms-end').value;
             if (!name) { UI.toast('⚠️ Ingresá un nombre', 'error'); return false; }
+            if (!startRaw || !endRaw) { UI.toast('⚠️ Definí inicio y fin planificados', 'error'); return false; }
+            if (new Date(endRaw).getTime() <= new Date(startRaw).getTime()) {
+                UI.toast('⚠️ El fin planificado debe ser posterior al inicio', 'error');
+                return false;
+            }
             try {
                 UI.showLoading();
                 const res = await ApiService.startExploratorySession({
                     project_id: projectId,
                     name,
                     charter,
-                    timebox_minutes: timeboxRaw ? parseInt(timeboxRaw, 10) : null
+                    timebox_minutes: timeboxRaw ? parseInt(timeboxRaw, 10) : null,
+                    planned_start_at: new Date(startRaw).toISOString(),
+                    planned_end_at: new Date(endRaw).toISOString(),
+                    deadline_at: new Date(endRaw).toISOString()
                 });
                 invalidateTabCache('exploratoria::active', projectId);
                 invalidateTabCache('exploratoria::detail', projectId);

@@ -41,11 +41,19 @@ export function StartSessionDialog({
     name: string;
     charter: string;
     timebox_minutes: number | null;
+    planned_start_at: string;
+    planned_end_at: string;
     deadline_at: string;
   }) => Promise<void>;
 }) {
-  const { register, handleSubmit, reset, formState } = useForm({
-    defaultValues: { name: '', charter: '', timebox: '', deadline: defaultDeadlineInput() },
+  const { register, handleSubmit, reset, getValues, formState } = useForm({
+    defaultValues: {
+      name: '',
+      charter: '',
+      timebox: '',
+      start: nowInput(),
+      end: defaultDeadlineInput(),
+    },
   });
 
   useEffect(() => {
@@ -54,16 +62,20 @@ export function StartSessionDialog({
       name: '',
       charter: '',
       timebox: '',
-      deadline: defaultDeadlineInput(),
+      start: nowInput(),
+      end: defaultDeadlineInput(),
     });
   }, [open, reset]);
 
   const submit = handleSubmit(async (values) => {
+    const plannedEnd = new Date(values.end).toISOString();
     await onSubmit({
       name: values.name.trim(),
       charter: values.charter.trim(),
       timebox_minutes: values.timebox ? Number(values.timebox) : null,
-      deadline_at: new Date(values.deadline).toISOString(),
+      planned_start_at: new Date(values.start).toISOString(),
+      planned_end_at: plannedEnd,
+      deadline_at: plannedEnd,
     });
     reset();
     onOpenChange(false);
@@ -75,7 +87,8 @@ export function StartSessionDialog({
         <DialogHeader>
           <DialogTitle>Nueva sesión exploratoria</DialogTitle>
           <DialogDescription>
-            Definí el charter (misión), la fecha límite obligatoria y, si querés, un timebox.
+            Definí la ventana planificada (inicio y fin), el charter (misión) y, si querés, un timebox.
+            El fin planificado es la fecha límite inicial de la sesión.
           </DialogDescription>
         </DialogHeader>
 
@@ -98,22 +111,38 @@ export function StartSessionDialog({
             />
           </Field>
 
-          <Field
-            label="Fecha límite"
-            htmlFor="session-deadline"
-            error={formState.errors.deadline?.message}
-          >
-            <Input
-              id="session-deadline"
-              type="datetime-local"
-              min={nowInput()}
-              {...register('deadline', {
-                required: 'La fecha límite es obligatoria',
-                validate: (value) =>
-                  new Date(value).getTime() > Date.now() || 'La fecha límite debe ser futura',
-              })}
-            />
-          </Field>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Field
+              label="Inicio planificado"
+              htmlFor="session-start"
+              error={formState.errors.start?.message}
+            >
+              <Input
+                id="session-start"
+                type="datetime-local"
+                {...register('start', { required: 'El inicio planificado es obligatorio' })}
+              />
+            </Field>
+
+            <Field
+              label="Fin planificado"
+              htmlFor="session-end"
+              error={formState.errors.end?.message}
+            >
+              <Input
+                id="session-end"
+                type="datetime-local"
+                min={nowInput()}
+                {...register('end', {
+                  required: 'El fin planificado es obligatorio',
+                  validate: (value) =>
+                    new Date(value).getTime() > new Date(getValues('start')).getTime() ||
+                    'El fin debe ser posterior al inicio',
+                  deps: 'start',
+                })}
+              />
+            </Field>
+          </div>
 
           <Field label="Timebox (minutos)" htmlFor="session-timebox" hint="Opcional">
             <Input id="session-timebox" type="number" min={1} placeholder="Ej: 60" {...register('timebox')} />

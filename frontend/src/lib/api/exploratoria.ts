@@ -6,7 +6,11 @@ export interface StartSessionInput {
   name: string;
   charter?: string;
   timebox_minutes?: number | null;
-  /** Fecha límite obligatoria (ISO). */
+  /** Inicio planificado (ISO). */
+  planned_start_at: string;
+  /** Fin planificado (ISO). Es el límite inicial de la sesión. */
+  planned_end_at: string;
+  /** Fecha límite obligatoria (ISO). Igual a planned_end_at al crear. */
   deadline_at: string;
 }
 

@@ -322,6 +322,8 @@ export function ExploratoriaPage() {
             name: values.name,
             charter: values.charter,
             timebox_minutes: values.timebox_minutes,
+            planned_start_at: values.planned_start_at,
+            planned_end_at: values.planned_end_at,
             deadline_at: values.deadline_at,
           });
           patchParams({ v: null, run: String(result.run_id) });
@@ -474,8 +476,25 @@ function SessionRow({
           {(session.fail_count ?? 0) > 0 ? (
             <span className="text-fail">{session.fail_count} FAIL</span>
           ) : null}
-          {session.started_at ? (
+          {session.planned_start_at || session.planned_end_at ? (
+            <span title="Ventana planificada">
+              🗓 {session.planned_start_at
+                ? new Date(session.planned_start_at).toLocaleDateString('es-AR')
+                : '—'}{' '}
+              →{' '}
+              {session.planned_end_at
+                ? new Date(session.planned_end_at).toLocaleDateString('es-AR')
+                : '—'}
+            </span>
+          ) : session.started_at ? (
             <span>{new Date(session.started_at).toLocaleDateString('es-AR')}</span>
+          ) : null}
+          {session.planned_end_at &&
+          session.deadline_at &&
+          new Date(session.deadline_at).getTime() > new Date(session.planned_end_at).getTime() ? (
+            <span className="text-warn" title="La fecha límite fue extendida respecto del plan">
+              + postergada
+            </span>
           ) : null}
         </p>
       </button>

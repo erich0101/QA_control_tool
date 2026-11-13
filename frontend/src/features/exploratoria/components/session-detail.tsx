@@ -329,6 +329,24 @@ export function SessionDetail({
         <div className="mt-1 flex flex-wrap items-center gap-3 text-caption text-fg-subtle">
           {run.charter ? <span>📜 {run.charter}</span> : null}
           {run.timebox_minutes ? <span>⏱ {run.timebox_minutes} min</span> : null}
+          {run.planned_start_at || run.planned_end_at ? (
+            <span title="Ventana planificada al crear la sesión">
+              🗓 Plan:{' '}
+              {run.planned_start_at
+                ? new Date(run.planned_start_at).toLocaleString('es-AR', {
+                    dateStyle: 'short',
+                    timeStyle: 'short',
+                  })
+                : '—'}{' '}
+              →{' '}
+              {run.planned_end_at
+                ? new Date(run.planned_end_at).toLocaleString('es-AR', {
+                    dateStyle: 'short',
+                    timeStyle: 'short',
+                  })
+                : '—'}
+            </span>
+          ) : null}
           <span
             className={cn(
               deadlineOverdue
@@ -412,7 +430,10 @@ export function SessionDetail({
               Original:{' '}
               <strong className="text-fg-muted">
                 {new Date(
-                  [...extensions].reverse()[0]?.previous_deadline ?? run.deadline_at ?? '',
+                  [...extensions].reverse()[0]?.previous_deadline ??
+                    run.planned_end_at ??
+                    run.deadline_at ??
+                    '',
                 ).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })}
               </strong>{' '}
               · Actual:{' '}

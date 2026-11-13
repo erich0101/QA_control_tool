@@ -68,6 +68,11 @@ await query(`ALTER TABLE qa_defects ADD COLUMN IF NOT EXISTS observations TEXT`)
         await query(`ALTER TABLE qa_test_runs ADD COLUMN IF NOT EXISTS coverage_ready_by INTEGER REFERENCES qa_users(id) ON DELETE SET NULL`);
         // Fecha límite obligatoria de la sesión exploratoria (con zona horaria).
         await query(`ALTER TABLE qa_test_runs ADD COLUMN IF NOT EXISTS deadline_at TIMESTAMPTZ`);
+        // Ventana planificada de la sesión: inicio y fin definidos al crearla.
+        // `planned_end_at` es el plan original y no se modifica cuando se
+        // extiende la fecha límite; `deadline_at` es el límite vigente.
+        await query(`ALTER TABLE qa_test_runs ADD COLUMN IF NOT EXISTS planned_start_at TIMESTAMPTZ`);
+        await query(`ALTER TABLE qa_test_runs ADD COLUMN IF NOT EXISTS planned_end_at TIMESTAMPTZ`);
         // Historial de extensiones de fecha (con justificación).
         await query(`
             CREATE TABLE IF NOT EXISTS qa_exploratory_extensions (
@@ -123,6 +128,24 @@ await query(`ALTER TABLE qa_defects ADD COLUMN IF NOT EXISTS observations TEXT`)
             UPDATE qa_test_runs
                SET deadline_at = COALESCE(started_at, CURRENT_TIMESTAMP) + INTERVAL '7 days'
              WHERE run_type = 'EXPLORATORY' AND deadline_at IS NULL
+        `);
+        // Backfill de la ventana planificada: inicio real y límite original
+        // (la primera postergación si existió; si no, el límite vigente).
+        await query(`
+            UPDATE qa_test_runs
+               SET planned_start_at = COALESCE(started_at, CURRENT_TIMESTAMP)
+             WHERE run_type = 'EXPLORATORY' AND planned_start_at IS NULL
+        `);
+        await query(`
+            UPDATE qa_test_runs r
+               SET planned_end_at = COALESCE(
+                     (SELECT MIN(e.previous_deadline)
+                        FROM qa_exploratory_extensions e
+                       WHERE e.run_id = r.id),
+                     r.deadline_at,
+                     r.planned_start_at
+                   )
+             WHERE r.run_type = 'EXPLORATORY' AND r.planned_end_at IS NULL
         `);
         // Hallazgos creados dentro de una sesión exploratoria (sin ejecución).
         await query(`ALTER TABLE qa_defects ADD COLUMN IF NOT EXISTS exploratory_run_id INTEGER REFERENCES qa_test_runs(id) ON DELETE CASCADE`);
