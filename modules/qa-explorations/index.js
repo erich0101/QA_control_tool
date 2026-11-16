@@ -1433,6 +1433,22 @@ router.get('/reports/status', async (req, res) => {
         const totalsByRun = new Map(runTotalsRes.rows.map(r => [r.run_id, r]));
         const totalPending = runTotalsRes.rows.reduce((acc, row) => acc + row.pending, 0);
 
+        // Pendientes por sesión: se listan para que el reporte no omita el
+        // estado PENDING aunque no tengan fecha de ejecución en el rango.
+        const pendingByRunRes = runIds.length === 0 ? { rows: [] } : await query(`
+            SELECT e.run_id, e.id AS execution_id, e.tc_id, tc.key_id, tc.title
+              FROM qa_executions e
+              JOIN qa_test_cases tc ON tc.id = e.tc_id
+             WHERE e.run_id IN (${runIds.map(() => '?').join(',')})
+               AND e.status = 'PENDING'
+             ORDER BY e.run_id, tc.id
+        `, runIds);
+        const pendingByRun = new Map();
+        for (const row of pendingByRunRes.rows) {
+            if (!pendingByRun.has(row.run_id)) pendingByRun.set(row.run_id, []);
+            pendingByRun.get(row.run_id).push(row);
+        }
+
         // Trazabilidad de fechas: postergaciones del límite y cambios de plan.
         const extRes = runIds.length === 0 ? { rows: [] } : await query(`
             SELECT e.run_id, e.field, e.previous_deadline, e.new_deadline, e.reason, e.created_at,
@@ -1713,8 +1729,10 @@ router.get('/reports/status', async (req, res) => {
             WARNING: { bg: '#fef3c7', fg: '#b45309', chart: '#d97706' },
             BLOCK: { bg: '#fff7ed', fg: '#c2410c', chart: '#f97316' },
             SKIP: { bg: '#e5e7eb', fg: '#4b5563', chart: '#94a3b8' },
+            PENDING: { bg: '#f3f4f6', fg: '#6b7280', chart: '#cbd5e1' },
         };
         const STATUS_ORDER = ['FAIL', 'WARNING', 'BLOCK', 'SKIP', 'OK'];
+        const DISTRIBUTION_ORDER = ['OK', 'FAIL', 'WARNING', 'BLOCK', 'SKIP', 'PENDING'];
 
         const counts = { OK: 0, FAIL: 0, WARNING: 0, BLOCK: 0, SKIP: 0 };
         for (const e of execs.rows) {
@@ -1735,30 +1753,50 @@ router.get('/reports/status', async (req, res) => {
         }
 
         const statusTotal = STATUS_ORDER.reduce((acc, status) => acc + (counts[status] || 0), 0);
-        const distributionHTML = `<div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:14px 16px;margin-bottom:18px;">
-            <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:8px;">
-                <div style="font-size:.64rem;font-weight:800;color:#6b7280;text-transform:uppercase;letter-spacing:.06em;">Distribución de resultados</div>
-                <div style="font-size:.68rem;color:#6b7280;">${totalTests} ejecución(es) en el rango</div>
-            </div>
-            ${statusTotal === 0 ? '<div style="font-size:.72rem;color:#6b7280;">Sin ejecuciones en el rango.</div>' : `
-                <div style="display:flex;height:16px;border-radius:8px;overflow:hidden;background:#eef2f7;">
-                    ${STATUS_ORDER.map((status) => {
-                        const value = counts[status] || 0;
+        const accumulatedCounts = {
+            OK: sessionTotals.ok,
+            FAIL: sessionTotals.fail,
+            WARNING: sessionTotals.warning,
+            BLOCK: sessionTotals.block,
+            SKIP: sessionTotals.skip,
+            PENDING: sessionTotals.pending,
+        };
+        const distributionBar = (statusCounts, total) => {
+            const sum = DISTRIBUTION_ORDER.reduce((acc, status) => acc + (statusCounts[status] || 0), 0) || total;
+            if (!sum) return '<div style="font-size:.72rem;color:#6b7280;">Sin datos para mostrar.</div>';
+            return `<div style="display:flex;height:16px;border-radius:8px;overflow:hidden;background:#eef2f7;">
+                    ${DISTRIBUTION_ORDER.map((status) => {
+                        const value = statusCounts[status] || 0;
                         if (!value) return '';
-                        return `<div title="${status}: ${value}" style="width:${(value / statusTotal) * 100}%;background:${STATUS_STYLE[status].chart};"></div>`;
+                        return `<div title="${status}: ${value}" style="width:${(value / sum) * 100}%;background:${STATUS_STYLE[status].chart};"></div>`;
                     }).join('')}
                 </div>
                 <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:10px;">
-                    ${STATUS_ORDER.map((status) => {
-                        const value = counts[status] || 0;
-                        const pct = statusTotal > 0 ? Math.round((value / statusTotal) * 100) : 0;
+                    ${DISTRIBUTION_ORDER.map((status) => {
+                        const value = statusCounts[status] || 0;
+                        const pct = sum > 0 ? Math.round((value / sum) * 100) : 0;
                         return `<div style="display:flex;align-items:center;gap:6px;font-size:.7rem;color:#4b5563;">
                             <span style="width:9px;height:9px;border-radius:50%;background:${STATUS_STYLE[status].chart};"></span>
                             <strong style="color:#111827;">${value}</strong>
                             <span>${status} (${pct}%)</span>
                         </div>`;
                     }).join('')}
-                </div>`}
+                </div>`;
+        };
+        const distributionHTML = `<div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:14px 16px;margin-bottom:18px;">
+            <div style="font-size:.64rem;font-weight:800;color:#6b7280;text-transform:uppercase;letter-spacing:.06em;">Distribución de resultados</div>
+            <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;margin:8px 0 6px;">
+                <div style="font-size:.7rem;font-weight:700;color:#4b5563;">Actividad del rango</div>
+                <div style="font-size:.66rem;color:#6b7280;">${totalTests} ejecución(es) con resultado en el rango</div>
+            </div>
+            ${distributionBar(counts, totalTests)}
+            <div style="margin-top:14px;border-top:1px dashed #e5e7eb;padding-top:10px;">
+                <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:6px;">
+                    <div style="font-size:.7rem;font-weight:700;color:#4b5563;">Estado acumulado de las sesiones incluidas</div>
+                    <div style="font-size:.66rem;color:#6b7280;">${sessionTotals.total} TC · incluye PENDING</div>
+                </div>
+                ${distributionBar(accumulatedCounts, sessionTotals.total)}
+            </div>
         </div>`;
 
         const TRANSITION_ORDER = ['OK', 'PASS', 'FAIL', 'WARNING', 'BLOCK', 'SKIP', 'OPEN', 'IN_PROGRESS', 'FIXED', 'CLOSED', 'WONT_FIX'];
@@ -1881,7 +1919,8 @@ router.get('/reports/status', async (req, res) => {
                     <span style="color:#dc2626;font-weight:700;">${st.fail} F</span> ·
                     <span style="color:#b45309;font-weight:700;">${st.warning} W</span> ·
                     <span style="color:#c2410c;font-weight:700;">${st.block} B</span> ·
-                    <span style="color:#4b5563;font-weight:700;">${st.skip} S</span>
+                    <span style="color:#4b5563;font-weight:700;">${st.skip} S</span> ·
+                    <span style="color:#6b7280;font-weight:700;">${st.pending} P</span>
                 </td>
                 <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;font-size:.72rem;white-space:nowrap;">
                     <strong style="color:${acceptanceColor(runAcceptance)};">${runAcceptance === null ? '—' : `${runAcceptance}%`}</strong>
@@ -2078,6 +2117,16 @@ router.get('/reports/status', async (req, res) => {
                         : '<span style="font-size:.62rem;font-weight:700;background:#fef3c7;color:#b45309;padding:2px 8px;border-radius:10px;">⚠ TC de cobertura sin declarar</span>'}</div>
                 </div>
                 ${testsHTML || '<div style="font-size:.74rem;color:#6b7280;padding:4px 0;">Sin tests ejecutados en el rango.</div>'}
+                ${(() => {
+                    const runPending = pendingByRun.get(run.id) || [];
+                    if (runPending.length === 0) return '';
+                    return `<details class="collapsible" style="margin-top:8px;">
+                        <summary style="cursor:pointer;font-size:.66rem;font-weight:700;color:#6b7280;text-transform:uppercase;">Pendientes sin ejecutar (${runPending.length})</summary>
+                        <ol style="margin:4px 0 0 16px;padding:0;font-size:.66rem;color:#4b5563;">
+                            ${runPending.map((row) => `<li style="margin-bottom:2px;"><strong>${htmlEscape(row.key_id || '')}</strong> — ${htmlEscape(row.title)}</li>`).join('')}
+                        </ol>
+                    </details>`;
+                })()}
                 ${runHallazgos.length > 0 ? `<div style="margin-top:6px;"><div style="font-size:.66rem;font-weight:700;color:#6b7280;text-transform:uppercase;">Hallazgos exploratorios (${runHallazgos.length})</div>${hallazgosHTML}</div>` : ''}
                 </div>
             </details>`;

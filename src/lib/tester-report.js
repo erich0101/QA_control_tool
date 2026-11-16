@@ -109,6 +109,7 @@ function renderTesterReportHTML(data, userName) {
     const totalPassed = Object.values(projects).reduce((s, p) => s + p.execs.filter(e => ['OK', 'PASS'].includes(e.status)).length, 0);
     const totalFailed = Object.values(projects).reduce((s, p) => s + p.execs.filter(e => e.status === 'FAIL').length, 0);
     const totalBlocked = Object.values(projects).reduce((s, p) => s + p.execs.filter(e => ['BLOCK', 'BLOCKED'].includes(e.status)).length, 0);
+    const totalPending = Object.values(projects).reduce((s, p) => s + p.execs.filter(e => !e.status || e.status === 'PENDING').length, 0);
     const passRate = totalExecs > 0 ? ((totalPassed / totalExecs) * 100).toFixed(1) : 0;
 
     let projectsHTML = '';
@@ -117,10 +118,11 @@ function renderTesterReportHTML(data, userName) {
         const pFailed = proj.execs.filter(e => e.status === 'FAIL').length;
         const pBlocked = proj.execs.filter(e => ['BLOCK', 'BLOCKED'].includes(e.status)).length;
         const pSkip = proj.execs.filter(e => ['SKIP', 'SKIPPED'].includes(e.status)).length;
+        const pPending = proj.execs.filter(e => !e.status || e.status === 'PENDING').length;
 
         let execRows = '';
         for (const e of proj.execs) {
-            const statusClass = ['OK', 'PASS'].includes(e.status) ? 'pass' : e.status === 'FAIL' ? 'fail' : e.status === 'SKIP' || e.status === 'SKIPPED' ? 'skip' : 'block';
+            const statusClass = ['OK', 'PASS'].includes(e.status) ? 'pass' : e.status === 'FAIL' ? 'fail' : e.status === 'SKIP' || e.status === 'SKIPPED' ? 'skip' : (!e.status || e.status === 'PENDING') ? 'pending' : 'block';
             const evidHTML = (evidByExec[e.id] || []).map(ev => evidenceHTML(ev, 200)).join('');
             execRows += `<tr>
                 <td>${e.tc_title || 'N/A'}</td>
@@ -154,6 +156,7 @@ function renderTesterReportHTML(data, userName) {
                 <div class="kpi red"><div class="kpi-val">${pFailed}</div><div class="kpi-lab">Fallidos</div></div>
                 <div class="kpi orange"><div class="kpi-val">${pBlocked}</div><div class="kpi-lab">Bloqueados</div></div>
                 <div class="kpi"><div class="kpi-val">${pSkip}</div><div class="kpi-lab">Saltados</div></div>
+                <div class="kpi"><div class="kpi-val">${pPending}</div><div class="kpi-lab">Pendientes</div></div>
                 <div class="kpi purple"><div class="kpi-val">${proj.defects.length}</div><div class="kpi-lab">Hallazgos</div></div>
             </div>
             ${proj.execs.length > 0 ? `
@@ -184,6 +187,7 @@ function renderTesterReportHTML(data, userName) {
         .status-badge{padding:2px 8px;border-radius:4px;font-size:.7rem;font-weight:600}
         .status-badge.pass{background:#d1fae5;color:#059669}.status-badge.fail{background:#fee2e2;color:#dc2626}
         .status-badge.block{background:#fef3c7;color:#d97706}.status-badge.skip{background:#f3f4f6;color:#6b7280}
+        .status-badge.pending{background:#e5e7eb;color:#4b5563}
         .footer{text-align:center;padding:16px;color:#6b7280;font-size:.75rem}
         @media print{body{background:white;padding:0}}
     </style></head><body>
@@ -196,6 +200,7 @@ function renderTesterReportHTML(data, userName) {
         <div class="kpi green"><div class="kpi-val">${totalPassed}</div><div class="kpi-lab">Pasados</div></div>
         <div class="kpi red"><div class="kpi-val">${totalFailed}</div><div class="kpi-lab">Fallidos</div></div>
         <div class="kpi orange"><div class="kpi-val">${totalBlocked}</div><div class="kpi-lab">Bloqueados</div></div>
+        <div class="kpi"><div class="kpi-val">${totalPending}</div><div class="kpi-lab">Pendientes</div></div>
         <div class="kpi"><div class="kpi-val">${passRate}%</div><div class="kpi-lab">Tasa Aprobación</div></div>
         <div class="kpi purple"><div class="kpi-val">${totalDefects}</div><div class="kpi-lab">Hallazgos</div></div>
     </div>
