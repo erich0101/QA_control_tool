@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { ChevronRight, Timer } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
-import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { KpiCard } from './charts';
@@ -138,18 +138,16 @@ export function PerformanceTab({ projectId }: { projectId: number }) {
         </h3>
 
         <div className="ml-auto flex flex-wrap items-center gap-2">
-          <Input
-            type="date"
+          <DatePicker
             value={from}
-            onChange={(event) => setFrom(event.target.value)}
+            onChange={setFrom}
             className="h-8 w-36 text-caption"
             aria-label="Desde"
           />
           <span className="text-caption text-fg-subtle">→</span>
-          <Input
-            type="date"
+          <DatePicker
             value={to}
-            onChange={(event) => setTo(event.target.value)}
+            onChange={setTo}
             className="h-8 w-36 text-caption"
             aria-label="Hasta"
           />

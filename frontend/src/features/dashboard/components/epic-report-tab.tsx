@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Field } from '@/components/ui/field';
-import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
 import { SelectField } from '@/components/ui/select-field';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { EpicReport } from '@/lib/api/stats';
@@ -81,21 +81,19 @@ export function EpicReportTab({ projectId }: { projectId: number }) {
           </Field>
 
           <Field label="Desde" htmlFor="epic-from">
-            <Input
+            <DatePicker
               id="epic-from"
-              type="date"
               value={from}
-              onChange={(event) => setFrom(event.target.value)}
+              onChange={setFrom}
               className="h-9 w-36"
             />
           </Field>
 
           <Field label="Hasta" htmlFor="epic-to">
-            <Input
+            <DatePicker
               id="epic-to"
-              type="date"
               value={to}
-              onChange={(event) => setTo(event.target.value)}
+              onChange={setTo}
               className="h-9 w-36"
             />
           </Field>

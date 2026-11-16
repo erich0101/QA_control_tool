@@ -1,5 +1,5 @@
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
 
 interface DateRangeFilterProps {
   idPrefix: string;
@@ -30,20 +30,18 @@ export function DateRangeFilter({
         Periodo
       </span>
 
-      <Input
+      <DatePicker
         id={`${idPrefix}-from`}
-        type="date"
         value={from}
-        onChange={(event) => onFromChange(event.target.value)}
+        onChange={onFromChange}
         className="h-8 w-36 text-caption"
         aria-label="Fecha desde"
       />
       <span className="text-caption text-fg-subtle">→</span>
-      <Input
+      <DatePicker
         id={`${idPrefix}-to`}
-        type="date"
         value={to}
-        onChange={(event) => onToChange(event.target.value)}
+        onChange={onToChange}
         className="h-8 w-36 text-caption"
         aria-label="Fecha hasta"
       />

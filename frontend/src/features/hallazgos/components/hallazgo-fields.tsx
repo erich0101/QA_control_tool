@@ -1,6 +1,8 @@
 import { Controller, useFormContext } from 'react-hook-form';
 import { Field } from '@/components/ui/field';
+import { Combobox } from '@/components/ui/combobox';
 import { Input, Textarea } from '@/components/ui/input';
+import { TextareaWithCount } from '@/components/ui/textarea-with-count';
 import { SelectField } from '@/components/ui/select-field';
 import {
   FREQUENCIES,
@@ -32,14 +34,24 @@ export function HallazgoFields({ team }: { team: User[] }) {
         />
       </Field>
 
-      <Field label="Descripción" htmlFor="h-description">
-        <Textarea
-          id="h-description"
-          className="min-h-24"
-          placeholder="Qué se detectó, en qué flujo y con qué frecuencia…"
-          {...register('description')}
-        />
-      </Field>
+      <Controller
+        control={control}
+        name="description"
+        render={({ field }) => (
+          <Field label="Descripción" htmlFor="h-description">
+            <TextareaWithCount
+              id="h-description"
+              className="min-h-24"
+              maxLength={2000}
+              placeholder="Qué se detectó, en qué flujo y con qué frecuencia…"
+              name={field.name}
+              value={field.value ?? ''}
+              onChange={field.onChange}
+              onBlur={field.onBlur}
+            />
+          </Field>
+        )}
+      />
 
       <div className="grid gap-4 md:grid-cols-2">
         <Field label="Pasos para reproducir" htmlFor="h-steps">
@@ -66,14 +78,24 @@ export function HallazgoFields({ team }: { team: User[] }) {
         </Field>
       </div>
 
-      <Field label="Observaciones" htmlFor="h-observations">
-        <Textarea
-          id="h-observations"
-          className="min-h-20"
-          placeholder="Notas, workarounds, links relacionados…"
-          {...register('observations')}
-        />
-      </Field>
+      <Controller
+        control={control}
+        name="observations"
+        render={({ field }) => (
+          <Field label="Observaciones" htmlFor="h-observations">
+            <TextareaWithCount
+              id="h-observations"
+              className="min-h-20"
+              maxLength={1000}
+              placeholder="Notas, workarounds, links relacionados…"
+              name={field.name}
+              value={field.value ?? ''}
+              onChange={field.onChange}
+              onBlur={field.onBlur}
+            />
+          </Field>
+        )}
+      />
 
       <div className="grid gap-3 md:grid-cols-4">
         <Controller
@@ -128,13 +150,21 @@ export function HallazgoFields({ team }: { team: User[] }) {
           name="assigned_to"
           render={({ field }) => (
             <Field label="Asignado a" htmlFor="h-assignee">
-              <SelectField
+              <Combobox
                 id="h-assignee"
-                value={field.value}
-                onValueChange={field.onChange}
-                allowEmpty
+                value={field.value ? String(field.value) : ''}
+                onValueChange={(value) => field.onChange(value ? Number(value) : null)}
                 placeholder="Sin asignar"
-                options={team.map((user) => ({ value: String(user.id), label: user.name }))}
+                searchPlaceholder="Buscar persona…"
+                aria-label="Asignado a"
+                options={[
+                  { value: '', label: 'Sin asignar' },
+                  ...team.map((user) => ({
+                    value: String(user.id),
+                    label: user.name,
+                    description: user.email,
+                  })),
+                ]}
               />
             </Field>
           )}

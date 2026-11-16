@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useForm } from 'react-hook-form';
+import { Controller, useForm } from 'react-hook-form';
 import { CalendarClock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -11,7 +11,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Field } from '@/components/ui/field';
-import { Input, Textarea } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
 
 const pad = (value: number) => String(value).padStart(2, '0');
 
@@ -50,7 +51,7 @@ export function EditDatesDialog({
   isPending,
   onSubmit,
 }: EditDatesDialogProps) {
-  const { register, handleSubmit, reset, getValues, formState } = useForm({
+  const { control, register, handleSubmit, reset, getValues, formState } = useForm({
     defaultValues: {
       start: toInput(current.planned_start_at),
       end: toInput(current.planned_end_at),
@@ -92,53 +93,82 @@ export function EditDatesDialog({
 
         <form className="space-y-4" onSubmit={submit} noValidate>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field
-              label="Inicio planificado"
-              htmlFor="edit-dates-start"
-              error={formState.errors.start?.message}
-            >
-              <Input
-                id="edit-dates-start"
-                type="datetime-local"
-                {...register('start', { required: 'El inicio planificado es obligatorio' })}
-              />
-            </Field>
+            <Controller
+              control={control}
+              name="start"
+              rules={{ required: 'El inicio planificado es obligatorio' }}
+              render={({ field, fieldState }) => (
+                <Field
+                  label="Inicio planificado"
+                  htmlFor="edit-dates-start"
+                  error={fieldState.error?.message}
+                >
+                  <DatePicker
+                    id="edit-dates-start"
+                    withTime
+                    name={field.name}
+                    value={field.value}
+                    onChange={field.onChange}
+                    onBlur={field.onBlur}
+                  />
+                </Field>
+              )}
+            />
 
-            <Field
-              label="Fin planificado"
-              htmlFor="edit-dates-end"
-              error={formState.errors.end?.message}
-            >
-              <Input
-                id="edit-dates-end"
-                type="datetime-local"
-                {...register('end', {
-                  required: 'El fin planificado es obligatorio',
-                  validate: (value) =>
-                    new Date(value).getTime() > new Date(getValues('start')).getTime() ||
-                    'El fin debe ser posterior al inicio',
-                  deps: 'start',
-                })}
-              />
-            </Field>
+            <Controller
+              control={control}
+              name="end"
+              rules={{
+                required: 'El fin planificado es obligatorio',
+                validate: (value) =>
+                  new Date(value).getTime() > new Date(getValues('start')).getTime() ||
+                  'El fin debe ser posterior al inicio',
+              }}
+              render={({ field, fieldState }) => (
+                <Field
+                  label="Fin planificado"
+                  htmlFor="edit-dates-end"
+                  error={fieldState.error?.message}
+                >
+                  <DatePicker
+                    id="edit-dates-end"
+                    withTime
+                    name={field.name}
+                    value={field.value}
+                    onChange={field.onChange}
+                    onBlur={field.onBlur}
+                  />
+                </Field>
+              )}
+            />
           </div>
 
-          <Field
-            label="Fecha límite vigente"
-            htmlFor="edit-dates-deadline"
-            error={formState.errors.deadline?.message}
-            hint="Es el límite que se usa para las alertas y la postergación."
-          >
-            <Input
-              id="edit-dates-deadline"
-              type="datetime-local"
-              {...register('deadline', {
-                required: 'La fecha límite es obligatoria',
-                validate: (value) =>
-                  new Date(value).getTime() > Date.now() || 'La fecha límite debe ser futura',
-              })}
-            />
-          </Field>
+          <Controller
+            control={control}
+            name="deadline"
+            rules={{
+              required: 'La fecha límite es obligatoria',
+              validate: (value) =>
+                new Date(value).getTime() > Date.now() || 'La fecha límite debe ser futura',
+            }}
+            render={({ field, fieldState }) => (
+              <Field
+                label="Fecha límite vigente"
+                htmlFor="edit-dates-deadline"
+                error={fieldState.error?.message}
+                hint="Es el límite que se usa para las alertas y la postergación."
+              >
+                <DatePicker
+                  id="edit-dates-deadline"
+                  withTime
+                  name={field.name}
+                  value={field.value}
+                  onChange={field.onChange}
+                  onBlur={field.onBlur}
+                />
+              </Field>
+            )}
+          />
 
           <Field
             label="Justificación del cambio"

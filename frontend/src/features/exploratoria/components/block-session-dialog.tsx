@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useForm } from 'react-hook-form';
+import { Controller, useForm } from 'react-hook-form';
 import { Ban } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -11,7 +11,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Field } from '@/components/ui/field';
-import { Input, Textarea } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
 
 const pad = (value: number) => String(value).padStart(2, '0');
 
@@ -37,7 +38,7 @@ export function BlockSessionDialog({
   isPending,
   onSubmit,
 }: BlockSessionDialogProps) {
-  const { register, handleSubmit, reset, formState } = useForm({
+  const { control, register, handleSubmit, reset, formState } = useForm({
     defaultValues: { reason: '', from: nowInput() },
   });
 
@@ -66,17 +67,27 @@ export function BlockSessionDialog({
         </DialogHeader>
 
         <form className="space-y-4" onSubmit={submit} noValidate>
-          <Field
-            label="Inicio del bloqueo"
-            htmlFor="block-from"
-            error={formState.errors.from?.message}
-          >
-            <Input
-              id="block-from"
-              type="datetime-local"
-              {...register('from', { required: 'La fecha de inicio es obligatoria' })}
-            />
-          </Field>
+          <Controller
+            control={control}
+            name="from"
+            rules={{ required: 'La fecha de inicio es obligatoria' }}
+            render={({ field, fieldState }) => (
+              <Field
+                label="Inicio del bloqueo"
+                htmlFor="block-from"
+                error={fieldState.error?.message}
+              >
+                <DatePicker
+                  id="block-from"
+                  withTime
+                  name={field.name}
+                  value={field.value}
+                  onChange={field.onChange}
+                  onBlur={field.onBlur}
+                />
+              </Field>
+            )}
+          />
 
           <Field
             label="Motivo (fuerza mayor)"

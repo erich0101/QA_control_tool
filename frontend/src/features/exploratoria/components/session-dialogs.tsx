@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useForm } from 'react-hook-form';
+import { Controller, useForm } from 'react-hook-form';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dialog';
 import { Field } from '@/components/ui/field';
 import { Input, Textarea } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
 import { SelectField } from '@/components/ui/select-field';
 import { HALLZGO_SEVERITIES, type ExploratoryHallazgo } from '@/lib/api/types';
 
@@ -46,7 +47,7 @@ export function StartSessionDialog({
     deadline_at: string;
   }) => Promise<void>;
 }) {
-  const { register, handleSubmit, reset, getValues, formState } = useForm({
+  const { control, register, handleSubmit, reset, getValues, formState } = useForm({
     defaultValues: {
       name: '',
       charter: '',
@@ -112,36 +113,55 @@ export function StartSessionDialog({
           </Field>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field
-              label="Inicio planificado"
-              htmlFor="session-start"
-              error={formState.errors.start?.message}
-            >
-              <Input
-                id="session-start"
-                type="datetime-local"
-                {...register('start', { required: 'El inicio planificado es obligatorio' })}
-              />
-            </Field>
+            <Controller
+              control={control}
+              name="start"
+              rules={{ required: 'El inicio planificado es obligatorio' }}
+              render={({ field, fieldState }) => (
+                <Field
+                  label="Inicio planificado"
+                  htmlFor="session-start"
+                  error={fieldState.error?.message}
+                >
+                  <DatePicker
+                    id="session-start"
+                    withTime
+                    name={field.name}
+                    value={field.value}
+                    onChange={field.onChange}
+                    onBlur={field.onBlur}
+                  />
+                </Field>
+              )}
+            />
 
-            <Field
-              label="Fin planificado"
-              htmlFor="session-end"
-              error={formState.errors.end?.message}
-            >
-              <Input
-                id="session-end"
-                type="datetime-local"
-                min={nowInput()}
-                {...register('end', {
-                  required: 'El fin planificado es obligatorio',
-                  validate: (value) =>
-                    new Date(value).getTime() > new Date(getValues('start')).getTime() ||
-                    'El fin debe ser posterior al inicio',
-                  deps: 'start',
-                })}
-              />
-            </Field>
+            <Controller
+              control={control}
+              name="end"
+              rules={{
+                required: 'El fin planificado es obligatorio',
+                validate: (value) =>
+                  new Date(value).getTime() > new Date(getValues('start')).getTime() ||
+                  'El fin debe ser posterior al inicio',
+              }}
+              render={({ field, fieldState }) => (
+                <Field
+                  label="Fin planificado"
+                  htmlFor="session-end"
+                  error={fieldState.error?.message}
+                >
+                  <DatePicker
+                    id="session-end"
+                    withTime
+                    min={nowInput()}
+                    name={field.name}
+                    value={field.value}
+                    onChange={field.onChange}
+                    onBlur={field.onBlur}
+                  />
+                </Field>
+              )}
+            />
           </div>
 
           <Field label="Timebox (minutos)" htmlFor="session-timebox" hint="Opcional">

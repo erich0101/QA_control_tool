@@ -31,15 +31,7 @@ const isToolsViewer = (path) => path.startsWith('features/tools/');
 
 // Inputs de fecha que todavía no usan <DatePicker>. Deuda a migrar de a uno;
 // los archivos nuevos ya quedan bloqueados.
-const DATE_INPUT_ALLOWLIST = new Set([
-  'features/dashboard/components/epic-report-tab.tsx',
-  'features/dashboard/components/performance-tab.tsx',
-  'features/exploratoria/components/block-session-dialog.tsx',
-  'features/exploratoria/components/edit-dates-dialog.tsx',
-  'features/exploratoria/components/extend-deadline-dialog.tsx',
-  'features/exploratoria/components/session-dialogs.tsx',
-  'features/history/components/date-range-filter.tsx',
-]);
+const DATE_INPUT_ALLOWLIST = new Set([]);
 
 const violations = [];
 

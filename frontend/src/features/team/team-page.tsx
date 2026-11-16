@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { Plus, Search, Users } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
+import { PageHeader } from '@/components/ui/page-header';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { User } from '@/lib/api/types';
 import { useProjects } from '@/features/projects/use-projects';
@@ -44,29 +44,31 @@ export function TeamPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <header className="flex shrink-0 flex-wrap items-center gap-3 border-b border-border bg-surface px-5 py-2.5">
-        <span className="text-caption font-bold uppercase tracking-wide text-fg-subtle">
-          Equipo
-        </span>
-        <Badge tone="neutral">{team.length} usuarios</Badge>
-        <Badge tone="fail">{admins} admin</Badge>
+      <PageHeader
+        className="shrink-0"
+        eyebrow="Equipo"
+        title="Usuarios del equipo"
+        description={`${team.length} usuarios · ${admins} admin`}
+        actions={
+          <>
+            <div className="relative w-64">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-fg-subtle" />
+              <Input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Buscar por nombre, email o rol…"
+                className="h-8 pl-8 text-footnote"
+                aria-label="Buscar usuario"
+              />
+            </div>
 
-        <div className="relative ml-auto w-64">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-fg-subtle" />
-          <Input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Buscar por nombre, email o rol…"
-            className="h-8 pl-8 text-footnote"
-            aria-label="Buscar usuario"
-          />
-        </div>
-
-        <Button variant="primary" size="sm" onClick={openCreate}>
-          <Plus />
-          Nuevo usuario
-        </Button>
-      </header>
+            <Button variant="primary" size="sm" onClick={openCreate}>
+              <Plus />
+              Nuevo usuario
+            </Button>
+          </>
+        }
+      />
 
       <div className="scrollbar-apple min-h-0 flex-1 overflow-y-auto p-5">
         {isLoading ? (

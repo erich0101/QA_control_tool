@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useForm } from 'react-hook-form';
+import { Controller, useForm } from 'react-hook-form';
 import { CalendarClock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -11,7 +11,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Field } from '@/components/ui/field';
-import { Input, Textarea } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
 
 interface ExtendDeadlineDialogProps {
   open: boolean;
@@ -42,7 +43,7 @@ export function ExtendDeadlineDialog({
   isPending,
   onSubmit,
 }: ExtendDeadlineDialogProps) {
-  const { register, handleSubmit, reset, formState } = useForm({
+  const { control, register, handleSubmit, reset, formState } = useForm({
     defaultValues: { deadline: nextDeadline(currentDeadline), reason: '' },
   });
 
@@ -84,28 +85,38 @@ export function ExtendDeadlineDialog({
         </div>
 
         <form className="space-y-4" onSubmit={submit} noValidate>
-          <Field
-            label="Nueva fecha límite"
-            htmlFor="extend-deadline"
-            error={formState.errors.deadline?.message}
-          >
-            <Input
-              id="extend-deadline"
-              type="datetime-local"
-              {...register('deadline', {
-                required: 'La nueva fecha es obligatoria',
-                validate: (value) => {
-                  const date = new Date(value);
-                  if (Number.isNaN(date.getTime())) return 'Fecha inválida';
-                  if (date.getTime() <= Date.now()) return 'Debe ser futura';
-                  if (currentDeadline && date.getTime() <= new Date(currentDeadline).getTime()) {
-                    return 'Debe ser posterior a la fecha actual';
-                  }
-                  return true;
-                },
-              })}
-            />
-          </Field>
+          <Controller
+            control={control}
+            name="deadline"
+            rules={{
+              required: 'La nueva fecha es obligatoria',
+              validate: (value) => {
+                const date = new Date(value);
+                if (Number.isNaN(date.getTime())) return 'Fecha inválida';
+                if (date.getTime() <= Date.now()) return 'Debe ser futura';
+                if (currentDeadline && date.getTime() <= new Date(currentDeadline).getTime()) {
+                  return 'Debe ser posterior a la fecha actual';
+                }
+                return true;
+              },
+            }}
+            render={({ field, fieldState }) => (
+              <Field
+                label="Nueva fecha límite"
+                htmlFor="extend-deadline"
+                error={fieldState.error?.message}
+              >
+                <DatePicker
+                  id="extend-deadline"
+                  withTime
+                  name={field.name}
+                  value={field.value}
+                  onChange={field.onChange}
+                  onBlur={field.onBlur}
+                />
+              </Field>
+            )}
+          />
 
           <Field
             label="Justificación de la demora"
