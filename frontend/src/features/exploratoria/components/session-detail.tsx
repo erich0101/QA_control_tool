@@ -309,7 +309,7 @@ export function SessionDetail({
             }
           >
             <ClipboardCheck />
-            {coverageReady ? 'Cobertura TC ✓' : 'Marcar TC cargados'}
+            {coverageReady ? 'Cobertura declarada ✓' : 'Declarar cobertura TC'}
           </Button>
 
           {!isFinished ? (
@@ -478,7 +478,7 @@ export function SessionDetail({
               loading={isCoveragePending}
             >
               <ClipboardCheck />
-              Marcar TC cargados
+              Declarar cobertura TC
             </Button>
           ) : null}
         </div>
