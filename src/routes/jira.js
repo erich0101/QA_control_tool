@@ -442,6 +442,7 @@ router.get('/projects/:id/tracking', requireAuth, async (req, res) => {
             JOIN qa_test_suites s ON tc.suite_id = s.id
             JOIN qa_use_cases cu ON s.use_case_id = cu.id
             WHERE cu.project_id = ? AND d.jira_key IS NOT NULL AND d.status != 'DISMISSED'
+            ORDER BY d.created_at DESC, d.id DESC
         `, [projectId]);
 
         if (dbBugs.rows.length === 0) return res.json({ tracking: [] });

@@ -16,6 +16,7 @@ import { formatDate } from '@/lib/utils';
 import { useUiStore } from '@/stores/ui';
 import { JiraTicketDrawer } from './components/jira-ticket-drawer';
 import { useJiraTracking } from './use-jira-tracking';
+import { useJiraTicketContext } from '@/features/jira-tickets/use-create-jira-ticket';
 
 const STATUS_TONE = (status: string): 'ok' | 'warn' | 'brand' | 'neutral' => {
   const value = status.toUpperCase();
@@ -34,6 +35,7 @@ interface EpicGroup {
 export function JiraTrackingPage() {
   const projectId = useUiStore((s) => s.activeProjectId);
   const { data: tracking = [], isLoading, isFetching, refetch, error } = useJiraTracking(projectId);
+  const { data: jiraContext } = useJiraTicketContext(projectId, tracking.length > 0);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<JiraTrackingItem | null>(null);
   const [spaceFilter, setSpaceFilter] = useState('');
@@ -49,21 +51,27 @@ export function JiraTrackingPage() {
 
   const filtered = useMemo(() => {
     const term = keyFilter.trim().toLowerCase();
-    return tracking.filter((item) => {
-      if (spaceFilter && item.jira_space_key !== spaceFilter) return false;
-      if (term && !item.jira_key.toLowerCase().includes(term)) return false;
-      if (epicFilter && item.jira_epic_key !== epicFilter) return false;
-      if (statusFilter && item.jira_status !== statusFilter) return false;
+    return tracking
+      .filter((item) => {
+        if (spaceFilter && item.jira_space_key !== spaceFilter) return false;
+        if (term && !item.jira_key.toLowerCase().includes(term)) return false;
+        if (epicFilter && item.jira_epic_key !== epicFilter) return false;
+        if (statusFilter && item.jira_status !== statusFilter) return false;
 
-      const day = item.created_at
-        ? new Date(item.created_at).toLocaleDateString('en-CA', {
-            timeZone: 'America/Argentina/Buenos_Aires',
-          })
-        : '';
-      if (fromDate && day < fromDate) return false;
-      if (toDate && day > toDate) return false;
-      return true;
-    });
+        const day = item.created_at
+          ? new Date(item.created_at).toLocaleDateString('en-CA', {
+              timeZone: 'America/Argentina/Buenos_Aires',
+            })
+          : '';
+        if (fromDate && day < fromDate) return false;
+        if (toDate && day > toDate) return false;
+        return true;
+      })
+      .sort((a, b) => {
+        const aTime = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const bTime = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return bTime - aTime;
+      });
   }, [tracking, spaceFilter, keyFilter, epicFilter, statusFilter, fromDate, toDate]);
 
   const spaceOptions = useMemo(() => {
@@ -83,6 +91,11 @@ export function JiraTrackingPage() {
 
   const epicOptions = useMemo(() => {
     const map = new Map<string, string>();
+    // Primero las épicas del proyecto en Jira (aunque todavía no tengan
+    // tickets vinculados), así el filtro muestra todas.
+    for (const epic of jiraContext?.epics ?? []) {
+      map.set(epic.key, epic.summary || epic.name || epic.key);
+    }
     for (const item of tracking) {
       map.set(item.jira_epic_key, item.jira_epic_name);
     }
@@ -92,7 +105,7 @@ export function JiraTrackingPage() {
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([value, label]) => ({ value, label: `${value} — ${label}` })),
     ];
-  }, [tracking]);
+  }, [tracking, jiraContext]);
 
   const statusOptions = useMemo(() => {
     const values = [...new Set(tracking.map((item) => item.jira_status))].sort((a, b) =>
@@ -128,7 +141,9 @@ export function JiraTrackingPage() {
       map.get(key)!.tickets.push(item);
     }
 
-    return [...map.values()].sort((a, b) => a.key.localeCompare(b.key));
+    // `filtered` viene ordenado de más nuevo a más viejo: el orden de
+    // inserción de las épicas refleja la actividad más reciente.
+    return [...map.values()];
   }, [filtered]);
 
   const toggle = (key: string) =>
