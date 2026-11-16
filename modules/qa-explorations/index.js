@@ -1799,6 +1799,44 @@ router.get('/reports/status', async (req, res) => {
             </div>
         </div>`;
 
+        const sessionDonut = (statusCounts, total) => {
+            const size = 78;
+            const radius = 30;
+            const center = 39;
+            const stroke = 11;
+            const circumference = 2 * Math.PI * radius;
+            let offset = 0;
+            const rings = DISTRIBUTION_ORDER.map((status) => {
+                const value = statusCounts[status] || 0;
+                const length = total > 0 ? (value / total) * circumference : 0;
+                if (!length) return '';
+                const ring = `<circle cx="${center}" cy="${center}" r="${radius}" fill="none" stroke="${STATUS_STYLE[status].chart}" stroke-width="${stroke}" stroke-dasharray="${length} ${circumference - length}" stroke-dashoffset="${-offset}" transform="rotate(-90 ${center} ${center})"></circle>`;
+                offset += length;
+                return ring;
+            }).join('');
+            const okPct = total > 0 ? Math.round(((statusCounts.OK || 0) / total) * 100) : 0;
+            return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" role="img" aria-label="Estado general de la sesión">
+                <circle cx="${center}" cy="${center}" r="${radius}" fill="none" stroke="#eef2f7" stroke-width="${stroke}"></circle>
+                ${rings}
+                <text x="${center}" y="${center - 2}" text-anchor="middle" font-size="14" font-weight="800" fill="#111827">${okPct}%</text>
+                <text x="${center}" y="${center + 10}" text-anchor="middle" font-size="7" fill="#6b7280">OK</text>
+            </svg>`;
+        };
+
+        const acceptanceBar = (label, pct) => {
+            const color = acceptanceColor(pct);
+            const width = pct == null ? 0 : pct;
+            return `<div style="min-width:150px;flex:1;">
+                <div style="display:flex;justify-content:space-between;gap:8px;font-size:.62rem;color:#6b7280;">
+                    <span>${htmlEscape(label)}</span>
+                    <strong style="color:${color};">${pct == null ? '—' : `${pct}%`}</strong>
+                </div>
+                <div style="height:6px;border-radius:3px;background:#eef2f7;overflow:hidden;margin-top:2px;">
+                    <div style="width:${width}%;height:100%;background:${color};"></div>
+                </div>
+            </div>`;
+        };
+
         const TRANSITION_ORDER = ['OK', 'PASS', 'FAIL', 'WARNING', 'BLOCK', 'SKIP', 'OPEN', 'IN_PROGRESS', 'FIXED', 'CLOSED', 'WONT_FIX'];
         const transitionTone = (status) => {
             if (status === 'OK' || status === 'PASS' || status === 'FIXED' || status === 'CLOSED') return { fg: '#15803d', bg: '#dcfce7' };
@@ -1884,6 +1922,14 @@ router.get('/reports/status', async (req, res) => {
             const runEvaluables = st.ok + st.fail + st.warning;
             const runAcceptanceEval = runEvaluables > 0 ? Math.round((st.ok / runEvaluables) * 100) : null;
             const runProgress = st.total > 0 ? Math.round((st.executed / st.total) * 100) : 0;
+            const runDistribution = {
+                OK: st.ok,
+                FAIL: st.fail,
+                WARNING: st.warning,
+                BLOCK: st.block,
+                SKIP: st.skip,
+                PENDING: st.pending,
+            };
             const runDeadline = run.deadline_at ? new Date(run.deadline_at) : null;
             const runOverdue = run.status === 'RUNNING' && runDeadline && runDeadline.getTime() < now;
             const runNear = run.status === 'RUNNING' && runDeadline && !runOverdue
@@ -2073,19 +2119,6 @@ router.get('/reports/status', async (req, res) => {
                     <div style="font-size:.68rem;margin-top:2px;color:${run.deadline_at && new Date(run.deadline_at) < new Date() ? '#dc2626' : '#4b5563'};">
                         Límite: ${run.deadline_at ? fmtReportDay(run.deadline_at) : 'sin definir'}${run.deadline_at && new Date(run.deadline_at) < new Date() ? ' · VENCIDA' : ''}
                     </div>
-                    <div style="font-size:.68rem;color:#4b5563;margin-top:2px;">Avance sesión ${(() => {
-                        const t = totalsByRun.get(run.id);
-                        return t && t.total > 0 ? Math.round((t.executed / t.total) * 100) + '% (' + t.executed + '/' + t.total + ')' : '—';
-                    })()} · Pendientes ${totalsByRun.get(run.id)?.pending ?? 0} · Aceptación evaluada ${(() => {
-                        const t = totalsByRun.get(run.id);
-                        const ev = t ? t.ok + t.fail + t.warning : 0;
-                        const pct = ev > 0 ? Math.round((t.ok / ev) * 100) : null;
-                        return `<strong style="color:${acceptanceColor(pct)}">${pct === null ? '—' : pct + '%'}</strong>`;
-                    })()} · Aceptación total ${(() => {
-                        const t = totalsByRun.get(run.id);
-                        const pct = t && t.total > 0 ? Math.round((t.ok / t.total) * 100) : null;
-                        return `<strong style="color:${acceptanceColor(pct)}">${pct === null ? '—' : pct + '%'}</strong>`;
-                    })()}</div>
                     ${(() => {
                         const FIELD_LABEL = {
                             planned_start: 'Inicio planificado',
@@ -2115,6 +2148,20 @@ router.get('/reports/status', async (req, res) => {
                     <div style="margin-top:4px;">${run.coverage_ready
                         ? '<span style="font-size:.62rem;font-weight:700;background:#dcfce7;color:#15803d;padding:2px 8px;border-radius:10px;">✓ TC de cobertura declarados</span>'
                         : '<span style="font-size:.62rem;font-weight:700;background:#fef3c7;color:#b45309;padding:2px 8px;border-radius:10px;">⚠ TC de cobertura sin declarar</span>'}</div>
+                </div>
+                <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;padding:10px 12px;margin-bottom:10px;border:1px solid #eef2f7;border-radius:8px;background:#fff;">
+                    ${sessionDonut(runDistribution, st.total)}
+                    <div style="flex:1;min-width:240px;">
+                        <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:.6rem;font-weight:800;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;">
+                            <span>Estado general de la sesión</span>
+                            <span>${st.total} TC · ${runProgress}% ejecutado</span>
+                        </div>
+                        <div style="margin-top:6px;">${distributionBar(runDistribution, st.total)}</div>
+                        <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:10px;">
+                            ${acceptanceBar('Aceptación total', runAcceptance)}
+                            ${acceptanceBar('Aceptación evaluada', runAcceptanceEval)}
+                        </div>
+                    </div>
                 </div>
                 ${testsHTML || '<div style="font-size:.74rem;color:#6b7280;padding:4px 0;">Sin tests ejecutados en el rango.</div>'}
                 ${(() => {
