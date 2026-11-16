@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils';
 import { useUiStore } from '@/stores/ui';
 import { useSessionStore } from '@/stores/session';
 import { useTeam } from '@/features/team/use-team';
+import { useProjectUserStories } from '@/features/use-cases/use-use-cases';
 import { AddFlowDialog, AddHallazgoDialog, StartSessionDialog } from './components/session-dialogs';
 import { StatusReportDialog } from './components/status-report-dialog';
 import { ExtendDeadlineDialog } from './components/extend-deadline-dialog';
@@ -55,6 +56,7 @@ export function ExploratoriaPage() {
   const { data: sessions = [], isLoading } = useExploratorySessions(projectId, status);
   const { data: detail, isLoading: detailLoading } = useExploratorySession(runId);
   const { data: team = [] } = useTeam();
+  const { data: userStories = [] } = useProjectUserStories(projectId);
   const mutations = useExploratoriaMutations(projectId, runId);
 
   const patchParams = (updates: Record<string, string | null>) => {
@@ -420,6 +422,7 @@ export function ExploratoriaPage() {
               : mutations.updateFlow.isPending
           }
           initial={flowForm.flow}
+          userStories={userStories}
           onSubmit={async (values) => {
             if (flowForm.mode === 'edit' && flowForm.flow) {
               await mutations.updateFlow.mutateAsync({ id: flowForm.flow.id, input: values });

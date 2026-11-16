@@ -123,6 +123,20 @@ router.put('/:id', requireAuth, async (req, res) => {
         const params = [];
         const allowedFields = ['us_id', 'scenario_id', 'title', 'steps', 'expected_result', 'assigned_to', 'priority', 'is_smoke', 'is_regression', 'is_integration', 'is_exploratory', 'preconditions', 'jira_epic_key', 'assumptions', 'test_data', 'acceptance_criteria', 'observations'];
 
+        if (req.body.us_id !== undefined && req.body.us_id !== null && req.body.us_id !== '') {
+            const usCheck = await query(
+                `SELECT us.id
+                   FROM qa_user_stories us
+                   JOIN qa_use_cases uc ON uc.id = us.use_case_id
+                   JOIN qa_test_cases tc ON tc.project_id = uc.project_id
+                  WHERE us.id = ? AND tc.id = ?`,
+                [req.body.us_id, tcId]
+            );
+            if (usCheck.rows.length === 0) {
+                return res.status(400).json({ error: 'La HU indicada no pertenece al proyecto del TC' });
+            }
+        }
+
         allowedFields.forEach(field => {
             if (req.body[field] !== undefined) {
                 fields.push(`${field} = ?`);
@@ -137,10 +151,10 @@ router.put('/:id', requireAuth, async (req, res) => {
             await query(`UPDATE qa_test_cases SET ${fields.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, params);
 
             // --- NUEVA LÓGICA: Sincronizar título con el Escenario ---
-            const tcRes = await query(`SELECT title, us_id, scenario_id FROM qa_test_cases WHERE id = ?`, [tcId]);
+            const tcRes = await query(`SELECT title, us_id, scenario_id, is_exploratory FROM qa_test_cases WHERE id = ?`, [tcId]);
             const tc = tcRes.rows[0];
             
-            if (tc && tc.us_id && !tc.scenario_id) {
+            if (tc && !tc.is_exploratory && tc.us_id && !tc.scenario_id) {
                 // 1. Crear escenario si no existe pero hay US vinculada
                 const scenarioRes = await query(
                     `INSERT INTO qa_scenarios (us_id, title, order_index) VALUES (?, ?, (SELECT COALESCE(MAX(order_index)+1, 0) FROM qa_scenarios WHERE us_id = ?)) RETURNING id`,
@@ -154,7 +168,7 @@ router.put('/:id', requireAuth, async (req, res) => {
                     `UPDATE qa_user_stories SET escenarios_prueba = CASE WHEN escenarios_prueba = '' OR escenarios_prueba IS NULL THEN ? ELSE escenarios_prueba || CHR(10) || ? END WHERE id = ?`,
                     [tc.title, tc.title, tc.us_id]
                 );
-            } else if (tc && tc.scenario_id && req.body.title !== undefined) {
+            } else if (tc && !tc.is_exploratory && tc.scenario_id && req.body.title !== undefined) {
                 // 3. Actualizar título del escenario si ya existe y cambió el título del test
                 await query(`UPDATE qa_scenarios SET title = ? WHERE id = ?`, [req.body.title, tc.scenario_id]);
             }

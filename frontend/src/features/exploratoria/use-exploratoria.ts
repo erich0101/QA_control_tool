@@ -61,7 +61,7 @@ export function useExploratoriaMutations(projectId: number | null, runId: number
   });
 
   const addFlow = useMutation({
-    mutationFn: ({ id, input }: { id: number; input: { title: string; steps?: string; expected_result?: string } }) =>
+    mutationFn: ({ id, input }: { id: number; input: { title: string; steps?: string; expected_result?: string; us_id?: number | null } }) =>
       exploratoriaApi.addFlow(id, input),
     onSuccess: async () => {
       await invalidateAll();
@@ -77,7 +77,7 @@ export function useExploratoriaMutations(projectId: number | null, runId: number
       input,
     }: {
       id: number;
-      input: { title: string; steps?: string; expected_result?: string };
+      input: { title: string; steps?: string; expected_result?: string; us_id?: number | null };
     }) => testSuitesApi.testCases.update(id, input),
     onSuccess: async () => {
       await invalidateAll();

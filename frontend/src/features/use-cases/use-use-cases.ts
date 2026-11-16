@@ -29,6 +29,17 @@ export function useUserStories(useCaseId: number | null) {
   });
 }
 
+/** HUs de todo el proyecto, para selectores de vinculación. */
+export function useProjectUserStories(projectId: number | null) {
+  return useQuery({
+    queryKey: queryKeys.projectUserStories(projectId),
+    queryFn: () => userStoriesApi.listByProject(projectId as number),
+    enabled: projectId != null,
+    select: (data) => data.userStories ?? [],
+    staleTime: 30_000,
+  });
+}
+
 /** Invalida las queries que dependen de una HU (lista + contadores de CU). */
 function useInvalidateStories(projectId: number | null, useCaseId: number | null) {
   const queryClient = useQueryClient();

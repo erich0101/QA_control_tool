@@ -367,6 +367,10 @@ export interface ExploratoryFlow {
   expected_result?: string | null;
   key_id?: string | null;
   assigned_to?: number | null;
+  /** HU vinculada (opcional); los flujos se agrupan por esta relación. */
+  us_id?: number | null;
+  us_key?: string | null;
+  us_title?: string | null;
   created_at?: string;
 }
 

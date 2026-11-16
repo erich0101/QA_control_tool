@@ -7,8 +7,22 @@ const router = express.Router();
 
 router.get('/', requireAuth, async (req, res) => {
     try {
-        const { use_case_id } = req.query;
-        if (!use_case_id) return res.status(400).json({ error: 'use_case_id requerido' });
+        const { use_case_id, project_id } = req.query;
+
+        // Selector de HU para vincular flujos: lista liviana de todo el proyecto.
+        if (!use_case_id && project_id) {
+            const stories = await query(`
+                SELECT us.id, us.use_case_id, us.key_id, us.title,
+                       uc.key_id AS use_case_key, uc.title AS use_case_title
+                  FROM qa_user_stories us
+                  JOIN qa_use_cases uc ON uc.id = us.use_case_id
+                 WHERE uc.project_id = ?
+                 ORDER BY uc.title ASC, us.id DESC
+            `, [project_id]);
+            return res.json({ userStories: stories.rows });
+        }
+
+        if (!use_case_id) return res.status(400).json({ error: 'use_case_id o project_id requerido' });
 
         const stories = await query(`
             SELECT us.*,

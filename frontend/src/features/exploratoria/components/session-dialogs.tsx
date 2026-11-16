@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { Button } from '@/components/ui/button';
+import { Combobox } from '@/components/ui/combobox';
 import {
   Dialog,
   DialogContent,
@@ -188,17 +189,30 @@ export function AddFlowDialog({
   isPending,
   onSubmit,
   initial,
+  userStories = [],
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   isPending?: boolean;
-  onSubmit: (values: { title: string; steps: string; expected_result: string }) => Promise<void>;
+  onSubmit: (values: {
+    title: string;
+    steps: string;
+    expected_result: string;
+    us_id: number | null;
+  }) => Promise<void>;
   /** Si viene un flujo, el diálogo edita en vez de crear. */
-  initial?: { title: string; steps?: string | null; expected_result?: string | null } | null;
+  initial?: {
+    title: string;
+    steps?: string | null;
+    expected_result?: string | null;
+    us_id?: number | null;
+  } | null;
+  /** HUs del proyecto para agrupar el flujo dentro de la sesión. */
+  userStories?: Array<{ id: number; key_id: string; title: string; use_case_title?: string | null }>;
 }) {
   const isEdit = Boolean(initial);
-  const { register, handleSubmit, reset, formState } = useForm({
-    defaultValues: { title: '', steps: '', expected: '' },
+  const { control, register, handleSubmit, reset, formState } = useForm({
+    defaultValues: { title: '', steps: '', expected: '', us_id: '' },
   });
 
   useEffect(() => {
@@ -207,14 +221,25 @@ export function AddFlowDialog({
       title: initial?.title ?? '',
       steps: initial?.steps ?? '',
       expected: initial?.expected_result ?? '',
+      us_id: initial?.us_id ? String(initial.us_id) : '',
     });
   }, [open, initial, reset]);
+
+  const storyOptions = [
+    { value: '', label: 'Sin HU (queda en “Sin vincular”)' },
+    ...userStories.map((story) => ({
+      value: String(story.id),
+      label: `${story.key_id} · ${story.title}`,
+      description: story.use_case_title ?? undefined,
+    })),
+  ];
 
   const submit = handleSubmit(async (values) => {
     await onSubmit({
       title: values.title.trim(),
       steps: values.steps.trim(),
       expected_result: values.expected.trim(),
+      us_id: values.us_id ? Number(values.us_id) : null,
     });
     onOpenChange(false);
   });
@@ -240,6 +265,28 @@ export function AddFlowDialog({
               {...register('title', { required: 'El título es obligatorio' })}
             />
           </Field>
+
+          <Controller
+            control={control}
+            name="us_id"
+            render={({ field }) => (
+              <Field
+                label="HU vinculada"
+                htmlFor="flow-us"
+                hint="Opcional. Si la elegís, el flujo se agrupa bajo esa HU dentro de la sesión."
+              >
+                <Combobox
+                  id="flow-us"
+                  value={field.value}
+                  onValueChange={field.onChange}
+                  placeholder="Sin HU"
+                  searchPlaceholder="Buscar HU…"
+                  aria-label="HU vinculada"
+                  options={storyOptions}
+                />
+              </Field>
+            )}
+          />
 
           <Field label="Pasos" htmlFor="flow-steps">
             <Textarea id="flow-steps" className="min-h-20" placeholder="Pasos generales del flujo" {...register('steps')} />

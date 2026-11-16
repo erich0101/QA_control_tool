@@ -248,6 +248,68 @@ export function SessionDetail({
     return true;
   });
 
+  /**
+   * Agrupación por HU: solo se activa si al menos un flujo ya está vinculado.
+   * Las sesiones históricas sin HU conservan la tabla plana de siempre.
+   */
+  const hasHuGroups = flows.some((flow) => flow.us_id);
+  const tableGroups = (() => {
+    if (!hasHuGroups) return undefined;
+    const flowGroups = new Map<string, { label: string; title: string; rows: Row[] }>();
+    for (const row of filteredRows) {
+      if (row.kind !== 'flow') continue;
+      const key = row.flow.us_id ? `us-${row.flow.us_id}` : 'sin-hu';
+      const current = flowGroups.get(key) ?? {
+        label: row.flow.us_key ?? 'Sin HU',
+        title: row.flow.us_title ?? 'Sin vincular',
+        rows: [],
+      };
+      current.rows.push(row);
+      flowGroups.set(key, current);
+    }
+    const groups = [...flowGroups.entries()]
+      .sort(([a], [b]) => {
+        if (a === 'sin-hu') return 1;
+        if (b === 'sin-hu') return -1;
+        return a.localeCompare(b);
+      })
+      .map(([id, group]) => ({
+        id,
+        header: (
+          <span className="flex flex-wrap items-center gap-2">
+            <Badge tone={id === 'sin-hu' ? 'warn' : 'brand'} className="shrink-0">
+              {id === 'sin-hu' ? 'SIN HU' : 'HU'}
+            </Badge>
+            <span className="font-semibold text-fg">{group.label}</span>
+            <span className="text-fg-muted">{group.title}</span>
+            <span className="text-caption text-fg-subtle">
+              {group.rows.length} flujo{group.rows.length === 1 ? '' : 's'}
+            </span>
+          </span>
+        ),
+        rows: group.rows,
+      }));
+
+    const hallazgoRows = filteredRows.filter((row) => row.kind === 'hallazgo');
+    if (hallazgoRows.length > 0) {
+      groups.push({
+        id: 'hallazgos',
+        header: (
+          <span className="flex flex-wrap items-center gap-2">
+            <Badge tone="brand" className="shrink-0">
+              HALLAZGOS
+            </Badge>
+            <span className="text-caption text-fg-subtle">
+              {hallazgoRows.length} hallazgo{hallazgoRows.length === 1 ? '' : 's'}
+            </span>
+          </span>
+        ),
+        rows: hallazgoRows,
+      });
+    }
+    return groups;
+  })();
+
   const changeType = (value: string) => {
     const next = value as typeof typeFilter;
     setTypeFilter(next);
@@ -999,7 +1061,8 @@ export function SessionDetail({
                 },
               },
             ]}
-            rows={filteredRows}
+            groups={tableGroups}
+            rows={tableGroups ? undefined : filteredRows}
             getRowId={(row) => row.rowId}
             onRowClick={(row) =>
               setExpandedRowId((current) => (current === row.rowId ? null : row.rowId))

@@ -244,9 +244,12 @@ router.get('/sessions/:runId', async (req, res) => {
         // cada sesión vea SOLO sus propios flujos, sin compartir con la suite
         // sintética "🧪 Exploratoria" que es global al proyecto.
         const flowsRes = await query(
-            `SELECT DISTINCT tc.id, tc.title, tc.steps, tc.expected_result, tc.key_id, tc.created_at, tc.assigned_to
+            `SELECT DISTINCT tc.id, tc.title, tc.steps, tc.expected_result, tc.key_id, tc.created_at,
+                    tc.assigned_to, tc.us_id,
+                    us.key_id AS us_key, us.title AS us_title
                FROM qa_test_cases tc
                JOIN qa_executions e ON e.tc_id = tc.id
+               LEFT JOIN qa_user_stories us ON us.id = tc.us_id
               WHERE e.run_id = ?
               ORDER BY tc.id ASC`,
             [runId]
@@ -320,7 +323,7 @@ router.get('/sessions/:runId', async (req, res) => {
 router.post('/sessions/:runId/flows', async (req, res) => {
     try {
         const runId = parseInt(req.params.runId, 10);
-        const { title, steps, expected_result } = req.body;
+        const { title, steps, expected_result, us_id } = req.body;
         if (!title || !title.trim()) return res.status(400).json({ error: 'title requerido' });
 
         const runRes = await query(
@@ -344,12 +347,31 @@ router.post('/sessions/:runId/flows', async (req, res) => {
 
         const keyId = await generateTcKey(run.project_id);
 
+        // Vinculación opcional con una HU del mismo proyecto. No crea
+        // escenario ni modifica la HU: solo deja el TC asociado para agrupar
+        // los flujos de la sesión.
+        let usId = null;
+        if (us_id !== undefined && us_id !== null && us_id !== '') {
+            usId = parseInt(us_id, 10);
+            if (!usId) return res.status(400).json({ error: 'us_id inválido' });
+            const usRes = await query(
+                `SELECT us.id
+                   FROM qa_user_stories us
+                   JOIN qa_use_cases uc ON uc.id = us.use_case_id
+                  WHERE us.id = ? AND uc.project_id = ?`,
+                [usId, run.project_id]
+            );
+            if (usRes.rows.length === 0) {
+                return res.status(400).json({ error: 'La HU indicada no pertenece al proyecto' });
+            }
+        }
+
         const ins = await query(
             `INSERT INTO qa_test_cases
-                (suite_id, title, steps, expected_result, is_exploratory, created_by, updated_by, key_id, project_id, priority, severity)
-             VALUES (?, ?, ?, ?, true, ?, ?, ?, ?, 'Media', 'Media')
+                (suite_id, title, steps, expected_result, is_exploratory, created_by, updated_by, key_id, project_id, priority, severity, us_id)
+             VALUES (?, ?, ?, ?, true, ?, ?, ?, ?, 'Media', 'Media', ?)
              RETURNING id`,
-            [suiteId, title.trim(), steps || '', expected_result || '', req.user.id, req.user.id, keyId, run.project_id]
+            [suiteId, title.trim(), steps || '', expected_result || '', req.user.id, req.user.id, keyId, run.project_id, usId]
         );
         const tcId = ins.rows[0].id;
 

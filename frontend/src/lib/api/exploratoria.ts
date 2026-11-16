@@ -37,7 +37,7 @@ export const exploratoriaApi = {
       body: input,
     }),
 
-  addFlow: (runId: number, input: { title: string; steps?: string; expected_result?: string }) =>
+  addFlow: (runId: number, input: { title: string; steps?: string; expected_result?: string; us_id?: number | null }) =>
     apiFetch<{ ok: true; id?: number }>(`/api/explorations/sessions/${runId}/flows`, {
       method: 'POST',
       body: input,

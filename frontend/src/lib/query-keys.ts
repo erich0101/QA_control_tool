@@ -7,6 +7,7 @@ export const queryKeys = {
   projects: ['projects'] as const,
   useCases: (projectId: number | null) => ['use-cases', projectId] as const,
   userStories: (useCaseId: number | null) => ['user-stories', useCaseId] as const,
+  projectUserStories: (projectId: number | null) => ['project-user-stories', projectId] as const,
   testSuites: (projectId: number | null, useCaseId?: number) =>
     ['test-suites', projectId, useCaseId ?? null] as const,
   users: ['users'] as const,

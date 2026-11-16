@@ -56,6 +56,11 @@ export const userStoriesApi = {
       query: { use_case_id: useCaseId },
     }),
 
+  listByProject: (projectId: number) =>
+    apiFetch<{ userStories: UserStory[] }>('/api/user-stories', {
+      query: { project_id: projectId },
+    }),
+
   create: (input: UserStoryInput) =>
     apiFetch<{ ok: true; id: number; key_id: string }>('/api/user-stories', {
       method: 'POST',
