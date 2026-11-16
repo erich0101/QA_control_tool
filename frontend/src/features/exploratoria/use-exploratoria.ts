@@ -126,6 +126,17 @@ export function useExploratoriaMutations(projectId: number | null, runId: number
     onError: (error: Error) => toast.error(error.message),
   });
 
+  /** Renombra la sesión. */
+  const renameSession = useMutation({
+    mutationFn: ({ id, name }: { id: number; name: string }) =>
+      exploratoriaApi.renameSession(id, name),
+    onSuccess: async () => {
+      await invalidateAll();
+      toast.success('Nombre de la sesión actualizado');
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
   /** Cambia las fechas de la sesión (plan y/o límite) con justificación. */
   const updateDates = useMutation({
     mutationFn: ({
@@ -325,6 +336,7 @@ export function useExploratoriaMutations(projectId: number | null, runId: number
     deleteSession,
     setCoverage,
     extendDeadline,
+    renameSession,
     updateDates,
     startBlock,
     endBlock,

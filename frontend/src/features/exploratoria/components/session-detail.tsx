@@ -59,6 +59,7 @@ interface SessionDetailProps {
   onToggleCoverage: (ready: boolean) => void;
   onExtendDeadline: () => void;
   onEditDates: () => void;
+  onRename: () => void;
   onBlock: () => void;
   onEndBlock: (blockId: number) => void;
   onAssignTester: (tcId: number, userId: number | null) => void;
@@ -110,6 +111,7 @@ export function SessionDetail({
   onToggleCoverage,
   onExtendDeadline,
   onEditDates,
+  onRename,
   onBlock,
   onEndBlock,
   onAssignTester,
@@ -274,6 +276,17 @@ export function SessionDetail({
           <h2 className="min-w-0 flex-1 whitespace-normal break-words text-[15px] font-semibold leading-snug text-fg">
             {run.name ?? `Sesión #${run.id}`}
           </h2>
+
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="mt-0.5 shrink-0"
+            onClick={onRename}
+            aria-label="Editar nombre de la sesión"
+            title="Editar nombre"
+          >
+            <Pencil />
+          </Button>
 
           <Badge tone={isFinished ? 'neutral' : 'ok'} className="mt-0.5 shrink-0">
             {isFinished ? 'FINALIZADA' : 'EN CURSO'}

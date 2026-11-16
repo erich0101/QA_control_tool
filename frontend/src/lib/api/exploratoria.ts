@@ -52,6 +52,13 @@ export const exploratoriaApi = {
   finishSession: (runId: number) =>
     apiFetch<{ ok: true }>(`/api/explorations/sessions/${runId}/finish`, { method: 'POST' }),
 
+  /** Cambia el nombre de la sesión. */
+  renameSession: (runId: number, name: string) =>
+    apiFetch<{ ok: true; name: string }>(`/api/explorations/sessions/${runId}/name`, {
+      method: 'PUT',
+      body: { name },
+    }),
+
   /** Extiende la fecha límite con justificación (sesiones en curso). */
   extendDeadline: (runId: number, input: { deadlineAt: string; reason: string }) =>
     apiFetch<{ ok: true; deadline_at: string; extension_id?: number }>(

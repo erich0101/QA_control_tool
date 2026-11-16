@@ -17,6 +17,7 @@ import { StatusReportDialog } from './components/status-report-dialog';
 import { ExtendDeadlineDialog } from './components/extend-deadline-dialog';
 import { EditDatesDialog } from './components/edit-dates-dialog';
 import { BlockSessionDialog } from './components/block-session-dialog';
+import { RenameSessionDialog } from './components/rename-session-dialog';
 import { SessionDetail } from './components/session-detail';
 import { useExploratoriaMutations, useExploratorySession, useExploratorySessions } from './use-exploratoria';
 
@@ -36,6 +37,7 @@ export function ExploratoriaPage() {
   const [deadlineOpen, setDeadlineOpen] = useState(false);
   const [datesOpen, setDatesOpen] = useState(false);
   const [blockOpen, setBlockOpen] = useState(false);
+  const [renameOpen, setRenameOpen] = useState(false);
   const [flowForm, setFlowForm] = useState<{
     mode: 'create' | 'edit';
     flow?: ExploratoryFlow;
@@ -329,6 +331,7 @@ export function ExploratoriaPage() {
               }
               onExtendDeadline={() => setDeadlineOpen(true)}
               onEditDates={() => setDatesOpen(true)}
+              onRename={() => setRenameOpen(true)}
               onBlock={() => setBlockOpen(true)}
               onEndBlock={(blockId) => {
                 void (async () => {
@@ -480,6 +483,18 @@ export function ExploratoriaPage() {
           isPending={mutations.updateDates.isPending}
           onSubmit={async (values) => {
             await mutations.updateDates.mutateAsync({ id: detail.run.id, ...values });
+          }}
+        />
+      ) : null}
+
+      {detail ? (
+        <RenameSessionDialog
+          open={renameOpen}
+          onOpenChange={setRenameOpen}
+          currentName={detail.run.name ?? ''}
+          isPending={mutations.renameSession.isPending}
+          onSubmit={async (values) => {
+            await mutations.renameSession.mutateAsync({ id: detail.run.id, name: values.name });
           }}
         />
       ) : null}

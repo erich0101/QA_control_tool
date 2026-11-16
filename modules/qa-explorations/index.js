@@ -170,6 +170,32 @@ router.post('/sessions', async (req, res) => {
     }
 });
 
+// ── PUT /api/explorations/sessions/:runId/name ────────────────────────────────
+// Renombra una sesión existente (permite corregir el nombre en cualquier estado).
+router.put('/sessions/:runId/name', async (req, res) => {
+    try {
+        const runId = parseInt(req.params.runId, 10);
+        if (!runId) return res.status(400).json({ error: 'runId inválido' });
+
+        const name = String(req.body.name || '').trim();
+        if (!name) return res.status(400).json({ error: 'El nombre es obligatorio' });
+        if (name.length > 200) {
+            return res.status(400).json({ error: 'El nombre no puede superar los 200 caracteres' });
+        }
+
+        const runRes = await query(
+            `SELECT id FROM qa_test_runs WHERE id = ? AND run_type = 'EXPLORATORY'`,
+            [runId]
+        );
+        if (runRes.rows.length === 0) return res.status(404).json({ error: 'Sesión no encontrada' });
+
+        await query(`UPDATE qa_test_runs SET name = ? WHERE id = ?`, [name, runId]);
+        res.json({ ok: true, name });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // ── GET /api/explorations/sessions/:runId ─────────────────────────────────────
 router.get('/sessions/:runId', async (req, res) => {
     try {
