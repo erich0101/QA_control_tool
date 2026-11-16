@@ -25,18 +25,28 @@ route (HTTP) -> buildData(...) -> render(data) -> res.send(html)
 
 ## Estado actual
 
-- `modules/qa-explorations/report-ui/status-report-ui.js`
-  contiene los bloques de presentación del reporte de estatus
-  (barra de distribución, donut por sesión, barras de aceptación,
-  matriz de transiciones, links a sesiones).
-- El route `GET /api/explorations/reports/status` todavía mezcla consultas y
-  template principal. Próximo paso: extraer `buildStatusReportData()` y
-  `renderStatusReport()` completos.
-- Reportes pendientes de extraer con el mismo patrón:
-  - reporte de bugs por sesión (`/sessions/:runId/bugs-report`),
-  - reporte de hallazgos (`/api/reports/hallazgos`),
-  - reporte por tester (`src/lib/tester-report.js`),
-  - reportes de suites (`report-generator.js`).
+- Reporte de estatus:
+  - datos: `modules/qa-explorations/status-report/data.js` (`buildStatusReportData`)
+  - presentación: `modules/qa-explorations/status-report/render.js` (`renderStatusReport`)
+  - bloques visuales reutilizables: `modules/qa-explorations/report-ui/status-report-ui.js`
+- Reporte de bugs por sesión:
+  - datos: `modules/qa-explorations/bugs-report/data.js` (`buildBugsReportData`)
+  - presentación: `modules/qa-explorations/bugs-report/render.js` (`renderBugsReport`)
+- Reporte de hallazgos seleccionados:
+  - datos: `src/lib/report-templates/hallazgos-data.js`
+  - presentación: `src/lib/report-templates/hallazgos-render.js`
+- Reporte por tester:
+  - ya estaba separado en `src/lib/tester-report.js`
+    (`generateTesterReport` → datos, `renderTesterReportHTML` → HTML).
+- Reportes de suites:
+  - `report-generator.js` ya separa `fetch*/compute*` de `render*`;
+    queda opcional partirlo en archivos si sigue creciendo.
+
+Todos los routes de reportes quedan como capa fina:
+
+```
+route -> build<Reporte>Data(...) -> render<Reporte>(data) -> res.send(html)
+```
 
 ## Por qué no migrar los reportes a React
 
