@@ -350,8 +350,17 @@ ${bug.evidences.map(f => `- ${f}`).join('\n')}
     },
 
     async getTicketsDetails(userCredentials, domain, keys) {
-        const jql = `key in (${keys.map(k => `"${k}"`).join(',')})`;
-        return this.searchIssues(userCredentials, domain, jql);
+        // Jira limita la búsqueda a 100 issues por request: se consulta por
+        // lotes para no dejar tickets sin sincronizar.
+        const uniqueKeys = [...new Set(keys.filter(Boolean))];
+        const issues = [];
+        for (let index = 0; index < uniqueKeys.length; index += 100) {
+            const chunk = uniqueKeys.slice(index, index + 100);
+            const jql = `key in (${chunk.map(k => `"${k}"`).join(',')})`;
+            const result = await this.searchIssues(userCredentials, domain, jql);
+            issues.push(...result);
+        }
+        return issues;
     },
 
     async searchIssues(userCredentials, domain, jql, expand = null, extraFields = []) {
@@ -363,7 +372,7 @@ ${bug.evidences.map(f => `- ${f}`).join('\n')}
         if (extraFields.includes('*all')) {
             fields = ['*all'];
         } else {
-            const defaultFields = ["summary", "status", "assignee", "reporter", "created", "parent", "priority", "resolutiondate", "updated"];
+            const defaultFields = ["summary", "status", "assignee", "reporter", "created", "parent", "priority", "resolutiondate", "updated", "project"];
             fields = extraFields.length > 0 ? [...new Set([...defaultFields, ...extraFields])] : defaultFields;
         }
 

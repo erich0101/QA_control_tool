@@ -492,6 +492,9 @@ export interface JiraTrackingItem {
   jira_priority?: string;
   jira_epic_key: string;
   jira_epic_name: string;
+  /** Espacio/proyecto de Jira del ticket. */
+  jira_space_key?: string;
+  jira_space_name?: string;
 }
 
 export interface JiraIssueComment {

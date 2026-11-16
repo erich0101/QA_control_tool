@@ -458,7 +458,9 @@ router.get('/projects/:id/tracking', requireAuth, async (req, res) => {
                 jira_avatar: jira?.fields?.assignee?.avatarUrls?.['32x32'] || null,
                 jira_priority: jira?.fields?.priority?.name || '—',
                 jira_epic_key: jira?.fields?.parent?.key || 'Otras',
-                jira_epic_name: jira?.fields?.parent?.fields?.summary || 'Tickets sin épica'
+                jira_epic_name: jira?.fields?.parent?.fields?.summary || 'Tickets sin épica',
+                jira_space_key: jira?.fields?.project?.key || '—',
+                jira_space_name: jira?.fields?.project?.name || '—'
             };
         });
 

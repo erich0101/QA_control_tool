@@ -2,8 +2,12 @@ import { useMemo, useState } from 'react';
 import { ChevronRight, Eye, RefreshCw, Target } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Combobox } from '@/components/ui/combobox';
 import { DataTable } from '@/components/ui/data-table';
+import { DatePicker } from '@/components/ui/date-picker';
 import { EmptyState } from '@/components/ui/empty-state';
+import { Field } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ApiError } from '@/lib/api/client';
 import { JiraSetupState, getJiraErrorCode } from '@/features/jira/components/jira-setup-state';
@@ -32,11 +36,87 @@ export function JiraTrackingPage() {
   const { data: tracking = [], isLoading, isFetching, refetch, error } = useJiraTracking(projectId);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<JiraTrackingItem | null>(null);
+  const [spaceFilter, setSpaceFilter] = useState('');
+  const [keyFilter, setKeyFilter] = useState('');
+  const [epicFilter, setEpicFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+
+  const filtersActive = Boolean(
+    spaceFilter || keyFilter.trim() || epicFilter || statusFilter || fromDate || toDate,
+  );
+
+  const filtered = useMemo(() => {
+    const term = keyFilter.trim().toLowerCase();
+    return tracking.filter((item) => {
+      if (spaceFilter && item.jira_space_key !== spaceFilter) return false;
+      if (term && !item.jira_key.toLowerCase().includes(term)) return false;
+      if (epicFilter && item.jira_epic_key !== epicFilter) return false;
+      if (statusFilter && item.jira_status !== statusFilter) return false;
+
+      const day = item.created_at
+        ? new Date(item.created_at).toLocaleDateString('en-CA', {
+            timeZone: 'America/Argentina/Buenos_Aires',
+          })
+        : '';
+      if (fromDate && day < fromDate) return false;
+      if (toDate && day > toDate) return false;
+      return true;
+    });
+  }, [tracking, spaceFilter, keyFilter, epicFilter, statusFilter, fromDate, toDate]);
+
+  const spaceOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const item of tracking) {
+      const key = item.jira_space_key ?? '';
+      if (!key || key === '—') continue;
+      map.set(key, item.jira_space_name && item.jira_space_name !== '—' ? item.jira_space_name : key);
+    }
+    return [
+      { value: '', label: 'Todos los espacios' },
+      ...[...map.entries()]
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([value, label]) => ({ value, label: `${value} · ${label}` })),
+    ];
+  }, [tracking]);
+
+  const epicOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const item of tracking) {
+      map.set(item.jira_epic_key, item.jira_epic_name);
+    }
+    return [
+      { value: '', label: 'Todas las épicas' },
+      ...[...map.entries()]
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([value, label]) => ({ value, label: `${value} — ${label}` })),
+    ];
+  }, [tracking]);
+
+  const statusOptions = useMemo(() => {
+    const values = [...new Set(tracking.map((item) => item.jira_status))].sort((a, b) =>
+      a.localeCompare(b),
+    );
+    return [
+      { value: '', label: 'Todos los estados' },
+      ...values.map((value) => ({ value, label: value })),
+    ];
+  }, [tracking]);
+
+  const clearFilters = () => {
+    setSpaceFilter('');
+    setKeyFilter('');
+    setEpicFilter('');
+    setStatusFilter('');
+    setFromDate('');
+    setToDate('');
+  };
 
   const groups = useMemo<EpicGroup[]>(() => {
     const map = new Map<string, EpicGroup>();
 
-    for (const item of tracking) {
+    for (const item of filtered) {
       const key = item.jira_epic_key || 'Otras';
       if (!map.has(key)) {
         map.set(key, {
@@ -49,7 +129,7 @@ export function JiraTrackingPage() {
     }
 
     return [...map.values()].sort((a, b) => a.key.localeCompare(b.key));
-  }, [tracking]);
+  }, [filtered]);
 
   const toggle = (key: string) =>
     setCollapsed((current) => {
@@ -85,7 +165,9 @@ export function JiraTrackingPage() {
           Seguimiento Jira
         </span>
         <Badge tone="neutral">
-          {tracking.length} {tracking.length === 1 ? 'ticket' : 'tickets'} sincronizados
+          {filtersActive
+            ? `${filtered.length} de ${tracking.length} tickets`
+            : `${tracking.length} ${tracking.length === 1 ? 'ticket' : 'tickets'} sincronizados`}
         </Badge>
         <Badge tone="brand">
           {groups.length} {groups.length === 1 ? 'épica' : 'épicas'}
@@ -98,6 +180,87 @@ export function JiraTrackingPage() {
           Sincronizar con Jira
         </Button>
       </header>
+
+      {tracking.length > 0 ? (
+        <div className="shrink-0 border-b border-border bg-surface px-5 py-2">
+          <div className="flex flex-wrap items-end gap-2">
+            <Field label="Espacio" htmlFor="tracking-space" className="w-44">
+              <Combobox
+                id="tracking-space"
+                value={spaceFilter}
+                onValueChange={setSpaceFilter}
+                options={spaceOptions}
+                placeholder="Todos los espacios"
+                aria-label="Filtrar por espacio"
+              />
+            </Field>
+
+            <Field label="Key" htmlFor="tracking-key" className="w-36">
+              <Input
+                id="tracking-key"
+                value={keyFilter}
+                onChange={(event) => setKeyFilter(event.target.value)}
+                placeholder="AGIP-1234"
+                className="h-9"
+              />
+            </Field>
+
+            <Field label="Épica" htmlFor="tracking-epic" className="w-64">
+              <Combobox
+                id="tracking-epic"
+                value={epicFilter}
+                onValueChange={setEpicFilter}
+                options={epicOptions}
+                placeholder="Todas las épicas"
+                searchPlaceholder="Buscar épica…"
+                aria-label="Filtrar por épica"
+              />
+            </Field>
+
+            <Field label="Estado" htmlFor="tracking-status" className="w-40">
+              <Combobox
+                id="tracking-status"
+                value={statusFilter}
+                onValueChange={setStatusFilter}
+                options={statusOptions}
+                placeholder="Todos los estados"
+                searchPlaceholder="Buscar estado…"
+                aria-label="Filtrar por estado"
+              />
+            </Field>
+
+            <Field label="Desde" htmlFor="tracking-from" className="w-40">
+              <DatePicker
+                id="tracking-from"
+                value={fromDate}
+                max={toDate || undefined}
+                onChange={setFromDate}
+                aria-label="Fecha desde"
+              />
+            </Field>
+
+            <Field label="Hasta" htmlFor="tracking-to" className="w-40">
+              <DatePicker
+                id="tracking-to"
+                value={toDate}
+                min={fromDate || undefined}
+                onChange={setToDate}
+                aria-label="Fecha hasta"
+              />
+            </Field>
+
+            <Button
+              variant="ghost"
+              size="sm"
+              className="mb-0.5"
+              onClick={clearFilters}
+              disabled={!filtersActive}
+            >
+              Limpiar filtros
+            </Button>
+          </div>
+        </div>
+      ) : null}
 
       <div className="scrollbar-apple min-h-0 flex-1 overflow-y-auto p-5">
         {isLoading ? (
@@ -118,6 +281,17 @@ export function JiraTrackingPage() {
             icon={<Target />}
             title="Sin tickets vinculados"
             description="Los bugs que exportes a Jira aparecen acá para seguimiento."
+          />
+        ) : filtered.length === 0 ? (
+          <EmptyState
+            icon={<Target />}
+            title="Sin tickets para los filtros"
+            description="Probá con otro espacio, key, épica, estado o rango de fechas."
+            action={
+              <Button variant="secondary" onClick={clearFilters}>
+                Limpiar filtros
+              </Button>
+            }
           />
         ) : (
           <DataTable
