@@ -269,15 +269,18 @@ export function SessionDetail({
   return (
     <div className="flex h-full min-h-0 flex-col">
       <header className="shrink-0 border-b border-border bg-surface px-5 py-2.5">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="font-mono text-caption font-bold text-brand">#{run.id}</span>
-          <h2 className="min-w-0 flex-1 truncate text-[15px] font-semibold text-fg">
+        <div className="flex items-start gap-2">
+          <span className="mt-0.5 font-mono text-caption font-bold text-brand">#{run.id}</span>
+          <h2 className="min-w-0 flex-1 whitespace-normal break-words text-[15px] font-semibold leading-snug text-fg">
             {run.name ?? `Sesión #${run.id}`}
           </h2>
 
-          <Badge tone={isFinished ? 'neutral' : 'ok'}>
+          <Badge tone={isFinished ? 'neutral' : 'ok'} className="mt-0.5 shrink-0">
             {isFinished ? 'FINALIZADA' : 'EN CURSO'}
           </Badge>
+        </div>
+
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
 
           <Button variant="ghost" size="sm" onClick={onBack}>
             ← Sesiones
