@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Compass, FileText, Loader2, Plus, Search } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -69,6 +69,45 @@ export function ExploratoriaPage() {
     );
   };
 
+  /**
+   * Al cambiar de proyecto se limpia la sesión abierta y los diálogos: el
+   * `?run=` de la URL pertenece al proyecto anterior y, si se conserva, el
+   * detalle sigue mostrando datos viejos hasta navegar o recargar.
+   */
+  const previousProjectRef = useRef(projectId);
+  useEffect(() => {
+    if (previousProjectRef.current === projectId) return;
+    previousProjectRef.current = projectId;
+
+    setSearch('');
+    setStartOpen(false);
+    setStatusReportOpen(false);
+    setDeadlineOpen(false);
+    setDatesOpen(false);
+    setBlockOpen(false);
+    setFlowForm(null);
+    setHallazgoForm(null);
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete('run');
+        return next;
+      },
+      { replace: true },
+    );
+  }, [projectId, setParams]);
+
+  // Defensa extra: si por una carrera llegara un detalle de otro proyecto,
+  // se descarta en vez de mostrarlo con el proyecto activo.
+  useEffect(() => {
+    if (!detail || !projectId) return;
+    const detailProject = detail.run.project_id;
+    if (detailProject && Number(detailProject) !== Number(projectId)) {
+      patchParams({ run: null });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detail, projectId]);
+
   const filtered = sessions.filter((session) => {
     const term = search.trim().toLowerCase();
     if (!term) return true;
@@ -128,6 +167,22 @@ export function ExploratoriaPage() {
     if (!ok) return;
     await mutations.deleteSession.mutateAsync(id);
     patchParams({ run: null });
+  };
+
+  /** Declarar/quitar cobertura pide confirmación para evitar clicks accidentales. */
+  const handleToggleCoverage = async (id: number, ready: boolean) => {
+    const ok = await confirm({
+      title: ready ? 'Declarar cobertura de TC' : 'Quitar cobertura declarada',
+      description: ready
+        ? 'Confirmá que ya cargaste los TC de cobertura funcional/negocio. ' +
+          'El reporte de estatus dejará de mostrar la alerta de cobertura.'
+        : 'Se quitará la declaración de cobertura de la sesión. ' +
+          'El reporte de estatus volverá a mostrar la alerta hasta que la declares nuevamente.',
+      confirmLabel: ready ? 'Declarar cobertura' : 'Quitar cobertura',
+      destructive: !ready,
+    });
+    if (!ok) return;
+    await mutations.setCoverage.mutateAsync({ id, ready });
   };
 
   if (!projectId) {
@@ -270,7 +325,7 @@ export function ExploratoriaPage() {
               canDeleteSession={canManage}
               onDeleteSession={() => handleDeleteSession(detail.run.id)}
               onToggleCoverage={(ready) =>
-                mutations.setCoverage.mutate({ id: detail.run.id, ready })
+                void handleToggleCoverage(detail.run.id, ready)
               }
               onExtendDeadline={() => setDeadlineOpen(true)}
               onEditDates={() => setDatesOpen(true)}
