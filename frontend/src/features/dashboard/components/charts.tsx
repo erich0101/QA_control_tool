@@ -1,32 +1,8 @@
 import { cn } from '@/lib/utils';
 
-export function KpiCard({
-  label,
-  value,
-  hint,
-  tone = 'default',
-}: {
-  label: string;
-  value: React.ReactNode;
-  hint?: string;
-  tone?: 'default' | 'ok' | 'fail' | 'warn' | 'brand';
-}) {
-  const toneClass = {
-    default: 'text-fg',
-    ok: 'text-ok',
-    fail: 'text-fail',
-    warn: 'text-warn',
-    brand: 'text-brand',
-  }[tone];
-
-  return (
-    <div className="rounded-xl border border-border bg-surface p-4">
-      <p className="text-caption font-bold uppercase tracking-wide text-fg-subtle">{label}</p>
-      <p className={cn('mt-1.5 text-[26px] font-bold leading-none', toneClass)}>{value}</p>
-      {hint ? <p className="mt-1 text-caption text-fg-subtle">{hint}</p> : null}
-    </div>
-  );
-}
+// KpiCard vive ahora en el design system; se reexporta para no cambiar imports
+// existentes del dashboard.
+export { KpiCard } from '@/components/ui/kpi-card';
 
 export function ProgressBar({
   value,

@@ -13,6 +13,7 @@
     "ui:build": "npm --prefix frontend run build",
     "ui:typecheck": "npm --prefix frontend run typecheck",
     "check:ui": "npm --prefix frontend run check:ui",
+    "ui:inventory": "node tools/ui-inventory.js",
     "evidences:audit": "node tools/evidences-sync.js",
     "evidences:publish": "node tools/evidences-sync.js --publish",
     "verify-index": "node scripts/verify-index.js"

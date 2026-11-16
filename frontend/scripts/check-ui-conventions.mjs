@@ -29,6 +29,18 @@ const PRE_WRAP_ALLOWLIST = new Set([
 
 const isToolsViewer = (path) => path.startsWith('features/tools/');
 
+// Inputs de fecha que todavía no usan <DatePicker>. Deuda a migrar de a uno;
+// los archivos nuevos ya quedan bloqueados.
+const DATE_INPUT_ALLOWLIST = new Set([
+  'features/dashboard/components/epic-report-tab.tsx',
+  'features/dashboard/components/performance-tab.tsx',
+  'features/exploratoria/components/block-session-dialog.tsx',
+  'features/exploratoria/components/edit-dates-dialog.tsx',
+  'features/exploratoria/components/extend-deadline-dialog.tsx',
+  'features/exploratoria/components/session-dialogs.tsx',
+  'features/history/components/date-range-filter.tsx',
+]);
+
 const violations = [];
 
 for (const file of walk(root)) {
@@ -41,13 +53,17 @@ for (const file of walk(root)) {
   };
 
   lines.forEach((line, index) => {
+    const trimmed = line.trim();
+    const isComment =
+      trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed.startsWith('/*');
+
     // 1) Tablas: solo DataTable.
-    if (line.includes('<table') && !path.startsWith('components/ui/')) {
+    if (!isComment && line.includes('<table') && !path.startsWith('components/ui/')) {
       report(index, 'Usá <DataTable> en vez de <table>');
     }
 
     // 2) Textareas: solo el primitivo Input.
-    if (line.includes('<textarea') && path !== 'components/ui/input.tsx') {
+    if (!isComment && line.includes('<textarea') && !path.startsWith('components/ui/')) {
       report(index, 'Usá <Textarea> en vez de <textarea>');
     }
 
@@ -64,13 +80,28 @@ for (const file of walk(root)) {
     if (line.includes('<pre') && !isToolsViewer(path) && !path.startsWith('components/ui/')) {
       report(index, 'Usá <ReadField> en vez de <pre> para texto de un campo');
     }
+
+    // 5) Selects nativos: solo SelectField/Combobox.
+    if (!isComment && line.includes('<select') && !path.startsWith('components/ui/')) {
+      report(index, 'Usá <SelectField> o <Combobox> en vez de <select>');
+    }
+
+    // 6) Inputs de fecha: solo DatePicker (o allowlist de deuda existente).
+    if (
+      !isComment &&
+      (line.includes('type="date"') || line.includes('type="datetime-local"')) &&
+      path !== 'components/ui/date-picker.tsx' &&
+      !DATE_INPUT_ALLOWLIST.has(path)
+    ) {
+      report(index, 'Usá <DatePicker> en vez de <input type="date|datetime-local">');
+    }
   });
 }
 
 if (violations.length > 0) {
   console.error(`❌ Convenciones de UI (${violations.length}):\n`);
   for (const violation of violations) console.error(` - ${violation}`);
-  console.error('\nReglas: docs/ui-refactor-plan.md › Reglas de UI (design system)');
+  console.error('\nReglas: docs/design-system.md › Reglas que aplica check:ui');
   process.exit(1);
 }
 

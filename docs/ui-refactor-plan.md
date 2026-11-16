@@ -14,6 +14,12 @@ todos estén migrados, `/` pasa a servir la nueva UI y se borra la legacy.
 /app     -> UI nueva (React)
 ```
 
+> Estado: todas las entradas de `NAV_ITEMS` ya tienen pantalla React en `/app`.
+> Lo pendiente no son tabs completos sino funcionalidades puntuales (IA, import
+> XLSX, voz, batch Jira) y el retiro final de `public/js/**`.
+> Design system y reglas: `docs/design-system.md`.
+> Medición de la migración: `npm run ui:inventory`.
+
 ## Equivalencias con el código viejo
 
 | Legacy | Nueva UI | Estado |

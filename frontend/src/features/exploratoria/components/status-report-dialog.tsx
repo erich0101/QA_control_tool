@@ -10,7 +10,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Field } from '@/components/ui/field';
-import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Skeleton } from '@/components/ui/skeleton';
 import { exploratoriaApi } from '@/lib/api/exploratoria';
 import { cn } from '@/lib/utils';
@@ -92,21 +92,19 @@ export function StatusReportDialog({ open, onOpenChange, projectId }: StatusRepo
 
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Desde" htmlFor="status-report-from">
-            <Input
+            <DatePicker
               id="status-report-from"
-              type="date"
               value={dateFrom}
               max={dateTo || undefined}
-              onChange={(event) => setDateFrom(event.target.value)}
+              onChange={setDateFrom}
             />
           </Field>
           <Field label="Hasta" htmlFor="status-report-to">
-            <Input
+            <DatePicker
               id="status-report-to"
-              type="date"
               value={dateTo}
               min={dateFrom || undefined}
-              onChange={(event) => setDateTo(event.target.value)}
+              onChange={setDateTo}
             />
           </Field>
         </div>
