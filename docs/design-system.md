@@ -128,9 +128,10 @@ medida que se migran esas pantallas.
 
 ## Deuda / próximos pasos
 
-- Migrar los `datetime-local` restantes a `DatePicker withTime`.
-- Adoptar `PageHeader`, `Section` y `KpiCard` en las pantallas que todavía
+- Adoptar `Section`, `EditableCell` y `PageHeader` en las pantallas que todavía
   arman esos bloques a mano.
 - Documentar estados de carga/error por pantalla y unificar toasts.
+- Separar datos y presentación en los reportes HTML: ver
+  `docs/reports-architecture.md`.
 - Evaluar Storybook solo si el equipo crece; no es requisito para usar el
   design system.
