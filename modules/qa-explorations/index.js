@@ -1232,6 +1232,12 @@ function fmtReportDate(value) {
     return new Date(value).toLocaleString('es-AR', { timeZone: REPORT_TZ });
 }
 
+/** Fechas de planificación/límite: solo día calendario, sin hora. */
+function fmtReportDay(value) {
+    if (!value) return '—';
+    return new Date(value).toLocaleDateString('es-AR', { timeZone: REPORT_TZ });
+}
+
 function reportRange(query) {
     const from = query.date_from || reportDaysAgo(7);
     const to = query.date_to || reportToday();
@@ -1591,7 +1597,7 @@ router.get('/reports/status', async (req, res) => {
                 tone: 'warn',
                 title: 'Cobertura del regresivo incompleta',
                 detail: `${uncoveredRuns.length} de ${runsById.size} sesión(es) no declararon los TC de cobertura. Los resultados muestran ejecución, no aceptación del regresivo.`,
-                refs: uncoveredRuns.map(run => `#${run.id}`).join(', '),
+                refs: uncoveredRuns.map(run => run.id),
             });
         }
         if (sessionTotals.fail > 0) {
@@ -1599,7 +1605,7 @@ router.get('/reports/status', async (req, res) => {
                 tone: 'fail',
                 title: `${sessionTotals.fail} TC en FAIL`,
                 detail: 'Hay resultados fallidos en las sesiones incluidas. Revisá los defectos y su estado antes de decidir la entrega.',
-                refs: '',
+                refs: [],
             });
         }
         if (activeBlockRuns.length > 0) {
@@ -1607,23 +1613,17 @@ router.get('/reports/status', async (req, res) => {
                 tone: 'fail',
                 title: `${activeBlockRuns.length} sesión(es) bloqueada(s)`,
                 detail: 'El testing está detenido por fuerza mayor. El bloqueo no extiende la fecha límite automáticamente.',
-                refs: activeBlockRuns.map(id => `#${id}`).join(', '),
+                refs: activeBlockRuns,
             });
         }
-        if (overdueRuns.length > 0) {
+        const pendingRunIds = [...new Set(pendingRuns.map(row => row.run_id))];
+        const followUpIds = [...new Set([...overdueRuns.map(run => run.id), ...pendingRunIds])];
+        if (followUpIds.length > 0) {
             alerts.push({
                 tone: 'warn',
-                title: `${overdueRuns.length} sesión(es) vencida(s)`,
-                detail: 'La fecha límite pasó y la sesión sigue en curso. Requiere reprogramación o cierre.',
-                refs: overdueRuns.map(run => `#${run.id}`).join(', '),
-            });
-        }
-        if (sessionTotals.pending > 0) {
-            alerts.push({
-                tone: 'warn',
-                title: `${sessionTotals.pending} TC pendientes`,
-                detail: `Sin ejecutar en las sesiones incluidas. Afecta la aceptación total (${acceptanceTotalPct ?? '—'}%).`,
-                refs: pendingRuns.map(row => `#${row.run_id}`).join(', '),
+                title: 'Sesiones con trabajo pendiente',
+                detail: `${overdueRuns.length} vencida(s) · ${sessionTotals.pending} TC pendientes en ${pendingRunIds.length} sesión(es).`,
+                refs: followUpIds,
             });
         }
         if (regressionTotal > 0) {
@@ -1631,7 +1631,7 @@ router.get('/reports/status', async (req, res) => {
                 tone: 'warn',
                 title: `${regressionTotal} regresión(es) en re-tests`,
                 detail: 'TC que estaban OK y pasaron a FAIL/WARNING/BLOCK. Es la señal más importante para priorizar la revisión.',
-                refs: '',
+                refs: [],
             });
         }
 
@@ -1650,7 +1650,10 @@ router.get('/reports/status', async (req, res) => {
                 : verdictTone === 'warn' ? 'Con observaciones' : 'No apto / requiere atención';
         const verdictDetail = !hasActivity
             ? 'No se encontraron sesiones con actividad ni cambios de fechas en el rango seleccionado.'
-            : `Aceptación total ${acceptanceTotalPct ?? '—'}% · Cobertura TC ${coveragePct ?? '—'}% · ${sessionTotals.executed}/${sessionTotals.total} TC ejecutados`;
+            : `Aceptación total ${acceptanceTotalPct ?? '—'}% · Cobertura TC ${coveragePct ?? '—'}% · Acumulado de sesión: ${sessionTotals.executed}/${sessionTotals.total} TC ejecutados`;
+
+        const sessionLink = (id) =>
+            `<a href="#sesion-${id}" style="color:#4f46e5;font-weight:700;text-decoration:none;">#${id}</a>`;
 
         const alertsHTML = alerts.length === 0 ? `
             <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-left:5px solid #16a34a;border-radius:10px;padding:12px 14px;margin-bottom:18px;">
@@ -1666,7 +1669,7 @@ router.get('/reports/status', async (req, res) => {
                             <div style="flex:1;">
                                 <div style="font-size:.75rem;font-weight:700;color:${alert.tone === 'fail' ? '#b91c1c' : '#92400e'};">${htmlEscape(alert.title)}</div>
                                 <div style="font-size:.68rem;color:${alert.tone === 'fail' ? '#991b1b' : '#92400e'};">${htmlEscape(alert.detail)}</div>
-                                ${alert.refs ? `<div style="font-size:.64rem;color:#6b7280;margin-top:2px;">${htmlEscape(alert.refs)}</div>` : ''}
+                                ${alert.refs.length > 0 ? `<div style="font-size:.64rem;color:#6b7280;margin-top:2px;">Ir a: ${alert.refs.map(sessionLink).join(' · ')}</div>` : ''}
                             </div>
                         </div>`).join('')}
                 </div>
@@ -1695,6 +1698,14 @@ router.get('/reports/status', async (req, res) => {
             if (!defectsByExec.has(d.execution_id)) defectsByExec.set(d.execution_id, []);
             defectsByExec.get(d.execution_id).push(d);
         }
+        const runIdByExec = new Map(execs.rows.map((exec) => [exec.id, exec.run_id]));
+        const defectsByRun = new Map();
+        for (const defect of defects.rows) {
+            const runId = runIdByExec.get(defect.execution_id);
+            if (runId) defectsByRun.set(runId, (defectsByRun.get(runId) || 0) + 1);
+        }
+        const totalDefects = defects.rows.length;
+        const totalFindings = totalDefects + hallazgos.rows.length;
 
         const STATUS_STYLE = {
             OK: { bg: '#dcfce7', fg: '#15803d', chart: '#16a34a' },
@@ -1856,6 +1867,14 @@ router.get('/reports/status', async (req, res) => {
                 <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;font-size:.68rem;color:#4b5563;white-space:nowrap;">
                     <strong style="color:#111827;">${runProgress}%</strong>
                     <div style="font-size:.62rem;color:#6b7280;">${st.executed}/${st.total} · ${st.pending} pend.</div>
+                    <div style="display:flex;height:5px;border-radius:3px;overflow:hidden;background:#eef2f7;margin-top:4px;min-width:90px;">
+                        ${st.ok ? `<div style="width:${(st.ok / Math.max(1, st.total)) * 100}%;background:#16a34a;" title="OK: ${st.ok}"></div>` : ''}
+                        ${st.fail ? `<div style="width:${(st.fail / Math.max(1, st.total)) * 100}%;background:#dc2626;" title="FAIL: ${st.fail}"></div>` : ''}
+                        ${st.warning ? `<div style="width:${(st.warning / Math.max(1, st.total)) * 100}%;background:#d97706;" title="WARNING: ${st.warning}"></div>` : ''}
+                        ${st.block ? `<div style="width:${(st.block / Math.max(1, st.total)) * 100}%;background:#f97316;" title="BLOCK: ${st.block}"></div>` : ''}
+                        ${st.skip ? `<div style="width:${(st.skip / Math.max(1, st.total)) * 100}%;background:#94a3b8;" title="SKIP: ${st.skip}"></div>` : ''}
+                        ${st.pending ? `<div style="width:${(st.pending / Math.max(1, st.total)) * 100}%;background:#e5e7eb;" title="Pendientes: ${st.pending}"></div>` : ''}
+                    </div>
                 </td>
                 <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;font-size:.66rem;white-space:nowrap;">
                     <span style="color:#15803d;font-weight:700;">${st.ok} OK</span> ·
@@ -1870,10 +1889,12 @@ router.get('/reports/status', async (req, res) => {
                 </td>
                 <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;font-size:.68rem;text-align:center;">
                     ${run.coverage_ready
-                        ? '<span style="color:#15803d;font-weight:700;">✓</span>'
-                        : '<span style="color:#b45309;font-weight:700;">⚠</span>'}
+                        ? '<span class="badge" style="background:#dcfce7;color:#15803d;">Declarado</span>'
+                        : '<span class="badge" style="background:#fef3c7;color:#b45309;">Sin declarar</span>'}
                 </td>
-                <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;font-size:.68rem;text-align:center;color:#4b5563;font-weight:700;">${runHallazgos.length}</td>
+                <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;font-size:.68rem;text-align:center;color:#4b5563;font-weight:700;" title="Defectos de ejecución / hallazgos">
+                    ${defectsByRun.get(run.id) || 0} / ${runHallazgos.length}
+                </td>
             </tr>`;
 
             // Agrupación por estado de resultado dentro de la sesión.
@@ -1897,16 +1918,33 @@ router.get('/reports/status', async (req, res) => {
                     <div style="margin-top:4px;">${evidHTML}</div>
                 </details>` : '';
                 const history = execHistoryByTc.get(e.tc_id) || [];
-                const historyHTML = history.length === 0 ? '' : `<details style="margin-top:6px;">
-                    <summary style="cursor:pointer;font-size:.66rem;font-weight:700;color:#6b7280;text-transform:uppercase;">Historial de estados (${history.length})</summary>
+                const historyForCard = [...history];
+                const lastHistory = historyForCard[historyForCard.length - 1];
+                if (lastHistory && lastHistory.to_status !== e.status) {
+                    historyForCard.push({
+                        id: `current-${e.id}`,
+                        from_status: lastHistory.to_status,
+                        to_status: e.status,
+                        changed_at: e.executed_at,
+                        changed_by_name: e.tester,
+                        reason: 'Estado actual (transición no registrada en el histórico)',
+                    });
+                }
+                // Con una sola transición el historial repite el estado actual:
+                // se muestra recién cuando aporta evolución real.
+                const historyHTML = historyForCard.length <= 1 ? '' : `<details class="collapsible" style="margin-top:6px;">
+                    <summary style="cursor:pointer;font-size:.66rem;font-weight:700;color:#6b7280;text-transform:uppercase;">Historial de estados (${historyForCard.length})</summary>
                     <ol style="margin:4px 0 0 16px;padding:0;font-size:.66rem;color:#4b5563;">
-                        ${history.map((row) => `<li style="margin-bottom:2px;">
+                        ${historyForCard.map((row) => `<li style="margin-bottom:2px;">
                             <strong>${row.from_status ? htmlEscape(row.from_status) + ' → ' : 'Inicial: '}${htmlEscape(row.to_status)}</strong>
                             ${row.reason ? ` · <em>${htmlEscape(row.reason)}</em>` : ''}
                             · ${htmlEscape(row.changed_by_name || '—')} · ${fmtReportDate(row.changed_at)}
                         </li>`).join('')}
                     </ol>
                 </details>`;
+                const normalize = (value) => String(value || '').trim().toLowerCase();
+                const showObservations = e.observations
+                    && normalize(e.observations) !== normalize(e.obtained_result);
                 const defectsHTML = execDefects.map(d => {
                     const defEvidList = evidByDef[d.id] || [];
                     const defEvid = defEvidList.map(ev => evidenceHTML(ev, 160)).join('');
@@ -1922,29 +1960,44 @@ router.get('/reports/status', async (req, res) => {
                     </div>`;
                 }).join('');
 
-                return `<div style="padding:12px;background:#fff;border-radius:8px;margin-bottom:9px;border-left:4px solid ${color.fg};box-shadow:0 1px 3px rgba(0,0,0,.07);">
-                    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+                return `<div class="test-card" data-status="${htmlEscape(e.status)}" style="padding:12px;background:#fff;border-radius:8px;margin-bottom:9px;border-left:4px solid ${color.fg};box-shadow:0 1px 3px rgba(0,0,0,.07);">
+                    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
                         <div style="font-weight:700;font-size:.82rem;">${htmlEscape(e.key_id || '')} — ${htmlEscape(e.tc_title)}</div>
-                        <span style="padding:2px 8px;border-radius:4px;font-size:.62rem;font-weight:700;background:${color.bg};color:${color.fg};">${htmlEscape(e.status)}</span>
+                        <span class="badge" style="background:${color.bg};color:${color.fg};">${htmlEscape(e.status)}</span>
                     </div>
                     <div style="font-size:.7rem;color:#6b7280;margin-top:2px;">Tester: ${htmlEscape(e.tester || '—')} · ${fmtReportDate(e.executed_at)}</div>
                     ${e.obtained_result ? `<div style="font-size:.74rem;margin-top:4px;"><strong>Obtenido:</strong> ${htmlEscape(e.obtained_result)}</div>` : ''}
-                    ${e.observations ? `<div style="font-size:.74rem;margin-top:2px;"><strong>Observaciones:</strong> ${htmlEscape(e.observations)}</div>` : ''}
+                    ${showObservations ? `<div style="font-size:.74rem;margin-top:2px;"><strong>Observaciones:</strong> ${htmlEscape(e.observations)}</div>` : ''}
                     ${evidBlock}
                     ${execDefects.length > 0 ? `<div style="margin-top:6px;"><div style="font-size:.66rem;font-weight:700;color:#6b7280;text-transform:uppercase;">Defectos (${execDefects.length})</div>${defectsHTML}</div>` : ''}
                     ${historyHTML}
                 </div>`;
             };
 
+            const okRows = (list) => `<div class="ok-table">
+                <div class="ok-head">
+                    <span>ID</span><span>Caso</span><span>Tester</span><span>Fecha</span>
+                </div>
+                ${list.map((e) => `<details class="ok-row collapsible" data-status="OK">
+                    <summary class="ok-summary">
+                        <span class="ok-key">${htmlEscape(e.key_id || '')}</span>
+                        <span class="ok-title">${htmlEscape(e.tc_title)}</span>
+                        <span class="ok-tester">${htmlEscape(e.tester || '—')}</span>
+                        <span class="ok-date">${fmtReportDate(e.executed_at)}</span>
+                    </summary>
+                    <div class="ok-detail">${testCard(e)}</div>
+                </details>`).join('')}
+            </div>`;
+
             const testsHTML = statusesToRender.map((status) => {
                 const list = byStatus.get(status) || [];
                 if (list.length === 0) return '';
                 const style = STATUS_STYLE[status] || { fg: '#4b5563', chart: '#94a3b8' };
-                return `<div style="margin-bottom:10px;">
+                return `<div class="status-group" data-status="${htmlEscape(status)}" style="margin-bottom:10px;">
                     <div style="display:inline-flex;align-items:center;gap:6px;font-size:.68rem;font-weight:800;color:${style.fg};text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px;">
                         <span style="width:8px;height:8px;border-radius:50%;background:${style.chart};"></span>${status} · ${list.length}
                     </div>
-                    ${list.map(testCard).join('')}
+                    ${status === 'OK' ? okRows(list) : list.map(testCard).join('')}
                 </div>`;
             }).join('');
 
@@ -1953,7 +2006,7 @@ router.get('/reports/status', async (req, res) => {
                 return `<div style="padding:7px 9px;background:#fffbeb;border-radius:6px;margin-top:5px;border-left:3px solid #d97706;">
                     <div style="font-weight:700;font-size:.78rem;">H-${h.id} · ${htmlEscape(h.title)}</div>
                     <div style="font-size:.7rem;color:#6b7280;">Severidad: ${htmlEscape(h.severity || 'Media')} · Estado: ${htmlEscape(h.status)} · ${htmlEscape(h.reporter_name)} · ${fmtReportDate(h.created_at)}</div>
-                    ${history.length === 0 ? '' : `<details style="margin-top:4px;">
+                    ${history.length <= 1 ? '' : `<details class="collapsible" style="margin-top:4px;">
                         <summary style="cursor:pointer;font-size:.64rem;font-weight:700;color:#6b7280;text-transform:uppercase;">Historial de estados (${history.length})</summary>
                         <ol style="margin:3px 0 0 16px;padding:0;font-size:.64rem;color:#4b5563;">
                             ${history.map((row) => `<li style="margin-bottom:2px;">
@@ -1966,20 +2019,20 @@ router.get('/reports/status', async (req, res) => {
                 </div>`;
             }).join('');
 
-            sessionsHTML += `<details style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;margin-bottom:12px;">
-                <summary style="cursor:pointer;padding:10px 14px;font-size:.76rem;font-weight:700;color:#111827;">
+            sessionsHTML += `<details id="sesion-${run.id}" class="session-block" style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;margin-bottom:12px;">
+                <summary class="session-summary" style="cursor:pointer;padding:10px 14px;font-size:.76rem;font-weight:700;color:#111827;">
                     Detalle de la sesión #${run.id} · ${htmlEscape(run.name || 'Sesión exploratoria')}
-                    <span style="float:right;font-size:.64rem;font-weight:400;color:#6b7280;">${runExecs.length} test(s) en el rango · ${runHallazgos.length} hallazgo(s)</span>
+                    <span style="float:right;font-size:.64rem;font-weight:400;color:#6b7280;">${runExecs.length} test(s) en el rango · ${defectsByRun.get(run.id) || 0} defecto(s) · ${runHallazgos.length} hallazgo(s)</span>
                 </summary>
                 <div style="border-top:1px solid #e5e7eb;padding:12px 14px;">
                 <div style="background:#f8fafc;border-radius:8px;padding:10px 12px;margin-bottom:10px;border-left:3px solid #4f46e5;">
                     <div style="font-size:.72rem;color:#4b5563;">${htmlEscape(run.charter || '')}</div>
-                    <div style="font-size:.68rem;color:#6b7280;margin-top:2px;">${fmtReportDate(run.started_at)} → ${run.finished_at ? fmtReportDate(run.finished_at) : 'en curso'} · ${runExecs.length} tests en el rango · ${runHallazgos.length} hallazgos</div>
+                    <div style="font-size:.68rem;color:#6b7280;margin-top:2px;">${fmtReportDay(run.started_at)} → ${run.finished_at ? fmtReportDay(run.finished_at) : 'en curso'} · ${runExecs.length} tests en el rango</div>
                     <div style="font-size:.68rem;color:#4b5563;margin-top:2px;">
-                        Plan: ${run.planned_start_at ? fmtReportDate(run.planned_start_at) : 'sin definir'} → ${run.planned_end_at ? fmtReportDate(run.planned_end_at) : 'sin definir'}
+                        Plan: ${run.planned_start_at ? fmtReportDay(run.planned_start_at) : 'sin definir'} → ${run.planned_end_at ? fmtReportDay(run.planned_end_at) : 'sin definir'}
                     </div>
                     <div style="font-size:.68rem;margin-top:2px;color:${run.deadline_at && new Date(run.deadline_at) < new Date() ? '#dc2626' : '#4b5563'};">
-                        Límite: ${run.deadline_at ? fmtReportDate(run.deadline_at) : 'sin definir'}${run.deadline_at && new Date(run.deadline_at) < new Date() ? ' · VENCIDA' : ''}
+                        Límite: ${run.deadline_at ? fmtReportDay(run.deadline_at) : 'sin definir'}${run.deadline_at && new Date(run.deadline_at) < new Date() ? ' · VENCIDA' : ''}
                     </div>
                     <div style="font-size:.68rem;color:#4b5563;margin-top:2px;">Avance sesión ${(() => {
                         const t = totalsByRun.get(run.id);
@@ -2025,7 +2078,7 @@ router.get('/reports/status', async (req, res) => {
                         : '<span style="font-size:.62rem;font-weight:700;background:#fef3c7;color:#b45309;padding:2px 8px;border-radius:10px;">⚠ TC de cobertura sin declarar</span>'}</div>
                 </div>
                 ${testsHTML || '<div style="font-size:.74rem;color:#6b7280;padding:4px 0;">Sin tests ejecutados en el rango.</div>'}
-                ${runHallazgos.length > 0 ? `<div style="margin-top:6px;"><div style="font-size:.66rem;font-weight:700;color:#6b7280;text-transform:uppercase;">Hallazgos (${runHallazgos.length})</div>${hallazgosHTML}</div>` : ''}
+                ${runHallazgos.length > 0 ? `<div style="margin-top:6px;"><div style="font-size:.66rem;font-weight:700;color:#6b7280;text-transform:uppercase;">Hallazgos exploratorios (${runHallazgos.length})</div>${hallazgosHTML}</div>` : ''}
                 </div>
             </details>`;
         }
@@ -2045,8 +2098,8 @@ router.get('/reports/status', async (req, res) => {
                             <th style="text-align:left;padding:6px 10px;font-size:.6rem;text-transform:uppercase;color:#6b7280;border-bottom:1px solid #e5e7eb;">Avance</th>
                             <th style="text-align:left;padding:6px 10px;font-size:.6rem;text-transform:uppercase;color:#6b7280;border-bottom:1px solid #e5e7eb;">Resultados</th>
                             <th style="text-align:left;padding:6px 10px;font-size:.6rem;text-transform:uppercase;color:#6b7280;border-bottom:1px solid #e5e7eb;">Aceptación</th>
-                            <th style="text-align:center;padding:6px 10px;font-size:.6rem;text-transform:uppercase;color:#6b7280;border-bottom:1px solid #e5e7eb;">Cob. TC</th>
-                            <th style="text-align:center;padding:6px 10px;font-size:.6rem;text-transform:uppercase;color:#6b7280;border-bottom:1px solid #e5e7eb;">Hallazgos</th>
+                            <th style="text-align:center;padding:6px 10px;font-size:.6rem;text-transform:uppercase;color:#6b7280;border-bottom:1px solid #e5e7eb;">Cobertura TC</th>
+                            <th style="text-align:center;padding:6px 10px;font-size:.6rem;text-transform:uppercase;color:#6b7280;border-bottom:1px solid #e5e7eb;" title="Defectos de ejecución / hallazgos">Def. / Hall.</th>
                         </tr>
                     </thead>
                     <tbody>${summaryRows}</tbody>
@@ -2063,11 +2116,30 @@ router.get('/reports/status', async (req, res) => {
         .kpi-val{font-size:1.5rem;font-weight:800;line-height:1.1}.kpi-lab{font-size:.62rem;color:#6b7280;text-transform:uppercase;letter-spacing:.04em;margin-top:2px}
         .kpi-sub{font-size:.66rem;color:#6b7280;margin-top:4px}
         .footer{text-align:center;padding:16px;color:#6b7280;font-size:.72rem}
+        .badge{display:inline-flex;align-items:center;justify-content:center;gap:4px;padding:2px 8px;border-radius:12px;font-size:.62rem;font-weight:700;white-space:nowrap;line-height:1.4}
+        .test-card{break-inside:avoid;page-break-inside:avoid}
+        .session-block{scroll-margin-top:70px}
+        .ok-table{border:1px solid #e5e7eb;border-radius:8px;overflow:hidden}
+        .ok-head,.ok-summary{display:grid;grid-template-columns:90px minmax(0,1fr) 130px 130px;gap:8px;align-items:center;padding:6px 10px}
+        .ok-head{background:#f9fafb;font-size:.58rem;text-transform:uppercase;color:#6b7280;font-weight:700}
+        .ok-row{border-top:1px solid #f3f4f6}
+        .ok-summary{cursor:pointer;font-size:.68rem;color:#4b5563;list-style:none}
+        .ok-summary:hover{background:#f9fafb}
+        .ok-key{font-weight:700;color:#111827}
+        .ok-title{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .ok-detail{padding:8px 10px;background:#fafafa}
+        .ok-detail .test-card{margin-bottom:0!important;box-shadow:none!important}
+        .toolbar{position:sticky;top:0;z-index:30;display:flex;flex-wrap:wrap;gap:6px;align-items:center;background:rgba(255,255,255,.97);border:1px solid #e5e7eb;border-radius:10px;padding:8px 10px;margin-bottom:14px;box-shadow:0 2px 6px rgba(0,0,0,.06)}
+        .toolbar button{border:1px solid #e5e7eb;background:#fff;border-radius:6px;padding:4px 9px;font-size:.68rem;font-weight:600;color:#4b5563;cursor:pointer}
+        .toolbar button:hover{background:#f3f4f6}
+        .toolbar a{font-size:.68rem;color:#4f46e5;font-weight:700;text-decoration:none}
+        .toolbar .spacer{flex:1}
         details summary::-webkit-details-marker{display:none}
-        @media print{body{background:#fff;padding:0}.kpi{box-shadow:none;border:1px solid #e5e7eb}}</style></head><body>
+        @media print{body{background:#fff;padding:0}.kpi{box-shadow:none;border:1px solid #e5e7eb}.toolbar{display:none}.test-card,.ok-row{break-inside:avoid;page-break-inside:avoid}.ok-title{white-space:normal}}</style></head><body>
         <div class="header">
             <h1>Reporte de estatus — Exploratoria</h1>
             <p>${htmlEscape(project.name)} · ${htmlEscape(testerLabel)} · ${from} → ${to} · generado ${new Date().toLocaleString('es-AR', { timeZone: REPORT_TZ })}</p>
+            ${omittedEvidence > 0 ? `<p style="margin:6px 0 0;font-size:.7rem;opacity:.85;" title="El reporte se generó en modo offline: las evidencias no disponibles en esta máquina no se embeben. Los archivos siguen asociados a cada ejecución en el sistema.">ⓘ ${omittedEvidence} evidencia(s) no adjuntas en este reporte (modo offline)</p>` : ''}
         </div>
 
         <div style="background:${verdictTone === 'ok' ? '#f0fdf4' : verdictTone === 'warn' ? '#fffbeb' : '#fef2f2'};border:1px solid ${verdictTone === 'ok' ? '#bbf7d0' : verdictTone === 'warn' ? '#fde68a' : '#fecaca'};border-left:6px solid ${verdictTone === 'ok' ? '#16a34a' : verdictTone === 'warn' ? '#d97706' : '#dc2626'};border-radius:10px;padding:14px 16px;margin-bottom:14px;">
@@ -2086,33 +2158,46 @@ router.get('/reports/status', async (req, res) => {
             </div>
             <div class="kpi" style="border-top-color:${acceptanceColor(acceptanceTotalPct)};">
                 <div class="kpi-val" style="color:${acceptanceColor(acceptanceTotalPct)};">${acceptanceTotalPct === null ? '—' : `${acceptanceTotalPct}%`}</div>
-                <div class="kpi-lab">Aceptación total</div>
+                <div class="kpi-lab">Aceptación total (acumulado)</div>
                 <div class="kpi-sub">${sessionTotals.ok} OK de ${sessionTotals.total} TC · pendientes incluidos</div>
             </div>
             <div class="kpi" style="border-top-color:${acceptanceColor(acceptanceEvaluatedPct)};">
                 <div class="kpi-val" style="color:${acceptanceColor(acceptanceEvaluatedPct)};">${acceptanceEvaluatedPct === null ? '—' : `${acceptanceEvaluatedPct}%`}</div>
-                <div class="kpi-lab">Aceptación evaluada</div>
-                <div class="kpi-sub">Calidad de lo ya probado</div>
+                <div class="kpi-lab">Aceptación evaluada (acumulado)</div>
+                <div class="kpi-sub">Calidad de lo ya probado · sesiones incluidas</div>
             </div>
             <div class="kpi" style="border-top-color:${sessionTotals.pending > 0 ? '#d97706' : '#16a34a'};">
                 <div class="kpi-val" style="color:${sessionTotals.pending > 0 ? '#b45309' : '#15803d'};">${sessionTotals.pending}</div>
-                <div class="kpi-lab">TC pendientes</div>
-                <div class="kpi-sub">${sessionTotals.executed}/${sessionTotals.total} ejecutados</div>
+                <div class="kpi-lab">TC pendientes (acumulado)</div>
+                <div class="kpi-sub">${sessionTotals.executed}/${sessionTotals.total} ejecutados en las sesiones</div>
             </div>
             <div class="kpi" style="border-top-color:${counts.FAIL > 0 ? '#dc2626' : '#16a34a'};">
                 <div class="kpi-val" style="color:${sessionTotals.fail > 0 ? '#dc2626' : '#15803d'};">${sessionTotals.fail}</div>
-                <div class="kpi-lab">TC en FAIL</div>
-                <div class="kpi-sub">${counts.FAIL} fallo(s) en el rango · estado actual de las sesiones</div>
+                <div class="kpi-lab">TC en FAIL (acumulado)</div>
+                <div class="kpi-sub">${counts.FAIL} ejecución(es) en FAIL dentro del rango</div>
             </div>
             <div class="kpi" style="border-top-color:#4f46e5;">
-                <div class="kpi-val" style="color:#4f46e5;">${hallazgos.rows.length}</div>
-                <div class="kpi-lab">Hallazgos</div>
-                <div class="kpi-sub">${defects.rows.length} defecto(s) de ejecución</div>
+                <div class="kpi-val" style="color:#4f46e5;">${totalFindings}</div>
+                <div class="kpi-lab">Defectos / Hallazgos</div>
+                <div class="kpi-sub">${totalDefects} de ejecución · ${hallazgos.rows.length} hallazgos exploratorios</div>
             </div>
         </div>
         <div style="font-size:.64rem;color:#6b7280;margin:6px 0 16px 2px;">
             <strong>Aceptación total</strong> = OK / total de TC (pendientes, BLOCK y SKIP cuentan como no aceptados).
             <strong>Aceptación evaluada</strong> = OK / (OK + FAIL + WARNING): calidad de lo probado.
+        </div>
+
+        <div class="toolbar">
+            <span style="font-size:.6rem;font-weight:800;color:#6b7280;text-transform:uppercase;letter-spacing:.06em;">Navegación</span>
+            <button type="button" onclick="reportFilter('all')">Todos</button>
+            <button type="button" onclick="reportFilter('problems')">Fallos y bloqueos</button>
+            <button type="button" onclick="reportFilter('ok')">Solo OK</button>
+            <span style="width:1px;height:16px;background:#e5e7eb;"></span>
+            <button type="button" onclick="reportToggleAll(true)">Expandir todo</button>
+            <button type="button" onclick="reportToggleAll(false)">Colapsar todo</button>
+            <span class="spacer"></span>
+            <span style="font-size:.62rem;color:#6b7280;">Ir a:</span>
+            ${[...runsById.values()].map(run => `<a href="#sesion-${run.id}">#${run.id}</a>`).join(' ')}
         </div>
 
         ${alertsHTML}
@@ -2122,9 +2207,25 @@ router.get('/reports/status', async (req, res) => {
 
         <div style="font-size:.64rem;font-weight:800;color:#6b7280;text-transform:uppercase;letter-spacing:.06em;margin:4px 2px 8px;">Detalle por sesión</div>
         ${sessionsHTML || '<div style="text-align:center;padding:40px;color:#6b7280;">Sin actividad en el rango seleccionado.</div>'}
-        ${omittedEvidence > 0 ? `<div style="text-align:center;padding:8px;color:#b45309;font-size:.72rem;">${omittedEvidence} evidencia(s) no disponible(s) en esta máquina: se omitieron del reporte.</div>` : ''}
         <div class="footer">Reporte generado automáticamente | ${new Date().toLocaleString('es-AR', { timeZone: REPORT_TZ })}</div>
         ${lightboxHTML()}
+        <script>
+        function reportFilter(kind) {
+            document.querySelectorAll('[data-status]').forEach(function (el) {
+                var status = el.getAttribute('data-status');
+                var show = true;
+                if (kind === 'problems') show = ['FAIL', 'WARNING', 'BLOCK', 'SKIP'].indexOf(status) !== -1;
+                else if (kind === 'ok') show = status === 'OK';
+                el.style.display = show ? '' : 'none';
+            });
+            if (kind !== 'all') {
+                document.querySelectorAll('details.session-block').forEach(function (d) { d.open = true; });
+            }
+        }
+        function reportToggleAll(open) {
+            document.querySelectorAll('details').forEach(function (d) { d.open = open; });
+        }
+        </script>
         </body></html>`;
 
         res.setHeader('Content-Type', 'text/html');
