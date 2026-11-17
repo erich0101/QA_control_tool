@@ -33,3 +33,24 @@
 container.innerHTML = `<div>${UI.escapeHTML(userTitle)}</div>`;
 ```
 
+
+## 5. Jira: AGIP es solo lectura para pruebas (CRÍTICO)
+
+- **Regla:** El proyecto Jira **AGIP** y **cualquiera de sus épicas** no se usan
+  NUNCA para probar, validar o verificar creación de tickets, ni para ningún
+  otro efecto de escritura disparado por una prueba del agente.
+- **Prohibido en AGIP:** crear issues, `validateOnly=true` (también crea el
+  ticket), editar, comentar, transicionar o borrar issues como prueba.
+- **Permitido en AGIP:** consultas de solo lectura (GET, JQL, metadatos) y
+  operaciones reales pedidas explícitamente por el usuario con datos reales.
+- **Dónde probar escrituras:** únicamente en el proyecto Jira **`default`**
+  (`qa_jira_configs.jira_project_key = 'default'`). Si `default` no está
+  configurado o no tiene Jira activo, **no se prueba**: el agente entrega el
+  cambio y el usuario confirma si resuelve el problema.
+- **Verificación sin escribir:** inspeccionar el payload (stub de `fetch`,
+  request interceptado, logs) y validar el formato contra el `createmeta`
+  (los campos `option`/`select` exigen `{ id }`, no un string).
+- **Reason:** un ticket de prueba en AGIP contamina el backlog real del
+  cliente, dispara notificaciones y no se puede borrar sin permisos especiales.
+
+Ver `AGENTS.md` para el checklist previo a cualquier escritura en Jira.
