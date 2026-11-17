@@ -14,5 +14,5 @@ Este archivo centraliza el conocimiento arquitectónico y operativo del proyecto
 
 ## 🔄 Procedimientos Comunes
 - **Nuevas Funcionalidades:** Verificar siempre el impacto en `db.js` si se requiere SQL nuevo (Postgres vs SQLite).
-- **Jira — pruebas de escritura:** AGIP y sus épicas son **solo lectura** para pruebas. Nunca crear/editar/borrar issues de prueba ni usar `validateOnly` en AGIP. Las pruebas de creación se hacen únicamente en el proyecto local `Default` (`project_id=2`, Jira SCRUM); si no tiene Jira activo, no se prueba y lo valida el usuario. Ver `AGENTS.md` y `RULES.md` §5.
+- **Jira — pruebas:** todas las pruebas de la app se hacen en el proyecto **`Default`** (`project_id=2`). AGIP (`project_id=3/5`) y AFA (`project_id=8`) son proyectos de cliente y **nunca** se usan para probar: en Jira son solo lectura y no se crea/edita/borra nada de prueba ni se usa `validateOnly`. Si `Default` no tiene Jira activo, no se prueba la creación y lo valida el usuario. Ver `AGENTS.md` y `RULES.md` §5.
 - **Reportes:** Se pueden generar vía Node.js (`/api/report/:id`) o Python (`qa_report_builder.py`).

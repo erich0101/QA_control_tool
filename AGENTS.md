@@ -24,24 +24,30 @@ Permitido en AGIP:
 - Operaciones de escritura **reales** pedidas explícitamente por el usuario,
   con datos reales y confirmación previa (no son pruebas).
 
-### Dónde se prueban las escrituras
+### Dónde se prueba la app
 
-1. Usar el proyecto local **`Default`** → `project_id=2`
-   (`/api/use-cases?project_id=2`), que hoy apunta al espacio Jira **SCRUM**.
-   Es el único proyecto habilitado para pruebas de creación.
-2. Si ese proyecto no tiene Jira activo, **no se prueba la creación**: el agente
-   entrega el cambio y el usuario confirma si resuelve el problema.
-3. Nunca "improvisar" un proyecto de prueba usando AGIP, AFA u otro proyecto de
-   cliente.
+1. Usar **siempre** el proyecto de la app **`Default`** → `project_id=2`
+   (`http://localhost:3001/app`, selector de proyecto, o
+   `/api/use-cases?project_id=2`). Es el único proyecto habilitado para pruebas.
+2. Nunca usar los proyectos de la app que corresponden a clientes:
+   - `project_id=3` (Proyecto QA - Importado)
+   - `project_id=5` (SIGMA - MVP2)
+   - `project_id=8` (Sellos AFA)
+   - cualquier otro proyecto de cliente.
+3. La regla aplica a **todas** las pruebas de la app: sesiones exploratorias,
+   hallazgos, bugs, evidencias, reportes y creación de tickets Jira.
+4. Si el proyecto `Default` no tiene Jira activo/configurado, **no se prueba la
+   creación de tickets**: el agente entrega el cambio y el usuario confirma si
+   resuelve el problema.
 
-### Mapa de proyectos (referencia)
+### Mapa de proyectos de la app (referencia)
 
-| project_id | Proyecto local | Jira | Uso para pruebas |
-|---|---|---|---|
-| 2 | Default | SCRUM | ✅ único permitido para escrituras |
-| 3 | Proyecto QA - Importado | AGIP | ❌ solo lectura |
-| 5 | SIGMA - MVP2 | AGIP | ❌ solo lectura |
-| 8 | Sellos AFA | AFA | ❌ solo lectura |
+| project_id | Proyecto de la app | ¿Se puede usar para pruebas? |
+|---|---|---|
+| 2 | Default | ✅ sí, es el único permitido |
+| 3 | Proyecto QA - Importado | ❌ cliente (Jira AGIP) |
+| 5 | SIGMA - MVP2 | ❌ cliente (Jira AGIP) |
+| 8 | Sellos AFA | ❌ cliente (Jira AFA) |
 
 ### Verificación sin escribir
 
@@ -64,6 +70,6 @@ Para validar cambios de creación de tickets alcanza con:
 ## Checklist antes de cualquier llamada de escritura a Jira
 
 - [ ] ¿Es una prueba o una operación real pedida por el usuario?
-- [ ] Si es prueba: ¿el proyecto es `default`?
+- [ ] Si es prueba: ¿estoy en el proyecto de la app `Default` (`project_id=2`)?
 - [ ] ¿Evité AGIP y todas sus épicas?
 - [ ] ¿Evité `validateOnly=true` contra AGIP?

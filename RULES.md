@@ -43,13 +43,14 @@ container.innerHTML = `<div>${UI.escapeHTML(userTitle)}</div>`;
   ticket), editar, comentar, transicionar o borrar issues como prueba.
 - **Permitido en AGIP:** consultas de solo lectura (GET, JQL, metadatos) y
   operaciones reales pedidas explícitamente por el usuario con datos reales.
-- **Dónde probar escrituras:** únicamente en el proyecto local **`Default`**
-  (`project_id=2`, `/api/use-cases?project_id=2`), que hoy usa el espacio Jira
-  **SCRUM**. Si ese proyecto no tiene Jira activo, **no se prueba**: el agente
-  entrega el cambio y el usuario confirma si resuelve el problema.
+- **Dónde probar la app:** únicamente en el proyecto de la app **`Default`**
+  (`project_id=2`, `http://localhost:3001/app`, `/api/use-cases?project_id=2`).
+  Aplica a todas las pruebas: sesiones exploratorias, hallazgos, bugs,
+  evidencias, reportes y creación de tickets Jira.
 - **Proyectos de cliente:** AGIP (`project_id=3` y `5`) y AFA (`project_id=8`)
-  son solo lectura para pruebas. Nunca crear, editar, comentar, transicionar ni
-  usar `validateOnly` en ellos.
+  no se usan para pruebas, ni en la app ni en Jira. Si el proyecto `Default` no
+  tiene Jira activo, **no se prueba la creación de tickets**: lo valida el
+  usuario.
 - **Verificación sin escribir:** inspeccionar el payload (stub de `fetch`,
   request interceptado, logs) y validar el formato contra el `createmeta`
   (los campos `option`/`select` exigen `{ id }`, no un string).
