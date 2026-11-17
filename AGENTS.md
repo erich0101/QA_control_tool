@@ -26,11 +26,22 @@ Permitido en AGIP:
 
 ### Dónde se prueban las escrituras
 
-1. Usar el proyecto Jira **`default`** (config `qa_jira_configs.jira_project_key = 'default'`).
-2. Si `default` no está configurado o no tiene Jira activo, **no se prueba la
-   creación**: el agente entrega el cambio y el usuario confirma si resuelve
-   el problema.
-3. Nunca "improvisar" un proyecto de prueba usando AGIP o una épica de AGIP.
+1. Usar el proyecto local **`Default`** → `project_id=2`
+   (`/api/use-cases?project_id=2`), que hoy apunta al espacio Jira **SCRUM**.
+   Es el único proyecto habilitado para pruebas de creación.
+2. Si ese proyecto no tiene Jira activo, **no se prueba la creación**: el agente
+   entrega el cambio y el usuario confirma si resuelve el problema.
+3. Nunca "improvisar" un proyecto de prueba usando AGIP, AFA u otro proyecto de
+   cliente.
+
+### Mapa de proyectos (referencia)
+
+| project_id | Proyecto local | Jira | Uso para pruebas |
+|---|---|---|---|
+| 2 | Default | SCRUM | ✅ único permitido para escrituras |
+| 3 | Proyecto QA - Importado | AGIP | ❌ solo lectura |
+| 5 | SIGMA - MVP2 | AGIP | ❌ solo lectura |
+| 8 | Sellos AFA | AFA | ❌ solo lectura |
 
 ### Verificación sin escribir
 
