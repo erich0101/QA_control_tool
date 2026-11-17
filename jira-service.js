@@ -5,6 +5,52 @@ const { decrypt } = require('./utils/crypto-utils');
  * Motor de integración profesional con Jira Cloud API v3.
  */
 const JiraService = {
+    /** Caché corto del createmeta por proyecto: evita una llamada extra por ticket. */
+    _createMetaCache: new Map(),
+
+    _metaCacheKey(domain, projectKey) {
+        return `${String(domain).replace(/\/$/, '')}|${projectKey}`;
+    },
+
+    _getCachedCreateMeta(domain, projectKey) {
+        const key = this._metaCacheKey(domain, projectKey);
+        const hit = this._createMetaCache.get(key);
+        if (!hit || Date.now() - hit.at > 5 * 60 * 1000) return null;
+        return hit.fields;
+    },
+
+    /** Convierte un valor plano al formato que exige Jira según el campo. */
+    normalizeCustomFieldValue(field, value) {
+        if (value === null || value === undefined || value === '') return value;
+        // select / option: Jira exige { id } o { name }, nunca un string suelto.
+        if (field && Array.isArray(field.options) && field.options.length > 0) {
+            if (Array.isArray(value)) {
+                return value.map(item => (item && typeof item === 'object' ? item : { id: String(item) }));
+            }
+            if (typeof value === 'object') return value;
+            return { id: String(value) };
+        }
+        if (field && field.schemaType === 'array' && typeof value === 'string') {
+            return value.split(',').map(v => v.trim()).filter(Boolean);
+        }
+        if (field && field.schemaType === 'number' && typeof value === 'string') {
+            const numeric = Number(value);
+            return Number.isNaN(numeric) ? value : numeric;
+        }
+        return value;
+    },
+
+    /** Mensaje legible para los errores de creación (campo por nombre). */
+    _formatCreateError(error, fieldsMeta) {
+        const names = new Map((fieldsMeta || []).map(field => [field.fieldId, field.name]));
+        const parts = [];
+        for (const [fieldId, message] of Object.entries(error.errors || {})) {
+            parts.push(`${names.get(fieldId) || fieldId}: ${message}`);
+        }
+        for (const message of error.errorMessages || []) parts.push(message);
+        return parts.join(' · ');
+    },
+
     /**
      * Genera el contenido Markdown basado en los datos del bug de nuestra APP.
      */
@@ -236,18 +282,18 @@ ${bug.evidences.map(f => `- ${f}`).join('\n')}
             const data = await res.json();
             const projects = data.projects || [];
             const fields = [];
+            const allFields = [];
 
             for (const project of projects) {
                 for (const issuetype of (project.issuetypes || [])) {
                     const issueFields = issuetype.fields || {};
                     for (const [fieldId, fieldMeta] of Object.entries(issueFields)) {
                         if (!fieldId.startsWith('customfield_')) continue;
-                        if (!fieldMeta.required) continue;
 
                         const fieldInfo = {
                             fieldId,
                             name: fieldMeta.name,
-                            required: true,
+                            required: Boolean(fieldMeta.required),
                             schemaType: fieldMeta.schema?.type,
                             options: []
                         };
@@ -260,10 +306,16 @@ ${bug.evidences.map(f => `- ${f}`).join('\n')}
                             }));
                         }
 
-                        fields.push(fieldInfo);
+                        allFields.push(fieldInfo);
+                        if (fieldInfo.required) fields.push(fieldInfo);
                     }
                 }
             }
+
+            this._createMetaCache.set(this._metaCacheKey(baseUrl, projectKey), {
+                at: Date.now(),
+                fields: allFields
+            });
 
             return fields;
         } catch (e) {
@@ -292,8 +344,19 @@ ${bug.evidences.map(f => `- ${f}`).join('\n')}
         if (assigneeId) payload.fields.assignee = { accountId: assigneeId };
         if (priorityId) payload.fields.priority = { id: priorityId };
         if (customFields && Object.keys(customFields).length > 0) {
+            // Normalización defensiva: clientes viejos mandan el id del select
+            // como string y Jira exige { id }. Se usa el createmeta cacheado
+            // (se pide una vez si todavía no se cargó el contexto).
+            let fieldsMeta = this._getCachedCreateMeta(baseUrl, projectKey);
+            if (!fieldsMeta) {
+                try {
+                    await this.getCreateMetadata(userCredentials, projectKey, baseUrl);
+                    fieldsMeta = this._getCachedCreateMeta(baseUrl, projectKey);
+                } catch (_) { /* sin metadata: se manda tal cual */ }
+            }
             for (const [fieldId, value] of Object.entries(customFields)) {
-                payload.fields[fieldId] = value;
+                const field = (fieldsMeta || []).find(meta => meta.fieldId === fieldId);
+                payload.fields[fieldId] = this.normalizeCustomFieldValue(field, value);
             }
         }
 
@@ -309,8 +372,11 @@ ${bug.evidences.map(f => `- ${f}`).join('\n')}
         });
 
         if (!res.ok) {
-            const error = await res.json();
-            throw new Error(error.errors ? JSON.stringify(error.errors) : 'Error desconocido al crear ticket');
+            let error = {};
+            try { error = await res.json(); } catch (_) { /* body no JSON */ }
+            const meta = this._getCachedCreateMeta(baseUrl, projectKey) || [];
+            const detail = this._formatCreateError(error, meta);
+            throw new Error(detail || 'Error desconocido al crear ticket');
         }
 
         return await res.json();

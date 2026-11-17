@@ -43,6 +43,31 @@ export interface JiraContextCustomField {
   options?: Array<{ id: string; name: string; value?: string }>;
 }
 
+/**
+ * Jira no acepta un id suelto en campos de tipo select/option: exige
+ * `{ id }` (o `{ name }`). Los campos de texto/número sí van planos.
+ */
+export function jiraCustomFieldValue(
+  field: JiraContextCustomField | undefined,
+  raw: string,
+): unknown {
+  if (raw == null || raw === '') return raw;
+  if (field?.options?.length) {
+    return field.schemaType === 'array' ? [{ id: raw }] : { id: raw };
+  }
+  if (field?.schemaType === 'number') {
+    const numeric = Number(raw);
+    return Number.isFinite(numeric) ? numeric : raw;
+  }
+  if (field?.schemaType === 'array') {
+    return raw
+      .split(',')
+      .map((value) => value.trim())
+      .filter(Boolean);
+  }
+  return raw;
+}
+
 export interface JiraTicketContext {
   epics: JiraContextEpic[];
   users: JiraContextUser[];

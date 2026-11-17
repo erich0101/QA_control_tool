@@ -15,7 +15,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { SelectField } from '@/components/ui/select-field';
-import type { JiraTicketPayload } from '@/lib/api/jira';
+import { jiraCustomFieldValue, type JiraTicketPayload } from '@/lib/api/jira';
 import {
   useCreateJiraTicket,
   useJiraTicketContext,
@@ -136,7 +136,15 @@ export function JiraTicketDialog({
       epicId: epicId === NO_EPIC ? null : epicId,
       assigneeId: assigneeId === NO_ASSIGNEE ? null : assigneeId,
       customFields: Object.fromEntries(
-        Object.entries(customValues).filter(([, value]) => value.trim() !== ''),
+        Object.entries(customValues)
+          .filter(([, value]) => value.trim() !== '')
+          .map(([fieldId, value]) => [
+            fieldId,
+            jiraCustomFieldValue(
+              customFields.find((field) => field.fieldId === fieldId),
+              value.trim(),
+            ),
+          ]),
       ),
     };
 
