@@ -52,6 +52,22 @@ const JiraService = {
     },
 
     /**
+     * Jira rechaza summaries de más de 255 caracteres. Se recorta el título
+     * (el título completo queda en la descripción del ticket).
+     */
+    buildSummary(bugData) {
+        const MAX_SUMMARY = 255;
+        const prefix = `🐞 BUG-${bugData.id}: `;
+        const title = String(bugData.title || '').replace(/\s+/g, ' ').trim();
+        const chars = Array.from(prefix + title);
+        if (chars.length <= MAX_SUMMARY) return prefix + title;
+
+        const room = MAX_SUMMARY - Array.from(prefix).length - 1; // 1 por el «…»
+        const shortened = Array.from(title).slice(0, Math.max(0, room)).join('').trimEnd();
+        return `${prefix}${shortened}…`;
+    },
+
+    /**
      * Genera el contenido Markdown basado en los datos del bug de nuestra APP.
      */
     generateBugMarkdown(bug) {
@@ -334,7 +350,7 @@ ${bug.evidences.map(f => `- ${f}`).join('\n')}
         const payload = {
             fields: {
                 project: { key: projectKey },
-                summary: `🐞 BUG-${bugData.id}: ${bugData.title}`,
+                summary: this.buildSummary(bugData),
                 issuetype: { name: 'Bug' },
                 description: adfDescription
             }
