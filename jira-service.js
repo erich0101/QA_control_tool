@@ -56,15 +56,23 @@ const JiraService = {
      * (el título completo queda en la descripción del ticket).
      */
     buildSummary(bugData) {
+        // Jira (Java) cuenta unidades UTF-16: el emoji del prefijo ocupa 2.
+        // Por eso el límite se mide con `string.length`, no con code points.
         const MAX_SUMMARY = 255;
         const prefix = `🐞 BUG-${bugData.id}: `;
         const title = String(bugData.title || '').replace(/\s+/g, ' ').trim();
-        const chars = Array.from(prefix + title);
-        if (chars.length <= MAX_SUMMARY) return prefix + title;
+        if ((prefix + title).length <= MAX_SUMMARY) return prefix + title;
 
-        const room = MAX_SUMMARY - Array.from(prefix).length - 1; // 1 por el «…»
-        const shortened = Array.from(title).slice(0, Math.max(0, room)).join('').trimEnd();
-        return `${prefix}${shortened}…`;
+        const room = MAX_SUMMARY - prefix.length - 1; // 1 por el «…»
+        let shortened = '';
+        for (const char of Array.from(title)) {
+            if (shortened.length + char.length > room) break;
+            shortened += char;
+        }
+        const summary = `${prefix}${shortened.trimEnd()}…`;
+        return summary.length <= MAX_SUMMARY
+            ? summary
+            : Array.from(summary).slice(0, MAX_SUMMARY - 1).join('');
     },
 
     /**
