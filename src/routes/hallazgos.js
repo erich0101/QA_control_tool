@@ -3,6 +3,7 @@ const { query } = require('../../db');
 const { requireAuth, requireAdmin } = require('../middleware/auth');
 const { checkPermission, generateKey } = require('../lib/sequences');
 const { recordStatusChange } = require('../lib/status-history');
+const evidenceStore = require('../../modules/evidence-store');
 
 const router = express.Router();
 
@@ -122,8 +123,14 @@ router.put('/:id', requireAuth, async (req, res) => {
 
 router.delete('/:id', requireAuth, requireAdmin, async (req, res) => {
     try {
+        // qa_attachments cae por ON DELETE CASCADE, pero el índice local de
+        // evidencias (SQLite) hay que limpiarlo explícitamente.
+        const att = await query(`SELECT id FROM qa_attachments WHERE defect_id = ?`, [req.params.id]);
         await query(`DELETE FROM qa_status_history WHERE entity_type = 'hallazgo' AND entity_id = ?`, [req.params.id]);
         await query(`DELETE FROM qa_defects WHERE id = ? AND execution_id IS NULL`, [req.params.id]);
+        for (const row of att.rows) {
+            try { evidenceStore.deleteIndex(row.id); } catch (_) { /* best-effort */ }
+        }
         res.json({ ok: true });
     } catch (err) {
         res.status(500).json({ error: err.message });

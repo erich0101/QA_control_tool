@@ -448,6 +448,8 @@ export interface ExploratoryHallazgo {
   created_by?: number | null;
   reporter_name?: string | null;
   assignee_name?: string | null;
+  /** Cantidad de evidencias adjuntas (qa_attachments por defect_id). */
+  evidence_count?: number;
 }
 
 export const EXPLORATORY_STATUSES = ['OK', 'FAIL', 'WARNING', 'BLOCK', 'SKIP'] as const;

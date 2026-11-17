@@ -57,7 +57,7 @@ nueva no reimplemente markup.
 | Componente | Uso |
 |---|---|
 | `Button` | Acciones. Variantes `primary`, `secondary`, `ghost`, `destructive`, `outline`. |
-| `Dialog` | Modales. |
+| `Dialog` | Modales. Usar `DialogBody` para contenido scrolleable. |
 | `ConfirmProvider` / `useConfirm` | Confirmaciones destructivas o irreversibles. |
 | `DropdownMenu` | Menús contextuales. |
 | `Tabs` | Navegación interna de una pantalla. |
@@ -65,6 +65,50 @@ nueva no reimplemente markup.
 | `sonner` (`toast`) | Notificaciones. |
 
 ## Combinaciones recomendadas
+
+### Modal con contenido largo
+
+Para que el header y los botones queden siempre visibles y solo scrollee el
+contenido:
+
+```tsx
+<DialogContent className="flex max-h-[90vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-lg">
+  <DialogHeader className="shrink-0 border-b border-border px-6 pb-4 pt-6">
+    <DialogTitle>…</DialogTitle>
+    <DialogDescription>…</DialogDescription>
+  </DialogHeader>
+
+  <form className="flex min-h-0 flex-1 flex-col" onSubmit={submit}>
+    <DialogBody className="space-y-4 px-6 py-4">{/* campos */}</DialogBody>
+    <DialogFooter className="shrink-0 border-t border-border px-6 py-4">
+      {/* acciones */}
+    </DialogFooter>
+  </form>
+</DialogContent>
+```
+
+Reglas:
+
+- `DialogBody` aporta `min-h-0 flex-1 overflow-y-auto`; nunca dejar el `overflow`
+  en el `DialogContent` si el modal tiene footer de acciones.
+- Evitar `<Textarea>` que crezcan con `min-h` muy altos: el scroll lo maneja el
+  cuerpo del modal, no la página.
+- Textos largos en tablas de modales: `truncate` + `title`, o `break-words`.
+
+### Evidencias en hallazgos
+
+Los hallazgos son `qa_defects` sin ejecución, así que la evidencia se adjunta
+con el endpoint existente:
+
+```
+POST /api/evidence   (multipart: evidence, category, defect_id)
+GET  /api/hallazgos/:id/evidence
+DELETE /api/evidence/:id
+```
+
+Reutilizar `EvidencePanel` (`features/hallazgos/components/evidence-panel.tsx`).
+En alta, las capturas quedan locales como "PENDIENTE" y se suben al obtener el
+`id` del hallazgo; en edición se suben al instante.
 
 ### Tabla editable
 

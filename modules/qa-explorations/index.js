@@ -262,6 +262,7 @@ router.get('/sessions/:runId', async (req, res) => {
             `SELECT d.id, d.title, d.description, d.severity, d.status, d.created_at,
                     d.steps_to_reproduce, d.expected_result, d.actual_result,
                     d.jira_key, d.jira_url, d.assigned_to, d.created_by,
+                    (SELECT COUNT(*) FROM qa_attachments a WHERE a.defect_id = d.id) AS evidence_count,
                     reporter.name AS reporter_name,
                     assignee.name AS assignee_name
                FROM qa_defects d

@@ -20,7 +20,12 @@ import { EditDatesDialog } from './components/edit-dates-dialog';
 import { BlockSessionDialog } from './components/block-session-dialog';
 import { RenameSessionDialog } from './components/rename-session-dialog';
 import { SessionDetail } from './components/session-detail';
-import { useExploratoriaMutations, useExploratorySession, useExploratorySessions } from './use-exploratoria';
+import {
+  useExploratoriaMutations,
+  useExploratorySession,
+  useExploratorySessions,
+  useHallazgoEvidence,
+} from './use-exploratoria';
 
 type SubTab = 'active' | 'history';
 
@@ -57,6 +62,9 @@ export function ExploratoriaPage() {
   const { data: detail, isLoading: detailLoading } = useExploratorySession(runId);
   const { data: team = [] } = useTeam();
   const { data: userStories = [] } = useProjectUserStories(projectId);
+  const { data: hallazgoEvidence = [], isLoading: hallazgoEvidenceLoading } = useHallazgoEvidence(
+    hallazgoForm?.mode === 'edit' ? (hallazgoForm.hallazgo?.id ?? null) : null,
+  );
   const mutations = useExploratoriaMutations(projectId, runId);
 
   const patchParams = (updates: Record<string, string | null>) => {
@@ -367,6 +375,13 @@ export function ExploratoriaPage() {
               onDeleteFlow={handleDeleteFlow}
               onEditHallazgo={(hallazgo) => setHallazgoForm({ mode: 'edit', hallazgo })}
               onDeleteHallazgo={handleDeleteHallazgo}
+              onUploadHallazgoEvidence={(hallazgoId, file, category) =>
+                mutations.uploadHallazgoEvidence.mutate({ hallazgoId, file, category })
+              }
+              onDeleteHallazgoEvidence={(attachmentId) =>
+                mutations.deleteEvidence.mutate(attachmentId)
+              }
+              isHallazgoEvidencePending={mutations.uploadHallazgoEvidence.isPending}
             />
           )
         ) : (
@@ -445,7 +460,19 @@ export function ExploratoriaPage() {
               : mutations.updateHallazgo.isPending
           }
           initial={hallazgoForm.hallazgo}
-          onSubmit={async (values) => {
+          evidence={hallazgoForm.mode === 'edit' ? hallazgoEvidence : []}
+          isEvidenceLoading={hallazgoEvidenceLoading}
+          isEvidenceUploading={mutations.uploadHallazgoEvidence.isPending}
+          onUploadEvidence={(file, category) => {
+            if (!hallazgoForm.hallazgo) return;
+            mutations.uploadHallazgoEvidence.mutate({
+              hallazgoId: hallazgoForm.hallazgo.id,
+              file,
+              category,
+            });
+          }}
+          onDeleteEvidence={(item) => mutations.deleteEvidence.mutate(item.id)}
+          onSubmit={async (values, files) => {
             if (hallazgoForm.mode === 'edit' && hallazgoForm.hallazgo) {
               await mutations.updateHallazgo.mutateAsync({
                 id: hallazgoForm.hallazgo.id,
@@ -453,7 +480,18 @@ export function ExploratoriaPage() {
               });
               return;
             }
-            await mutations.addHallazgo.mutateAsync(values);
+            const created = await mutations.addHallazgo.mutateAsync(values);
+            // Las capturas elegidas en el alta se suben recién cuando el
+            // hallazgo ya tiene id (qa_attachments.defect_id).
+            for (const item of files ?? []) {
+              if (!created?.id) break;
+              await mutations.uploadHallazgoEvidence.mutateAsync({
+                hallazgoId: created.id,
+                file: item.file,
+                category: item.category,
+                silent: true,
+              });
+            }
           }}
         />
       ) : null}

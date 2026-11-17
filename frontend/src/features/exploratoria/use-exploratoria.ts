@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { exploratoriaApi, type StartSessionInput } from '@/lib/api/exploratoria';
-import { hallazgosApi } from '@/lib/api/hallazgos';
+import { evidenceApi, hallazgosApi } from '@/lib/api/hallazgos';
 import { testSuitesApi } from '@/lib/api/test-suites';
 import { queryKeys } from '@/lib/query-keys';
 
@@ -21,6 +21,17 @@ export function useExploratorySession(runId: number | null) {
     queryFn: () => exploratoriaApi.getSession(runId as number),
     enabled: runId != null,
     staleTime: 10_000,
+  });
+}
+
+/** Evidencias de un hallazgo (qa_attachments por defect_id). */
+export function useHallazgoEvidence(hallazgoId: number | null) {
+  return useQuery({
+    queryKey: queryKeys.hallazgoEvidence(hallazgoId),
+    queryFn: () => hallazgosApi.evidence(hallazgoId as number),
+    enabled: hallazgoId != null,
+    select: (data) => data.evidence ?? [],
+    staleTime: 15_000,
   });
 }
 
@@ -222,7 +233,39 @@ export function useExploratoriaMutations(projectId: number | null, runId: number
     mutationFn: (id: number) => exploratoriaApi.deleteEvidence(id),
     onSuccess: async () => {
       await invalidateAll();
+      await queryClient.invalidateQueries({ queryKey: ['hallazgo-evidence'] });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.hallazgos(projectId) });
       toast.success('Evidencia eliminada');
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  /**
+   * Evidencias del hallazgo: mismo endpoint que usa la pantalla de Hallazgos
+   * (`POST /api/evidence` con `defect_id`), porque un hallazgo es un
+   * qa_defects sin ejecución.
+   */
+  const uploadHallazgoEvidence = useMutation({
+    mutationFn: ({
+      hallazgoId,
+      file,
+      category,
+    }: {
+      hallazgoId: number;
+      file: File;
+      category: string;
+      /** Evita un toast por archivo cuando se suben varias en el alta. */
+      silent?: boolean;
+    }) => evidenceApi.upload({ file, category, defectId: hallazgoId }),
+    onSuccess: async (_data, variables) => {
+      await invalidateAll();
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.hallazgoEvidence(variables.hallazgoId),
+        }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.hallazgos(projectId) }),
+      ]);
+      if (!variables.silent) toast.success('Evidencia adjuntada');
     },
     onError: (error: Error) => toast.error(error.message),
   });
@@ -342,6 +385,7 @@ export function useExploratoriaMutations(projectId: number | null, runId: number
     endBlock,
     uploadEvidence,
     deleteEvidence,
+    uploadHallazgoEvidence,
     assignTester,
     addHallazgo,
     updateHallazgo,

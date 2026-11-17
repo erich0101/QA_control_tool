@@ -9,6 +9,7 @@ import {
   ExternalLink,
   FileText,
   Pencil,
+  Paperclip,
   Play,
   Plus,
   Square,
@@ -23,6 +24,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { Label } from '@/components/ui/label';
 import { ReadField } from '@/components/ui/read-field';
 import type {
+  EvidenceItem,
   ExploratoryAttachment,
   ExploratoryDetail,
   ExploratoryFlow,
@@ -34,8 +36,10 @@ import { EXPLORATORY_STATUSES } from '@/lib/api/types';
 import { cn } from '@/lib/utils';
 import { SelectField } from '@/components/ui/select-field';
 import { JiraTicketDialog } from '@/features/jira-tickets/jira-ticket-dialog';
+import { EvidencePanel } from '@/features/hallazgos/components/evidence-panel';
 import { BugsReportDialog } from './bugs-report-dialog';
 import { FlowDetail } from './flow-detail';
+import { useHallazgoEvidence } from '../use-exploratoria';
 
 interface SessionDetailProps {
   detail: ExploratoryDetail;
@@ -69,6 +73,9 @@ interface SessionDetailProps {
   onDeleteFlow: (flow: ExploratoryFlow) => void;
   onEditHallazgo: (hallazgo: ExploratoryHallazgo) => void;
   onDeleteHallazgo: (hallazgo: ExploratoryHallazgo) => void;
+  onUploadHallazgoEvidence: (hallazgoId: number, file: File, category: string) => void;
+  onDeleteHallazgoEvidence: (attachmentId: number) => void;
+  isHallazgoEvidencePending: boolean;
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -121,6 +128,9 @@ export function SessionDetail({
   onDeleteFlow,
   onEditHallazgo,
   onDeleteHallazgo,
+  onUploadHallazgoEvidence,
+  onDeleteHallazgoEvidence,
+  isHallazgoEvidencePending,
 }: SessionDetailProps) {
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
   const [jiraHallazgoId, setJiraHallazgoId] = useState<number | null>(null);
@@ -908,6 +918,15 @@ export function SessionDetail({
                     <span className="truncate">
                       {row.kind === 'flow' ? row.flow.title : row.hallazgo.title}
                     </span>
+                    {row.kind === 'hallazgo' && row.hallazgo.evidence_count ? (
+                      <span
+                        className="flex shrink-0 items-center gap-1 text-caption text-fg-subtle"
+                        title={`${row.hallazgo.evidence_count} evidencia(s)`}
+                      >
+                        <Paperclip className="size-3" />
+                        {row.hallazgo.evidence_count}
+                      </span>
+                    ) : null}
                   </span>
                 ),
               },
@@ -1157,6 +1176,15 @@ export function SessionDetail({
                   <ReadField label="Resultado esperado" value={row.hallazgo.expected_result} />
                   <ReadField label="Resultado obtenido" value={row.hallazgo.actual_result} />
 
+                  <HallazgoEvidenceBlock
+                    hallazgoId={row.hallazgo.id}
+                    isUploading={isHallazgoEvidencePending}
+                    onUpload={(file, category) =>
+                      onUploadHallazgoEvidence(row.hallazgo.id, file, category)
+                    }
+                    onDelete={(item) => onDeleteHallazgoEvidence(item.id)}
+                  />
+
                   {row.hallazgo.jira_key ? null : (
                     <Button
                       variant="secondary"
@@ -1201,6 +1229,37 @@ export function SessionDetail({
         runId={run.id}
         runName={run.name}
         executions={executions}
+      />
+    </div>
+  );
+}
+
+/**
+ * Evidencias del hallazgo dentro de la sesión: se adjuntan antes de crear el
+ * ticket en Jira. Reutiliza el panel de la pantalla de Hallazgos y
+ * `POST /api/evidence` con `defect_id`.
+ */
+function HallazgoEvidenceBlock({
+  hallazgoId,
+  isUploading,
+  onUpload,
+  onDelete,
+}: {
+  hallazgoId: number;
+  isUploading?: boolean;
+  onUpload: (file: File, category: string) => void;
+  onDelete: (item: EvidenceItem) => void;
+}) {
+  const { data: items = [], isLoading } = useHallazgoEvidence(hallazgoId);
+
+  return (
+    <div className="rounded-lg border border-border bg-surface-2 p-3">
+      <EvidencePanel
+        items={items}
+        isLoading={isLoading}
+        isUploading={isUploading}
+        onUpload={onUpload}
+        onDelete={onDelete}
       />
     </div>
   );

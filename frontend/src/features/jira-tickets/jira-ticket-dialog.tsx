@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -171,8 +172,8 @@ export function JiraTicketDialog({
 
   return (
     <Dialog open={open} onOpenChange={(next) => !creating && onOpenChange(next)}>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
+      <DialogContent className="flex max-h-[90vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
+        <DialogHeader className="shrink-0 border-b border-border px-6 pb-4 pt-6">
           <DialogTitle>
             Crear {pending.length === 1 ? 'ticket' : `${pending.length} tickets`} en Jira
           </DialogTitle>
@@ -182,6 +183,7 @@ export function JiraTicketDialog({
           </DialogDescription>
         </DialogHeader>
 
+        <DialogBody className="space-y-4 px-6 py-4">
         {context.isLoading ? (
           <div className="flex items-center gap-2 px-1 py-6 text-footnote text-fg-subtle">
             <Loader2 className="size-4 animate-spin" />
@@ -342,8 +344,9 @@ export function JiraTicketDialog({
             ) : null}
           </div>
         )}
+        </DialogBody>
 
-        <DialogFooter>
+        <DialogFooter className="shrink-0 border-t border-border px-6 py-4">
           {contextError ? (
             <Button variant="secondary" onClick={() => onOpenChange(false)}>
               Cerrar
