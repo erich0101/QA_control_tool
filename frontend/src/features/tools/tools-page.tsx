@@ -5,6 +5,7 @@ import {
   IdCard,
   KeyRound,
   Rocket,
+  Workflow,
   Wrench,
   type LucideIcon,
 } from 'lucide-react';
@@ -16,6 +17,7 @@ import { Base64Tool } from './components/base64-tool';
 import { CuitTool } from './components/cuit-tool';
 import { RequestBuilderTool } from './components/request-builder-tool';
 import { TokenDecoderTool } from './components/token-decoder-tool';
+import { FlowQaTool } from './flowqa-tool';
 
 interface ToolDefinition {
   id: string;
@@ -46,6 +48,13 @@ const TOOLS: ToolDefinition[] = [
     icon: Rocket,
     ready: true,
   },
+  {
+    id: 'flowqa',
+    label: 'FlowQA Studio',
+    description: 'Diagramas de flujo',
+    icon: Workflow,
+    ready: true,
+  },
 ];
 
 export function ToolsPage() {
@@ -53,6 +62,7 @@ export function ToolsPage() {
 
   const requested = params.get('tool');
   const active = TOOLS.find((tool) => tool.id === requested) ?? TOOLS[0];
+  const isFlowQa = active.id === 'flowqa';
 
   const select = (id: string) => {
     setParams(
@@ -125,11 +135,17 @@ export function ToolsPage() {
         </nav>
       </aside>
 
-      <section className="scrollbar-apple min-w-0 flex-1 overflow-y-auto p-5">
+      <section
+        className={cn(
+          'min-w-0 flex-1',
+          isFlowQa ? 'flex min-h-0' : 'scrollbar-apple overflow-y-auto p-5',
+        )}
+      >
         {active.id === 'base64' ? <Base64Tool /> : null}
         {active.id === 'cuit-generator' ? <CuitTool /> : null}
         {active.id === 'token-decoder' ? <TokenDecoderTool /> : null}
         {active.id === 'request-builder' ? <RequestBuilderTool /> : null}
+        {active.id === 'flowqa' ? <FlowQaTool /> : null}
         {!active.ready ? (
           <EmptyState
             icon={<Construction />}

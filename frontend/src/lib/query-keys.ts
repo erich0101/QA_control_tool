@@ -38,4 +38,6 @@ export const queryKeys = {
   jiraProductivity: (projectId: number | null) => ['stats-jira-productivity', projectId] as const,
   epicReport: (projectId: number | null, epicKey: string | null, from: string, to: string) =>
     ['epic-report', projectId, epicKey, from, to] as const,
+  flowDiagrams: (projectId: number | null) => ['flow-diagrams', projectId] as const,
+  flowDiagram: (id: number | null) => ['flow-diagram', id] as const,
 };

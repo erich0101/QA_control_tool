@@ -537,6 +537,27 @@ $fn$ LANGUAGE plpgsql`);
         await query(`CREATE INDEX IF NOT EXISTS idx_tc_prec_tc_id     ON qa_tc_preconditions (tc_id)`);
         await query(`CREATE INDEX IF NOT EXISTS idx_tc_prec_prc_id    ON qa_tc_preconditions (prc_id)`);
 
+        // ── FlowQA Studio: diagramas de flujo (Tools) ──
+        // Documento JSONB por diagrama: nodos/edges son estado del editor y
+        // se guardan juntos para que cargar/editar sea atómico.
+        await query(`
+            CREATE TABLE IF NOT EXISTS qa_flow_diagrams (
+                id SERIAL PRIMARY KEY,
+                project_id INTEGER NOT NULL REFERENCES qa_projects(id) ON DELETE CASCADE,
+                name VARCHAR(160) NOT NULL,
+                description TEXT,
+                nodes JSONB NOT NULL DEFAULT '[]'::jsonb,
+                edges JSONB NOT NULL DEFAULT '[]'::jsonb,
+                settings JSONB NOT NULL DEFAULT '{}'::jsonb,
+                version INTEGER NOT NULL DEFAULT 1,
+                created_by INTEGER REFERENCES qa_users(id) ON DELETE SET NULL,
+                updated_by INTEGER REFERENCES qa_users(id) ON DELETE SET NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+        await query(`CREATE INDEX IF NOT EXISTS idx_flow_diagrams_project ON qa_flow_diagrams (project_id, updated_at DESC)`);
+
         // ── Seed del usuario admin por defecto ──
         const bcrypt = require('bcryptjs');
         const adminExists = await query(`SELECT id, perfil FROM qa_users WHERE email = ?`, ['erich@qa.local']);

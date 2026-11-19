@@ -38,6 +38,7 @@ const jiraRouter = require('./src/routes/jira');
 const debugRouter = require('./src/routes/debug');
 const fileTransferRouter = require('./src/routes/file-transfer');
 const reportsRouter = require('./src/routes/reports');
+const flowDiagramsRouter = require('./src/routes/flow-diagrams');
 const legacyRouter = require('./src/routes/legacy');
 
 const app = express();
@@ -105,6 +106,7 @@ app.use('/api', fileTransferRouter);
 // ── ESTADÍSTICAS Y TOOLS ──
 app.use('/api/stats', statsRouter);
 app.use('/api/tools', toolsRouter);
+app.use('/api/flow-diagrams', flowDiagramsRouter);
 
 // ── REPORTES Y EVIDENCIAS ──
 app.use('/api/reports', reportsRouter);
