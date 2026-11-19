@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { ChevronRight, Eye, RefreshCw, Target } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -16,6 +17,7 @@ import { formatDate } from '@/lib/utils';
 import { useUiStore } from '@/stores/ui';
 import { JiraTicketDrawer } from './components/jira-ticket-drawer';
 import { useJiraTracking } from './use-jira-tracking';
+import { jiraTrackingOrigin, jiraTrackingOriginHref } from './lib/origin';
 import { useJiraTicketContext } from '@/features/jira-tickets/use-create-jira-ticket';
 
 const STATUS_TONE = (status: string): 'ok' | 'warn' | 'brand' | 'neutral' => {
@@ -31,6 +33,8 @@ interface EpicGroup {
   name: string;
   tickets: JiraTrackingItem[];
 }
+
+
 
 export function JiraTrackingPage() {
   const projectId = useUiStore((s) => s.activeProjectId);
@@ -54,7 +58,19 @@ export function JiraTrackingPage() {
     return tracking
       .filter((item) => {
         if (spaceFilter && item.jira_space_key !== spaceFilter) return false;
-        if (term && !item.jira_key.toLowerCase().includes(term)) return false;
+        if (term) {
+          const haystack = [
+            item.jira_key,
+            item.tc_key,
+            item.origin_tc_key,
+            `#${item.id}`,
+            item.title,
+          ]
+            .filter(Boolean)
+            .join(' ')
+            .toLowerCase();
+          if (!haystack.includes(term)) return false;
+        }
         if (epicFilter && item.jira_epic_key !== epicFilter) return false;
         if (statusFilter && item.jira_status !== statusFilter) return false;
 
@@ -210,12 +226,12 @@ export function JiraTrackingPage() {
               />
             </Field>
 
-            <Field label="Key" htmlFor="tracking-key" className="w-36">
+            <Field label="Key / TC / #" htmlFor="tracking-key" className="w-40">
               <Input
                 id="tracking-key"
                 value={keyFilter}
                 onChange={(event) => setKeyFilter(event.target.value)}
-                placeholder="AGIP-1234"
+                placeholder="AGIP-1234, TC-395, #521"
                 className="h-9"
               />
             </Field>
@@ -295,7 +311,7 @@ export function JiraTrackingPage() {
           <EmptyState
             icon={<Target />}
             title="Sin tickets vinculados"
-            description="Los bugs que exportes a Jira aparecen acá para seguimiento."
+            description="Los bugs y hallazgos que exportes a Jira aparecen acá con su TC y número de origen."
           />
         ) : filtered.length === 0 ? (
           <EmptyState
@@ -323,6 +339,44 @@ export function JiraTrackingPage() {
                     <span className="text-footnote font-medium text-fg">{ticket.title}</span>
                   </div>
                 ),
+              },
+              {
+                id: 'origin',
+                header: 'Origen / TC',
+                headerClassName: 'w-64',
+                cell: (ticket) => {
+                  const origin = jiraTrackingOrigin(ticket);
+                  const href = jiraTrackingOriginHref(ticket);
+                  return (
+                    <div className="flex min-w-0 flex-col gap-0.5">
+                      <span className="flex items-center gap-1.5">
+                        <Badge tone={origin.isHallazgo ? 'brand' : 'warn'}>
+                          {origin.isHallazgo ? 'HALLAZGO' : 'BUG'}
+                        </Badge>
+                        {href ? (
+                          <Link
+                            to={href}
+                            className="text-caption font-semibold text-brand hover:underline"
+                          >
+                            {origin.label}
+                          </Link>
+                        ) : (
+                          <span className="text-caption font-semibold text-fg-muted">
+                            {origin.label}
+                          </span>
+                        )}
+                      </span>
+                      <span
+                        className="truncate text-caption text-fg-subtle"
+                        title={origin.tcTitle ?? undefined}
+                      >
+                        {origin.tcKey
+                          ? `${origin.tcKey}${origin.tcTitle ? ` · ${origin.tcTitle}` : ''}`
+                          : 'Sin TC asociado'}
+                      </span>
+                    </div>
+                  );
+                },
               },
               {
                 id: 'assignee',

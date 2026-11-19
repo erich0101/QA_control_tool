@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { CornerUpLeft, ExternalLink, Send, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -8,6 +9,7 @@ import { jiraIssueUrl } from '@/lib/api/jira';
 import type { JiraTrackingItem } from '@/lib/api/types';
 import { cn, formatDate } from '@/lib/utils';
 import { adfToText } from '../lib/adf';
+import { jiraTrackingOrigin, jiraTrackingOriginHref, jiraTrackingRunLabel } from '../lib/origin';
 import { useAddJiraComment, useJiraComments } from '../use-jira-tracking';
 
 const STATUS_TONE = (status: string): 'ok' | 'warn' | 'brand' | 'neutral' => {
@@ -90,6 +92,64 @@ export function JiraTicketDrawer({
               </p>
             </div>
           </div>
+
+          {(() => {
+            const origin = jiraTrackingOrigin(ticket);
+            const href = jiraTrackingOriginHref(ticket);
+            const runLabel = jiraTrackingRunLabel(ticket);
+            return (
+              <div className="mt-2 rounded-lg border border-border bg-surface-2 p-2.5 text-caption">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-fg-subtle">
+                  Trazabilidad local
+                </p>
+                <div className="mt-1.5 grid grid-cols-2 gap-2">
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wide text-fg-subtle">Origen</p>
+                    <p className="mt-0.5 flex flex-wrap items-center gap-1">
+                      <Badge tone={origin.isHallazgo ? 'brand' : 'warn'}>
+                        {origin.isHallazgo ? 'HALLAZGO' : 'BUG'}
+                      </Badge>
+                      {href ? (
+                        <Link to={href} className="font-semibold text-brand hover:underline">
+                          #{ticket.id}
+                        </Link>
+                      ) : (
+                        <span className="font-semibold text-fg-muted">#{ticket.id}</span>
+                      )}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wide text-fg-subtle">Test case</p>
+                    <p className="mt-0.5 truncate text-fg-muted" title={origin.tcTitle ?? undefined}>
+                      {origin.tcKey ?? 'Sin TC asociado'}
+                    </p>
+                  </div>
+                  <div className="col-span-2">
+                    <p className="text-[10px] uppercase tracking-wide text-fg-subtle">
+                      Sesión / ciclo
+                    </p>
+                    <p className="mt-0.5 text-fg-muted">{runLabel ?? '—'}</p>
+                  </div>
+                  {origin.tcTitle ? (
+                    <div className="col-span-2">
+                      <p className="text-[10px] uppercase tracking-wide text-fg-subtle">
+                        Nombre del TC
+                      </p>
+                      <p className="mt-0.5 text-fg-muted">{origin.tcTitle}</p>
+                    </div>
+                  ) : null}
+                </div>
+                {href ? (
+                  <Link
+                    to={href}
+                    className="mt-2 inline-flex items-center gap-1 font-semibold text-brand hover:underline"
+                  >
+                    Ver origen en la app
+                  </Link>
+                ) : null}
+              </div>
+            );
+          })()}
 
           <Button variant="primary" size="sm" className="mt-2 w-full" asChild>
             <a href={jiraIssueUrl(ticket.jira_key)} target="_blank" rel="noopener noreferrer">

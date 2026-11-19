@@ -497,6 +497,23 @@ export interface JiraTrackingItem {
   /** Espacio/proyecto de Jira del ticket. */
   jira_space_key?: string;
   jira_space_name?: string;
+  /** Origen local del ticket: bug de ejecución o hallazgo. */
+  origin?: 'bug' | 'hallazgo';
+  severity?: string | null;
+  /** Estado local del defecto/hallazgo. */
+  status?: string | null;
+  /** TC ejecutado (bugs). */
+  tc_key?: string | null;
+  tc_title?: string | null;
+  /** TC de origen (hallazgos convertidos). */
+  origin_tc_key?: string | null;
+  origin_tc_title?: string | null;
+  /** Ciclo/sesión asociada. */
+  run_id?: number | null;
+  origin_run_id?: number | null;
+  run_type?: string | null;
+  run_name?: string | null;
+  suite_title?: string | null;
 }
 
 export interface JiraIssueComment {

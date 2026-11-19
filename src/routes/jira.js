@@ -434,16 +434,40 @@ router.get('/projects/:id/tracking', requireAuth, async (req, res) => {
         const creds = await getJiraUserCredentials(projectId, req.user.id);
         if (creds.error) return res.status(creds.code === 'NO_PROJECT_CONFIG' ? 404 : 403).json({ error: creds.error, code: creds.code });
 
+        // Incluye bugs (defectos de una ejecución) y hallazgos (sin ejecución).
+        // Cada ticket debe poder rastrearse hasta su origen local y su TC.
         const dbBugs = await query(`
-            SELECT d.id, d.title, d.jira_key, d.jira_url, d.created_at
+            SELECT d.id, d.title, d.jira_key, d.jira_url, d.created_at,
+                   d.severity, d.status,
+                   CASE WHEN d.execution_id IS NULL THEN 'hallazgo' ELSE 'bug' END AS origin,
+                   e.run_id AS run_id,
+                   d.exploratory_run_id AS origin_run_id,
+                   r.run_type AS run_type,
+                   r.name AS run_name,
+                   s.title AS suite_title,
+                   tc.key_id AS tc_key,
+                   tc.title AS tc_title,
+                   origin_tc.key_id AS origin_tc_key,
+                   origin_tc.title AS origin_tc_title
             FROM qa_defects d
-            JOIN qa_executions e ON d.execution_id = e.id
-            JOIN qa_test_cases tc ON e.tc_id = tc.id
-            JOIN qa_test_suites s ON tc.suite_id = s.id
-            JOIN qa_use_cases cu ON s.use_case_id = cu.id
-            WHERE cu.project_id = ? AND d.jira_key IS NOT NULL AND d.status != 'DISMISSED'
+            LEFT JOIN qa_executions e ON d.execution_id = e.id
+            LEFT JOIN qa_test_cases tc ON e.tc_id = tc.id
+            LEFT JOIN qa_test_suites s ON tc.suite_id = s.id
+            LEFT JOIN qa_use_cases cu ON s.use_case_id = cu.id
+            LEFT JOIN qa_test_runs r ON e.run_id = r.id
+            LEFT JOIN (
+                SELECT DISTINCT ON (hallazgo_id) hallazgo_id, tc_id
+                FROM qa_hallazgo_tc
+                ORDER BY hallazgo_id, created_at DESC
+            ) ht ON d.id = ht.hallazgo_id
+            LEFT JOIN qa_test_cases origin_tc ON ht.tc_id = origin_tc.id
+            WHERE d.jira_key IS NOT NULL AND d.status != 'DISMISSED'
+              AND (
+                (d.execution_id IS NOT NULL AND cu.project_id = ?)
+                OR (d.execution_id IS NULL AND d.project_id = ?)
+              )
             ORDER BY d.created_at DESC, d.id DESC
-        `, [projectId]);
+        `, [projectId, projectId]);
 
         if (dbBugs.rows.length === 0) return res.json({ tracking: [] });
 
