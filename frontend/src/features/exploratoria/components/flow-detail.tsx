@@ -153,6 +153,10 @@ export function FlowDetail({
   const [status, setStatus] = useState<ExploratoryStatus>(
     (execution?.status as ExploratoryStatus) || 'OK',
   );
+  // Último estado persistido: define si el formulario de defecto debe verse.
+  const [savedStatus, setSavedStatus] = useState<ExploratoryStatus | null>(
+    (execution?.status as ExploratoryStatus) || null,
+  );
   const [observations, setObservations] = useState(execution?.observations ?? '');
   const [obtained, setObtained] = useState(execution?.obtained_result ?? '');
   const [bug, setBug] = useState<BugDraft>(emptyBug(flow.expected_result ?? ''));
@@ -170,6 +174,12 @@ export function FlowDetail({
     setEditingDefectId(null);
     setBug(emptyBug(flow.expected_result ?? ''));
   }, [flow.id, flow.expected_result]);
+
+  // Si la ejecución se refresca (por ejemplo tras guardar), el estado
+  // persistido manda: el formulario solo queda visible ante un cambio real.
+  useEffect(() => {
+    setSavedStatus((execution?.status as ExploratoryStatus) || null);
+  }, [execution?.id, execution?.status]);
 
   useEffect(() => {
     if (editingDefectId == null) return;
@@ -189,6 +199,12 @@ export function FlowDetail({
 
   const needsJustification = status === 'BLOCK' || status === 'SKIP';
   const allowsBug = status === 'FAIL' || status === 'WARNING';
+  // El formulario de defecto solo aparece cuando el usuario cambia el estado
+  // respecto del último guardado (o cuando edita un bug existente). Si el TC
+  // ya está guardado como FAIL/WARNING, su defecto se ve en "Defectos
+  // reportados" y no se repite el formulario.
+  const statusChanged = status !== savedStatus;
+  const showDefectForm = editingDefectId != null || (allowsBug && statusChanged);
   const executionAttachments = execution
     ? attachments.filter((item) => item.execution_id === execution.id)
     : [];
@@ -217,7 +233,7 @@ export function FlowDetail({
       return;
     }
 
-    if (allowsBug && !bug.title.trim() && status === 'FAIL') {
+    if (status === 'FAIL' && showDefectForm && !bug.title.trim()) {
       toast.warning('Un FAIL requiere reportar un defecto');
       return;
     }
@@ -229,13 +245,14 @@ export function FlowDetail({
         status,
         observations: observations.trim(),
         obtained_result: obtained.trim(),
-        ...(allowsBug && bug.title.trim() ? { bugs: [bug] } : {}),
+        ...(showDefectForm && bug.title.trim() ? { bugs: [bug] } : {}),
       },
     });
 
     // Tras guardar, el formulario vuelve a "nuevo defecto": el bug ya vive en
     // "Defectos reportados" y no se duplica como edición abierta.
     cancelEditing();
+    setSavedStatus(status);
 
     if (result.execution_id && pending.length > 0) {
       for (const file of pending) {
@@ -528,17 +545,27 @@ export function FlowDetail({
         />
       </Field>
 
-      {allowsBug ? (
+      {showDefectForm ? (
         <div className="space-y-2 rounded-lg border border-fail/30 bg-fail-soft/40 p-3">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-caption font-bold uppercase tracking-wide text-fail">
-              {editingDefectId ? `Editando bug #${editingDefectId}` : 'Reporte de defecto'}
+              {editingDefectId
+                ? `Editando bug #${editingDefectId}`
+                : status === 'FAIL'
+                  ? 'Reporte de defecto (obligatorio)'
+                  : 'Reporte de defecto (opcional)'}
             </span>
             {editingDefectId ? (
               <span className="text-caption text-fg-subtle">
                 Guardá para actualizar el bug reportado
               </span>
-            ) : null}
+            ) : (
+              <span className="text-caption text-fg-subtle">
+                {status === 'FAIL'
+                  ? 'Un FAIL debe registrar un defecto antes de guardar.'
+                  : 'Podés registrar un defecto asociado al warning.'}
+              </span>
+            )}
             {editingDefectId ? (
               <Button
                 variant="ghost"
@@ -662,7 +689,14 @@ export function FlowDetail({
                 key={button.value}
                 type="button"
                 data-active={status === button.value}
-                onClick={() => setStatus(button.value)}
+                onClick={() => {
+                  setStatus(button.value);
+                  // Al salir de FAIL/WARNING no hay formulario de defecto:
+                  // se descarta una edición abierta para no dejarla huérfana.
+                  if (button.value !== 'FAIL' && button.value !== 'WARNING') {
+                    cancelEditing();
+                  }
+                }}
                 disabled={isFinished}
                 className={cn(
                   'inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-caption font-bold transition-colors disabled:opacity-50',
