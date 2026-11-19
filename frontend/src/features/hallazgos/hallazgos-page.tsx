@@ -27,6 +27,7 @@ import {
   SeverityBadge,
   SuggestionStatusBadge,
 } from './components/badges';
+import { JiraTraceBadge } from '@/features/jira-tickets/jira-trace-badge';
 import { useHallazgos, useSuggestions } from './use-hallazgos';
 
 type SubTab = 'bug' | 'suggestion';
@@ -346,6 +347,7 @@ function HallazgoListItem({
         </p>
         <div className="mt-1 flex flex-wrap items-center gap-1.5">
           <SeverityBadge severity={hallazgo.severity} />
+          <JiraTraceBadge jiraKey={hallazgo.jira_key} jiraUrl={hallazgo.jira_url} />
           {hallazgo.component ? (
             <span className="text-caption text-fg-subtle">{hallazgo.component}</span>
           ) : null}

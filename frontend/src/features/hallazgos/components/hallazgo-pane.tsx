@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { FormProvider, useForm } from 'react-hook-form';
-import { Bug, ExternalLink, Rocket, RotateCcw, Save, Trash2, Wand2 } from 'lucide-react';
+import { Bug, Rocket, RotateCcw, Save, Trash2, Wand2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { useConfirm } from '@/components/ui/confirm-provider';
@@ -20,6 +20,7 @@ import { EvidencePanel } from './evidence-panel';
 import { HallazgoFields } from './hallazgo-fields';
 import { ConvertToTcDialog } from './convert-to-tc-dialog';
 import { JiraTicketDialog } from '@/features/jira-tickets/jira-ticket-dialog';
+import { JiraTraceBadge } from '@/features/jira-tickets/jira-trace-badge';
 
 interface HallazgoPaneProps {
   hallazgo?: Hallazgo | null;
@@ -126,14 +127,9 @@ export function HallazgoPane({
                 />
               </div>
 
-              {hallazgo.jira_key ? (
-                <Button variant="ghost" size="sm" asChild className="text-brand">
-                  <a href={hallazgo.jira_url ?? '#'} target="_blank" rel="noopener noreferrer">
-                    {hallazgo.jira_key}
-                    <ExternalLink />
-                  </a>
-                </Button>
-              ) : (
+              <JiraTraceBadge jiraKey={hallazgo.jira_key} jiraUrl={hallazgo.jira_url} />
+
+              {hallazgo.jira_key ? null : (
                 <Button
                   variant="secondary"
                   size="sm"

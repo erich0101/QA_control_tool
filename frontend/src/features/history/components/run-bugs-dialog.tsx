@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
 import { JiraTicketDialog } from '@/features/jira-tickets/jira-ticket-dialog';
+import { JiraTraceBadge } from '@/features/jira-tickets/jira-trace-badge';
 import type { TestRun } from '@/lib/api/types';
 import { useUiStore } from '@/stores/ui';
 import { useRunBugs } from '../use-history';
@@ -119,8 +120,14 @@ export function RunBugsDialog({ run, onOpenChange }: RunBugsDialogProps) {
                         <p className="mt-1 text-caption text-fg-subtle">
                           {bug.tc_title ? `${bug.tc_title} · ` : ''}
                           {bug.status ?? 'OPEN'}
-                          {bug.jira_key ? ` · ${bug.jira_key}` : ''}
                         </p>
+                        <div className="mt-1">
+                          <JiraTraceBadge
+                            jiraKey={bug.jira_key}
+                            jiraUrl={bug.jira_url}
+                            jiraStatus={bug.jira_status}
+                          />
+                        </div>
                       </div>
                     </li>
                   );

@@ -6,7 +6,6 @@ import {
   CalendarDays,
   ChevronRight,
   ClipboardCheck,
-  ExternalLink,
   FileText,
   Pencil,
   Paperclip,
@@ -36,6 +35,7 @@ import { EXPLORATORY_STATUSES } from '@/lib/api/types';
 import { cn } from '@/lib/utils';
 import { SelectField } from '@/components/ui/select-field';
 import { JiraTicketDialog } from '@/features/jira-tickets/jira-ticket-dialog';
+import { JiraTraceBadge } from '@/features/jira-tickets/jira-trace-badge';
 import { EvidencePanel } from '@/features/hallazgos/components/evidence-panel';
 import { BugsReportDialog } from './bugs-report-dialog';
 import { FlowDetail } from './flow-detail';
@@ -198,6 +198,18 @@ export function SessionDetail({
   type Row =
     | { kind: 'flow'; rowId: string; flow: ExploratoryFlow }
     | { kind: 'hallazgo'; rowId: string; hallazgo: ExploratoryHallazgo };
+
+  /** Tickets Jira vinculados a la fila: hallazgo directo o defectos del TC. */
+  const jiraTicketsFor = (row: Row): Array<{ key: string; url?: string | null }> => {
+    if (row.kind === 'hallazgo') {
+      return row.hallazgo.jira_key
+        ? [{ key: row.hallazgo.jira_key, url: row.hallazgo.jira_url }]
+        : [];
+    }
+    return defectsFor(row.flow)
+      .filter((defect) => Boolean(defect.jira_key))
+      .map((defect) => ({ key: defect.jira_key as string, url: defect.jira_url }));
+  };
 
   // Hallazgos y flujos conviven en la misma grilla: el hallazgo se identifica
   // con un badge y no participa de las métricas de ejecución.
@@ -951,6 +963,35 @@ export function SessionDetail({
                 },
               },
               {
+                id: 'jira',
+                header: 'Jira',
+                headerClassName: 'w-44',
+                cell: (row) => {
+                  const tickets = jiraTicketsFor(row);
+                  if (tickets.length === 0) {
+                    return <JiraTraceBadge emptyLabel="Sin ticket" />;
+                  }
+                  const shown = tickets.slice(0, 2);
+                  return (
+                    <span
+                      className="flex flex-wrap items-center gap-1"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      {shown.map((ticket) => (
+                        <JiraTraceBadge
+                          key={ticket.key}
+                          jiraKey={ticket.key}
+                          jiraUrl={ticket.url}
+                        />
+                      ))}
+                      {tickets.length > shown.length ? (
+                        <Badge tone="neutral">+{tickets.length - shown.length}</Badge>
+                      ) : null}
+                    </span>
+                  );
+                },
+              },
+              {
                 id: 'tester',
                 header: 'Tester',
                 headerClassName: 'w-40',
@@ -1118,18 +1159,10 @@ export function SessionDetail({
                     <span className="text-caption text-fg-subtle">
                       Reportado por {row.hallazgo.reporter_name ?? '—'}
                     </span>
-                    {row.hallazgo.jira_key ? (
-                      <Button variant="ghost" size="sm" asChild className="text-brand">
-                        <a
-                          href={row.hallazgo.jira_url ?? '#'}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          {row.hallazgo.jira_key}
-                          <ExternalLink />
-                        </a>
-                      </Button>
-                    ) : null}
+                    <JiraTraceBadge
+                      jiraKey={row.hallazgo.jira_key}
+                      jiraUrl={row.hallazgo.jira_url}
+                    />
                   </div>
 
                   <div className="grid gap-3 sm:grid-cols-2">

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronRight, ExternalLink, Rocket, RotateCcw, Trash2 } from 'lucide-react';
+import { ChevronRight, Rocket, RotateCcw, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ReadField } from '@/components/ui/read-field';
@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 import { useDefectStatusHistory } from '@/features/execution/use-status-history';
 import { StatusHistoryTimeline } from '@/features/execution/components/status-history-timeline';
 import { JiraTicketDialog } from '@/features/jira-tickets/jira-ticket-dialog';
+import { JiraTraceBadge } from '@/features/jira-tickets/jira-trace-badge';
 import { useUiStore } from '@/stores/ui';
 
 interface BugRowProps {
@@ -67,23 +68,13 @@ export function BugRow({ bug, onDismiss, isBusy }: BugRowProps) {
           {bug.severity ?? 'Media'}
         </Badge>
 
-        {bug.jira_key ? (
-          <a
-            href={bug.jira_url ?? '#'}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-caption font-semibold text-brand hover:underline"
-          >
-            {bug.jira_key}
-            <ExternalLink className="size-3" />
-          </a>
-        ) : (
-          <Badge tone={STATUS_TONE[bug.status ?? 'OPEN'] ?? 'neutral'}>{bug.status ?? 'OPEN'}</Badge>
-        )}
+        <Badge tone={STATUS_TONE[bug.status ?? 'OPEN'] ?? 'neutral'}>{bug.status ?? 'OPEN'}</Badge>
 
-        {bug.jira_status ? (
-          <span className="text-caption text-fg-subtle">{bug.jira_status}</span>
-        ) : null}
+        <JiraTraceBadge
+          jiraKey={bug.jira_key}
+          jiraUrl={bug.jira_url}
+          jiraStatus={bug.jira_status}
+        />
 
         <span className="w-12 shrink-0 text-right text-caption tabular-nums text-fg-subtle">
           {createdAt}

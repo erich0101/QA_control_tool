@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Bug, CircleCheck, CircleX, CircleSlash, Save, SkipForward } from 'lucide-react';
+import { Bug, CircleCheck, CircleX, CircleSlash, Rocket, Save, SkipForward } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,8 @@ import { useTcStatusHistory } from '../use-status-history';
 import { StatusHistoryTimeline } from './status-history-timeline';
 import { BugDrafts, emptyBugDraft } from './bug-drafts';
 import { EvidenceSection } from './evidence-section';
+import { JiraTicketDialog } from '@/features/jira-tickets/jira-ticket-dialog';
+import { JiraTraceBadge } from '@/features/jira-tickets/jira-trace-badge';
 
 interface ExecutionDetailProps {
   testCase: TestCase;
@@ -67,9 +69,11 @@ export function ExecutionDetail({ testCase, projectId }: ExecutionDetailProps) {
   const [observations, setObservations] = useState(testCase.observations ?? '');
   const [obtained, setObtained] = useState(testCase.obtained_result ?? '');
   const [drafts, setDrafts] = useState<BugDraft[]>([]);
+  const [jiraDefectId, setJiraDefectId] = useState<number | null>(null);
 
   const needsJustification = status === 'BLOCK' || status === 'SKIP';
   const existingDefects = testCase.defects ?? [];
+  const jiraDefect = existingDefects.find((defect) => defect.id === jiraDefectId) ?? null;
 
   const handleSave = async () => {
     if (status === 'PENDING') {
@@ -116,15 +120,43 @@ export function ExecutionDetail({ testCase, projectId }: ExecutionDetailProps) {
       </div>
 
       {existingDefects.length > 0 ? (
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="space-y-2">
           <span className="text-caption font-bold uppercase tracking-wide text-fg-subtle">
-            Defectos reportados
+            Defectos reportados ({existingDefects.length})
           </span>
           {existingDefects.map((defect) => (
-            <Badge key={defect.id} tone="fail" className="gap-1">
-              <Bug className="size-3" />
-              {defect.title}
-            </Badge>
+            <div
+              key={defect.id}
+              className="flex flex-wrap items-center gap-2 rounded-md border border-fail/30 bg-fail-soft/40 px-3 py-2"
+            >
+              <Bug className="size-3.5 shrink-0 text-fail" />
+              <span className="min-w-0 flex-1 truncate text-footnote font-medium text-fg">
+                {defect.title}
+              </span>
+              <Badge tone="fail">{defect.severity ?? 'Media'}</Badge>
+              <JiraTraceBadge
+                jiraKey={defect.jira_key}
+                jiraUrl={defect.jira_url}
+                jiraStatus={defect.jira_status}
+              />
+              {defect.jira_key ? null : (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="h-7"
+                  disabled={defect.status === 'DISMISSED'}
+                  title={
+                    defect.status === 'DISMISSED'
+                      ? 'El bug está descartado: reabrilo para exportarlo a Jira'
+                      : 'Crear un ticket de error en Jira a partir de este bug'
+                  }
+                  onClick={() => setJiraDefectId(defect.id)}
+                >
+                  <Rocket />
+                  Ticket Jira
+                </Button>
+              )}
+            </div>
           ))}
         </div>
       ) : null}
@@ -237,6 +269,27 @@ export function ExecutionDetail({ testCase, projectId }: ExecutionDetailProps) {
           Guardar
         </Button>
       </div>
+
+      <JiraTicketDialog
+        open={jiraDefect != null}
+        onOpenChange={(open) => {
+          if (!open) setJiraDefectId(null);
+        }}
+        projectId={projectId}
+        kind="defect"
+        items={
+          jiraDefect
+            ? [
+                {
+                  id: jiraDefect.id,
+                  title: jiraDefect.title || 'Sin título',
+                  severity: jiraDefect.severity,
+                  jira_key: jiraDefect.jira_key,
+                },
+              ]
+            : []
+        }
+      />
     </div>
   );
 }

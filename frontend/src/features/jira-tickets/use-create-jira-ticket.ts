@@ -33,6 +33,8 @@ export function useCreateJiraTicket(projectId: number | null, kind: JiraTicketKi
         'defects',
         'hallazgos',
         'run-bugs',
+        // Los TC (modo Ejecución y suites) también muestran jira_key.
+        'test-suites',
         'jira-tracking',
         'my-jira-tickets',
         'exploratory-session',

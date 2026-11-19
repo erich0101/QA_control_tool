@@ -4,7 +4,6 @@ import {
   CircleCheck,
   CircleSlash,
   CircleX,
-  ExternalLink,
   Pencil,
   Rocket,
   Save,
@@ -34,6 +33,7 @@ import { useExploratoriaMutations } from '../use-exploratoria';
 import { useTcStatusHistory, useDefectStatusHistory } from '@/features/execution/use-status-history';
 import { StatusHistoryTimeline } from '@/features/execution/components/status-history-timeline';
 import { JiraTicketDialog } from '@/features/jira-tickets/jira-ticket-dialog';
+import { JiraTraceBadge } from '@/features/jira-tickets/jira-trace-badge';
 
 interface FlowDetailProps {
   flow: ExploratoryFlow;
@@ -324,17 +324,9 @@ export function FlowDetail({
                   </Badge>
                   <Badge tone="outline">{defect.status ?? 'OPEN'}</Badge>
                   <span className="text-caption text-fg-subtle">#{defect.id}</span>
-                  {defect.jira_key ? (
-                    <a
-                      href={defect.jira_url ?? '#'}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-caption font-semibold text-brand hover:underline"
-                    >
-                      {defect.jira_key}
-                      <ExternalLink className="size-3" />
-                    </a>
-                  ) : (
+                  <JiraTraceBadge jiraKey={defect.jira_key} jiraUrl={defect.jira_url} />
+
+                  {defect.jira_key ? null : (
                     <Button
                       variant="secondary"
                       size="sm"
