@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronRight, ExternalLink, RotateCcw, Trash2 } from 'lucide-react';
+import { ChevronRight, ExternalLink, Rocket, RotateCcw, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ReadField } from '@/components/ui/read-field';
@@ -7,6 +7,8 @@ import type { Defect } from '@/lib/api/types';
 import { cn } from '@/lib/utils';
 import { useDefectStatusHistory } from '@/features/execution/use-status-history';
 import { StatusHistoryTimeline } from '@/features/execution/components/status-history-timeline';
+import { JiraTicketDialog } from '@/features/jira-tickets/jira-ticket-dialog';
+import { useUiStore } from '@/stores/ui';
 
 interface BugRowProps {
   bug: Defect;
@@ -29,6 +31,8 @@ const STATUS_TONE: Record<string, 'ok' | 'warn' | 'neutral'> = {
 
 export function BugRow({ bug, onDismiss, isBusy }: BugRowProps) {
   const [expanded, setExpanded] = useState(false);
+  const [jiraOpen, setJiraOpen] = useState(false);
+  const projectId = useUiStore((state) => state.activeProjectId);
   const { data: statusHistory = [] } = useDefectStatusHistory(bug.id, expanded);
   const isDismissed = bug.status === 'DISMISSED';
 
@@ -85,6 +89,23 @@ export function BugRow({ bug, onDismiss, isBusy }: BugRowProps) {
           {createdAt}
         </span>
 
+        {bug.jira_key ? null : (
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={isDismissed}
+            title={
+              isDismissed
+                ? 'El bug está descartado: reabrilo para exportarlo a Jira'
+                : 'Crear un ticket de error en Jira a partir de este bug'
+            }
+            onClick={() => setJiraOpen(true)}
+          >
+            <Rocket />
+            Crear ticket Jira
+          </Button>
+        )}
+
         <Button
           variant="ghost"
           size="sm"
@@ -129,6 +150,21 @@ export function BugRow({ bug, onDismiss, isBusy }: BugRowProps) {
           </div>
         </div>
       ) : null}
+
+      <JiraTicketDialog
+        open={jiraOpen}
+        onOpenChange={setJiraOpen}
+        projectId={projectId}
+        kind="defect"
+        items={[
+          {
+            id: bug.id,
+            title: bug.title || 'Sin título',
+            severity: bug.severity,
+            jira_key: bug.jira_key,
+          },
+        ]}
+      />
     </div>
   );
 }

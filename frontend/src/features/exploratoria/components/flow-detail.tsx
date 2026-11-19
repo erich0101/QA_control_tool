@@ -1,5 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
-import { Bug, CircleCheck, CircleSlash, CircleX, Pencil, Save, SkipForward, TriangleAlert, X } from 'lucide-react';
+import {
+  Bug,
+  CircleCheck,
+  CircleSlash,
+  CircleX,
+  ExternalLink,
+  Pencil,
+  Rocket,
+  Save,
+  SkipForward,
+  TriangleAlert,
+  X,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -21,6 +33,7 @@ import { cn } from '@/lib/utils';
 import { useExploratoriaMutations } from '../use-exploratoria';
 import { useTcStatusHistory, useDefectStatusHistory } from '@/features/execution/use-status-history';
 import { StatusHistoryTimeline } from '@/features/execution/components/status-history-timeline';
+import { JiraTicketDialog } from '@/features/jira-tickets/jira-ticket-dialog';
 
 interface FlowDetailProps {
   flow: ExploratoryFlow;
@@ -144,6 +157,8 @@ export function FlowDetail({
   const [obtained, setObtained] = useState(execution?.obtained_result ?? '');
   const [bug, setBug] = useState<BugDraft>(emptyBug(flow.expected_result ?? ''));
   const [editingDefectId, setEditingDefectId] = useState<number | null>(null);
+  const [jiraDefectId, setJiraDefectId] = useState<number | null>(null);
+  const jiraDefect = defects.find((defect) => defect.id === jiraDefectId) ?? null;
   const [category, setCategory] = useState('GENERAL');
   const [pending, setPending] = useState<File[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -292,6 +307,33 @@ export function FlowDetail({
                   </Badge>
                   <Badge tone="outline">{defect.status ?? 'OPEN'}</Badge>
                   <span className="text-caption text-fg-subtle">#{defect.id}</span>
+                  {defect.jira_key ? (
+                    <a
+                      href={defect.jira_url ?? '#'}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-caption font-semibold text-brand hover:underline"
+                    >
+                      {defect.jira_key}
+                      <ExternalLink className="size-3" />
+                    </a>
+                  ) : (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="h-7"
+                      disabled={defect.status === 'DISMISSED'}
+                      title={
+                        defect.status === 'DISMISSED'
+                          ? 'El bug está descartado: reabrilo para exportarlo a Jira'
+                          : 'Crear un ticket de error en Jira a partir de este bug'
+                      }
+                      onClick={() => setJiraDefectId(defect.id)}
+                    >
+                      <Rocket />
+                      Ticket Jira
+                    </Button>
+                  )}
                   {!isFinished ? (
                     <Button
                       variant="ghost"
@@ -650,6 +692,27 @@ export function FlowDetail({
           <Badge tone="ok">Sesión finalizada</Badge>
         )}
       </div>
+
+      <JiraTicketDialog
+        open={jiraDefect != null}
+        onOpenChange={(open) => {
+          if (!open) setJiraDefectId(null);
+        }}
+        projectId={projectId}
+        kind="defect"
+        items={
+          jiraDefect
+            ? [
+                {
+                  id: jiraDefect.id,
+                  title: jiraDefect.title || 'Sin título',
+                  severity: jiraDefect.severity,
+                  jira_key: jiraDefect.jira_key,
+                },
+              ]
+            : []
+        }
+      />
     </div>
   );
 }
