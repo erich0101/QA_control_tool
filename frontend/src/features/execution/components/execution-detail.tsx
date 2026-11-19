@@ -163,6 +163,7 @@ export function ExecutionDetail({ testCase, projectId }: ExecutionDetailProps) {
 
       <EvidenceSection
         testCase={testCase}
+        projectId={projectId}
         isUploading={uploadEvidence.isPending}
         onUpload={(file, category) =>
           uploadEvidence.mutate({ file, testCaseId: testCase.id, category })

@@ -209,6 +209,9 @@ export function HallazgoPane({
               <div className="rounded-xl border border-border bg-surface p-4">
                 <EvidencePanel
                   items={evidence}
+                  projectId={projectId}
+                  diagramEntityType="defect"
+                  diagramEntityId={hallazgo?.id ?? null}
                   isLoading={evidenceLoading}
                   isUploading={evidenceMutations.upload.isPending}
                   onUpload={(file, category) => evidenceMutations.upload.mutate({ file, category })}

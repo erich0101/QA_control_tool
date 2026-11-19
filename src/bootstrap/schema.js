@@ -556,7 +556,10 @@ $fn$ LANGUAGE plpgsql`);
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         `);
+        await query(`ALTER TABLE qa_flow_diagrams ADD COLUMN IF NOT EXISTS entity_type VARCHAR(32)`);
+        await query(`ALTER TABLE qa_flow_diagrams ADD COLUMN IF NOT EXISTS entity_id INTEGER`);
         await query(`CREATE INDEX IF NOT EXISTS idx_flow_diagrams_project ON qa_flow_diagrams (project_id, updated_at DESC)`);
+        await query(`CREATE INDEX IF NOT EXISTS idx_flow_diagrams_entity ON qa_flow_diagrams (project_id, entity_type, entity_id)`);
 
         // ── Seed del usuario admin por defecto ──
         const bcrypt = require('bcryptjs');

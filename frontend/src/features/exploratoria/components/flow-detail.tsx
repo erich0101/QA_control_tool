@@ -9,6 +9,7 @@ import {
   Save,
   SkipForward,
   TriangleAlert,
+  Workflow,
   X,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -34,6 +35,7 @@ import { useTcStatusHistory, useDefectStatusHistory } from '@/features/execution
 import { StatusHistoryTimeline } from '@/features/execution/components/status-history-timeline';
 import { JiraTicketDialog } from '@/features/jira-tickets/jira-ticket-dialog';
 import { JiraTraceBadge } from '@/features/jira-tickets/jira-trace-badge';
+import { AttachDiagramDialog } from '@/features/tools/flowqa/attach-diagram-dialog';
 
 interface FlowDetailProps {
   flow: ExploratoryFlow;
@@ -162,6 +164,7 @@ export function FlowDetail({
   const [bug, setBug] = useState<BugDraft>(emptyBug(flow.expected_result ?? ''));
   const [editingDefectId, setEditingDefectId] = useState<number | null>(null);
   const [jiraDefectId, setJiraDefectId] = useState<number | null>(null);
+  const [diagramOpen, setDiagramOpen] = useState(false);
   const jiraDefect = defects.find((defect) => defect.id === jiraDefectId) ?? null;
   const [category, setCategory] = useState('GENERAL');
   const [pending, setPending] = useState<File[]>([]);
@@ -424,6 +427,7 @@ export function FlowDetail({
                 { value: 'FIGMA', label: 'Figma' },
                 { value: 'DEV', label: 'Sistema' },
                 { value: 'BUG', label: 'Error' },
+                { value: 'DIAGRAM', label: 'Diagrama' },
               ]}
               aria-label="Categoría de la evidencia"
             />
@@ -434,6 +438,10 @@ export function FlowDetail({
           <div className="flex items-center gap-2">
             <Button variant="secondary" size="sm" onClick={() => fileRef.current?.click()}>
               Agregar captura
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => setDiagramOpen(true)}>
+              <Workflow />
+              Adjuntar diagrama
             </Button>
             <span className="text-caption text-fg-subtle">
               {execution ? 'Se sube al guardar el flujo.' : 'Se suben junto con el primer guardado.'}
@@ -718,6 +726,20 @@ export function FlowDetail({
           <Badge tone="ok">Sesión finalizada</Badge>
         )}
       </div>
+
+      {diagramOpen ? (
+        <AttachDiagramDialog
+          open={diagramOpen}
+          onOpenChange={setDiagramOpen}
+          projectId={projectId}
+          entityType="test_case"
+          entityId={flow.id}
+          onAttach={(file) => {
+            setPending((current) => [...current, file]);
+            setCategory('DIAGRAM');
+          }}
+        />
+      ) : null}
 
       <JiraTicketDialog
         open={jiraDefect != null}

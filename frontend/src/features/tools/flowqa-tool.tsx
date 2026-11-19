@@ -9,12 +9,17 @@ import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useConfirm } from '@/components/ui/confirm-provider';
-import type { FlowDiagramPayload } from '@/lib/api/flow-diagrams';
+import type { FlowDiagramPayload, FlowLinkEntityType } from '@/lib/api/flow-diagrams';
 import { formatDate } from '@/lib/utils';
 import { useUiStore } from '@/stores/ui';
 import { FlowQaEditor } from './flowqa/flowqa-editor';
 import { DEFAULT_SETTINGS, type FlowState } from './flowqa/model';
-import { useFlowDiagram, useFlowDiagramMutations, useFlowDiagrams } from './use-flow-diagrams';
+import {
+  useFlowDiagram,
+  useFlowDiagramMutations,
+  useFlowDiagrams,
+  useFlowLinkTargets,
+} from './use-flow-diagrams';
 
 const EMPTY_STATE: FlowState = { nodes: [], edges: [], settings: DEFAULT_SETTINGS };
 
@@ -26,9 +31,11 @@ export function FlowQaTool() {
   const [editorKey, setEditorKey] = useState(0);
   const [name, setName] = useState('Nuevo diagrama');
   const [description, setDescription] = useState('');
+  const [entity, setEntity] = useState('none');
   const [dirty, setDirty] = useState(false);
   const stateRef = useRef<FlowState>(EMPTY_STATE);
   const { data: activeDiagram, isLoading: isLoadingDiagram } = useFlowDiagram(activeId);
+  const { data: linkTargets = [] } = useFlowLinkTargets(projectId);
   const { create, update, remove } = useFlowDiagramMutations(projectId);
 
   useEffect(() => {
@@ -36,6 +43,7 @@ export function FlowQaTool() {
     setEditorKey((key) => key + 1);
     setName('Nuevo diagrama');
     setDescription('');
+    setEntity('none');
     setDirty(false);
     stateRef.current = EMPTY_STATE;
   }, [projectId]);
@@ -44,6 +52,11 @@ export function FlowQaTool() {
     if (!activeDiagram) return;
     setName(activeDiagram.name);
     setDescription(activeDiagram.description ?? '');
+    setEntity(
+      activeDiagram.entity_type && activeDiagram.entity_id
+        ? `${activeDiagram.entity_type}:${activeDiagram.entity_id}`
+        : 'none',
+    );
     setDirty(false);
     // Solo sincroniza cuando llega una versión nueva del servidor; no pisa
     // cambios locales de nombre/descripción ante un refetch cualquiera.
@@ -60,6 +73,7 @@ export function FlowQaTool() {
     setEditorKey((key) => key + 1);
     setName('Nuevo diagrama');
     setDescription('');
+    setEntity('none');
     setDirty(false);
     stateRef.current = EMPTY_STATE;
   };
@@ -89,6 +103,15 @@ export function FlowQaTool() {
     resetToNew();
   };
 
+  const entityLink = () => {
+    if (entity === 'none') return { entity_type: null, entity_id: null };
+    const [type, rawId] = entity.split(':');
+    return {
+      entity_type: type as FlowLinkEntityType,
+      entity_id: Number(rawId) || null,
+    };
+  };
+
   const saveDiagram = async () => {
     if (!projectId) return;
     if (!name.trim()) {
@@ -101,6 +124,7 @@ export function FlowQaTool() {
       nodes: stateRef.current.nodes,
       edges: stateRef.current.edges,
       settings: stateRef.current.settings,
+      ...entityLink(),
     };
     if (activeId) {
       await update.mutateAsync({ id: activeId, payload });
@@ -157,6 +181,14 @@ export function FlowQaTool() {
       label: `${diagram.name} · v${diagram.version}`,
     })),
   ];
+  const linkOptions = [
+    { value: 'none', label: 'Sin vínculo' },
+    ...linkTargets.map((target) => ({
+      value: `${target.type}:${target.id}`,
+      label: target.label,
+    })),
+  ];
+  const linkedLabel = linkTargets.find((target) => `${target.type}:${target.id}` === entity)?.label;
 
   return (
     <div className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-col">
@@ -178,6 +210,11 @@ export function FlowQaTool() {
             <Badge tone="neutral">Nuevo</Badge>
           )}
           {dirty ? <Badge tone="warn">Cambios sin guardar</Badge> : null}
+          {entity !== 'none' ? (
+            <Badge tone="brand" className="max-w-72 truncate" title={linkedLabel}>
+              {linkedLabel || entity.replace(':', ' #')}
+            </Badge>
+          ) : null}
 
           <div className="flex-1" />
 
@@ -244,6 +281,20 @@ export function FlowQaTool() {
               }}
               maxLength={500}
               placeholder="Opcional: alcance, HU, épica o nota de la evidencia"
+            />
+          </Field>
+          <Field label="Vincular a" htmlFor="flowqa-link" className="w-80">
+            <Combobox
+              id="flowqa-link"
+              value={entity}
+              onValueChange={(value) => {
+                setEntity(value);
+                setDirty(true);
+              }}
+              options={linkOptions}
+              placeholder="Sin vínculo"
+              searchPlaceholder="Buscar CU, HU, TC, suite, bug o sesión…"
+              aria-label="Vincular diagrama a una entidad"
             />
           </Field>
         </div>

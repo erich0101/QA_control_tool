@@ -1,14 +1,19 @@
 import { useRef, useState } from 'react';
-import { ImagePlus, Trash2, Upload } from 'lucide-react';
+import { ImagePlus, Trash2, Upload, Workflow } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { useConfirm } from '@/components/ui/confirm-provider';
 import { SelectField } from '@/components/ui/select-field';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { EvidenceItem } from '@/lib/api/types';
+import type { FlowLinkEntityType } from '@/lib/api/flow-diagrams';
+import { AttachDiagramDialog } from '@/features/tools/flowqa/attach-diagram-dialog';
 
 interface EvidencePanelProps {
   items: EvidenceItem[];
+  projectId?: number | null;
+  diagramEntityType?: FlowLinkEntityType;
+  diagramEntityId?: number | null;
   isLoading?: boolean;
   isUploading?: boolean;
   onUpload: (file: File, category: string) => void;
@@ -20,11 +25,15 @@ const CATEGORIES = [
   { value: 'FIGMA', label: 'Figma' },
   { value: 'DEV', label: 'Sistema' },
   { value: 'BUG', label: 'Error' },
+  { value: 'DIAGRAM', label: 'Diagrama' },
 ];
 
 /** Galería de evidencias de un hallazgo o sugerencia. */
 export function EvidencePanel({
   items,
+  projectId,
+  diagramEntityType = 'defect',
+  diagramEntityId,
   isLoading,
   isUploading,
   onUpload,
@@ -32,6 +41,7 @@ export function EvidencePanel({
 }: EvidencePanelProps) {
   const confirm = useConfirm();
   const [category, setCategory] = useState('GENERAL');
+  const [diagramOpen, setDiagramOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleFile = (file?: File) => {
@@ -93,6 +103,34 @@ export function EvidencePanel({
           }}
         />
       </div>
+
+      {diagramEntityId ? (
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            disabled={isUploading}
+            onClick={() => setDiagramOpen(true)}
+          >
+            <Workflow />
+            Adjuntar diagrama
+          </Button>
+          <span className="text-caption text-fg-subtle">Opcional · SVG o PNG</span>
+        </div>
+      ) : null}
+
+      {diagramOpen && diagramEntityId ? (
+        <AttachDiagramDialog
+          open={diagramOpen}
+          onOpenChange={setDiagramOpen}
+          projectId={projectId ?? null}
+          entityType={diagramEntityType}
+          entityId={diagramEntityId}
+          isUploading={isUploading}
+          onAttach={(file) => onUpload(file, 'DIAGRAM')}
+        />
+      ) : null}
 
       {isLoading ? (
         <div className="flex gap-2">

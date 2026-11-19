@@ -1,11 +1,27 @@
 import { apiFetch } from './client';
 
+export type FlowLinkEntityType =
+  | 'use_case'
+  | 'user_story'
+  | 'test_case'
+  | 'test_suite'
+  | 'defect'
+  | 'exploratory_session';
+
+export interface FlowLinkTarget {
+  type: FlowLinkEntityType;
+  id: number;
+  label: string;
+}
+
 export interface FlowDiagramSummary {
   id: number;
   project_id: number;
   name: string;
   description?: string | null;
   version: number;
+  entity_type?: FlowLinkEntityType | null;
+  entity_id?: number | null;
   node_count: number;
   edge_count: number;
   created_at?: string;
@@ -28,6 +44,8 @@ export interface FlowDiagramPayload {
   nodes: unknown[];
   edges: unknown[];
   settings?: unknown;
+  entity_type?: FlowLinkEntityType | null;
+  entity_id?: number | null;
 }
 
 export const flowDiagramsApi = {
@@ -40,6 +58,12 @@ export const flowDiagramsApi = {
   get: async (id: number) => {
     const res = await apiFetch<{ diagram: FlowDiagram }>(`/api/flow-diagrams/${id}`);
     return res.diagram;
+  },
+  linkTargets: async (projectId: number, q?: string) => {
+    const res = await apiFetch<{ targets: FlowLinkTarget[] }>('/api/flow-diagrams/link-targets', {
+      query: { project_id: projectId, q },
+    });
+    return res.targets;
   },
   create: async (projectId: number, payload: FlowDiagramPayload) => {
     const res = await apiFetch<{ diagram: FlowDiagram }>('/api/flow-diagrams', {

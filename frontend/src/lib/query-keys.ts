@@ -39,5 +39,6 @@ export const queryKeys = {
   epicReport: (projectId: number | null, epicKey: string | null, from: string, to: string) =>
     ['epic-report', projectId, epicKey, from, to] as const,
   flowDiagrams: (projectId: number | null) => ['flow-diagrams', projectId] as const,
+  flowLinkTargets: (projectId: number | null) => ['flow-link-targets', projectId] as const,
   flowDiagram: (id: number | null) => ['flow-diagram', id] as const,
 };

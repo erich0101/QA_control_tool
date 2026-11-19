@@ -1211,6 +1211,7 @@ export function SessionDetail({
 
                   <HallazgoEvidenceBlock
                     hallazgoId={row.hallazgo.id}
+                    projectId={projectId}
                     isUploading={isHallazgoEvidencePending}
                     onUpload={(file, category) =>
                       onUploadHallazgoEvidence(row.hallazgo.id, file, category)
@@ -1274,11 +1275,13 @@ export function SessionDetail({
  */
 function HallazgoEvidenceBlock({
   hallazgoId,
+  projectId,
   isUploading,
   onUpload,
   onDelete,
 }: {
   hallazgoId: number;
+  projectId: number | null;
   isUploading?: boolean;
   onUpload: (file: File, category: string) => void;
   onDelete: (item: EvidenceItem) => void;
@@ -1289,6 +1292,9 @@ function HallazgoEvidenceBlock({
     <div className="rounded-lg border border-border bg-surface-2 p-3">
       <EvidencePanel
         items={items}
+        projectId={projectId}
+        diagramEntityType="defect"
+        diagramEntityId={hallazgoId}
         isLoading={isLoading}
         isUploading={isUploading}
         onUpload={onUpload}

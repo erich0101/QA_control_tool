@@ -1,14 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
-import { ImagePlus, Trash2, Upload } from 'lucide-react';
+import { ImagePlus, Trash2, Upload, Workflow } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { useConfirm } from '@/components/ui/confirm-provider';
 import { SelectField } from '@/components/ui/select-field';
 import type { Attachment, TestCase } from '@/lib/api/types';
 import { cn } from '@/lib/utils';
+import { AttachDiagramDialog } from '@/features/tools/flowqa/attach-diagram-dialog';
 
 interface EvidenceSectionProps {
   testCase: TestCase;
+  projectId: number | null;
   isUploading: boolean;
   onUpload: (file: File, category: string) => void;
   onDelete: (attachment: Attachment) => void;
@@ -19,6 +21,7 @@ const CATEGORIES = [
   { value: 'FIGMA', label: 'Figma' },
   { value: 'DEV', label: 'Sistema' },
   { value: 'BUG', label: 'Error' },
+  { value: 'DIAGRAM', label: 'Diagrama' },
 ];
 
 const CATEGORY_STYLES: Record<string, string> = {
@@ -26,15 +29,23 @@ const CATEGORY_STYLES: Record<string, string> = {
   FIGMA: 'bg-accent/20 text-accent',
   DEV: 'bg-brand-soft text-brand',
   BUG: 'bg-fail-soft text-fail',
+  DIAGRAM: 'bg-brand-soft text-brand',
 };
 
 /**
  * Evidencias de la ejecución: click, drag&drop o pegar (Ctrl+V).
  * Antes esto era un bloque de ~120 líneas con handlers globales de `paste`.
  */
-export function EvidenceSection({ testCase, isUploading, onUpload, onDelete }: EvidenceSectionProps) {
+export function EvidenceSection({
+  testCase,
+  projectId,
+  isUploading,
+  onUpload,
+  onDelete,
+}: EvidenceSectionProps) {
   const confirm = useConfirm();
   const [category, setCategory] = useState('GENERAL');
+  const [diagramOpen, setDiagramOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const attachments = testCase.attachments ?? [];
@@ -137,6 +148,32 @@ export function EvidenceSection({ testCase, isUploading, onUpload, onDelete }: E
           }}
         />
       </div>
+
+      <div className="flex items-center gap-2">
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          disabled={isUploading}
+          onClick={() => setDiagramOpen(true)}
+        >
+          <Workflow />
+          Adjuntar diagrama
+        </Button>
+        <span className="text-caption text-fg-subtle">Opcional · SVG o PNG</span>
+      </div>
+
+      {diagramOpen ? (
+        <AttachDiagramDialog
+          open={diagramOpen}
+          onOpenChange={setDiagramOpen}
+          projectId={projectId}
+          entityType="test_case"
+          entityId={testCase.id}
+          isUploading={isUploading}
+          onAttach={(file) => onUpload(file, 'DIAGRAM')}
+        />
+      ) : null}
 
       {attachments.length === 0 ? (
         <p className="py-2 text-center text-caption text-fg-subtle">Sin evidencias adjuntas</p>

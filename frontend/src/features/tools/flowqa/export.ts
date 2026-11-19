@@ -257,16 +257,16 @@ export function buildSvg(state: FlowState, isDark: boolean) {
   return { svg: parts.join('\n'), width, height };
 }
 
-export function exportSvg(state: FlowState, isDark: boolean) {
+export function renderSvgFile(state: FlowState, isDark: boolean, name = 'diagrama') {
   const res = buildSvg(state, isDark);
-  if (!res) return false;
-  downloadBlob(new Blob([res.svg], { type: 'image/svg+xml;charset=utf-8' }), `flowqa-${Date.now()}.svg`);
-  return true;
+  if (!res) return null;
+  const blob = new Blob([res.svg], { type: 'image/svg+xml;charset=utf-8' });
+  return new File([blob], `${name}.svg`, { type: 'image/svg+xml' });
 }
 
-export async function exportPng(state: FlowState, isDark: boolean) {
+export async function renderPngFile(state: FlowState, isDark: boolean, name = 'diagrama') {
   const res = buildSvg(state, isDark);
-  if (!res) return false;
+  if (!res) return null;
   const scale = 2.5;
   const svgBlob = new Blob([res.svg], { type: 'image/svg+xml;charset=utf-8' });
   const url = URL.createObjectURL(svgBlob);
@@ -286,11 +286,24 @@ export async function exportPng(state: FlowState, isDark: boolean) {
     ctx.drawImage(image, 0, 0);
     const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
     if (!blob) throw new Error('No se pudo generar el PNG');
-    downloadBlob(blob, `flowqa-evidencia-${Date.now()}.png`);
-    return true;
+    return new File([blob], `${name}.png`, { type: 'image/png' });
   } finally {
     URL.revokeObjectURL(url);
   }
+}
+
+export function exportSvg(state: FlowState, isDark: boolean) {
+  const file = renderSvgFile(state, isDark, `flowqa-${Date.now()}`);
+  if (!file) return false;
+  downloadBlob(file, file.name);
+  return true;
+}
+
+export async function exportPng(state: FlowState, isDark: boolean) {
+  const file = await renderPngFile(state, isDark, `flowqa-evidencia-${Date.now()}`);
+  if (!file) return false;
+  downloadBlob(file, file.name);
+  return true;
 }
 
 function sanitizeMermaid(text: string) {

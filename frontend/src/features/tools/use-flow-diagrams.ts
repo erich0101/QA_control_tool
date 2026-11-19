@@ -22,6 +22,15 @@ export function useFlowDiagram(id: number | null) {
   });
 }
 
+export function useFlowLinkTargets(projectId: number | null, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.flowLinkTargets(projectId),
+    queryFn: () => flowDiagramsApi.linkTargets(projectId as number),
+    enabled: projectId != null && enabled,
+    staleTime: 5 * 60_000,
+  });
+}
+
 export function useFlowDiagramMutations(projectId: number | null) {
   const queryClient = useQueryClient();
   const invalidate = () => {
