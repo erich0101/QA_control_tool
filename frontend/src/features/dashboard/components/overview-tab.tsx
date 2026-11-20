@@ -105,6 +105,9 @@ export function OverviewTab({ projectId }: { projectId: number }) {
 
   const { summary, statuses, coverage, exploratory = [], defects } = data;
   const activeExploratory = summary.active_exploratory ?? exploratory.length;
+  // Si el backend sigue en una versión anterior, los campos nuevos llegan
+  // undefined y el dashboard parecería mostrar ceros "reales".
+  const backendOutdated = !Array.isArray(data.exploratory) || !data.defects;
   const total = summary.total_tc || 1;
   const countOf = (values: string[]) =>
     statuses
@@ -135,6 +138,13 @@ export function OverviewTab({ projectId }: { projectId: number }) {
 
   return (
     <div className="space-y-5">
+      {backendOutdated ? (
+        <div className="rounded-lg border border-warn/40 bg-warn-soft px-3 py-2 text-caption text-warn">
+          El backend no está devolviendo los datos nuevos del dashboard. Reiniciá el servidor
+          (Ctrl + C y <code>npm start</code>) para aplicar la actualización.
+        </div>
+      ) : null}
+
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <KpiCard label="Casos de uso" value={summary.total_cu} />
         <KpiCard label="Test cases" value={summary.total_tc} tone="brand" hint={`${summary.total_suites} suites activas`} />
