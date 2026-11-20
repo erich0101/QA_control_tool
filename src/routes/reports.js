@@ -7,6 +7,8 @@ const { buildHallazgosReportData } = require('../lib/report-templates/hallazgos-
 const { renderHallazgosReport } = require('../lib/report-templates/hallazgos-render');
 const { buildDeliveryReportData } = require('../lib/report-templates/delivery-data');
 const { renderDeliveryReport } = require('../lib/report-templates/delivery-render');
+const { buildCurrentStateReportData } = require('../lib/report-templates/current-state-data');
+const { renderCurrentStateReport } = require('../lib/report-templates/current-state-render');
 
 const router = express.Router();
 
@@ -102,6 +104,19 @@ router.get('/tester/projects', requireAuth, async (req, res) => {
         res.json({ projects: projects.rows });
     } catch (err) {
         res.status(500).json({ error: err.message });
+    }
+});
+
+// GET /api/reports/:runId/current-state
+// Estado actual de una ejecución o sesión exploratoria: último resultado
+// guardado por TC, sin cadena histórica de retests.
+router.get('/:runId/current-state', requireAuth, async (req, res) => {
+    try {
+        const data = await buildCurrentStateReportData(parseInt(req.params.runId, 10));
+        res.setHeader('Content-Type', 'text/html');
+        res.send(renderCurrentStateReport(data));
+    } catch (err) {
+        res.status(err.status || 500).json({ error: err.message });
     }
 });
 

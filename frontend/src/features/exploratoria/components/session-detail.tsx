@@ -6,6 +6,7 @@ import {
   CalendarDays,
   ChevronRight,
   ClipboardCheck,
+  ClipboardList,
   FileText,
   Pencil,
   Paperclip,
@@ -32,6 +33,7 @@ import type {
 } from '@/lib/api/types';
 import { HALLZGO_STATUSES } from '@/lib/api/types';
 import { EXPLORATORY_STATUSES } from '@/lib/api/types';
+import { reportsApi } from '@/lib/api/reports';
 import { cn } from '@/lib/utils';
 import { SelectField } from '@/components/ui/select-field';
 import { JiraTicketDialog } from '@/features/jira-tickets/jira-ticket-dialog';
@@ -381,6 +383,17 @@ export function SessionDetail({
 
           <Button variant="ghost" size="sm" onClick={onBack}>
             ← Sesiones
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-brand"
+            title="Estado actual: último estado guardado de cada flujo/TC"
+            onClick={() => window.open(reportsApi.currentStateUrl(run.id), '_blank', 'noopener')}
+          >
+            <ClipboardList />
+            Estado actual
           </Button>
 
           <Button

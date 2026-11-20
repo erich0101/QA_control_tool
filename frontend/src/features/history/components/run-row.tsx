@@ -1,9 +1,10 @@
-import { Bug, ClipboardCheck, FileText, RotateCcw } from 'lucide-react';
+import { Bug, ClipboardCheck, ClipboardList, FileText, RotateCcw } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import type { TestRun } from '@/lib/api/types';
 import { cn } from '@/lib/utils';
 import { historyApi } from '@/lib/api/history';
+import { reportsApi } from '@/lib/api/reports';
 
 interface RunRowProps {
   run: TestRun;
@@ -92,6 +93,16 @@ export function RunRow({ run, onViewBugs, onRetest, isRetesting }: RunRowProps) 
       </div>
 
       <div className="flex items-center gap-1">
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Estado actual de entrega"
+          title="Estado actual: último estado guardado de cada TC"
+          onClick={() => window.open(reportsApi.currentStateUrl(run.id), '_blank', 'noopener')}
+        >
+          <ClipboardList />
+        </Button>
+
         <Button
           variant="ghost"
           size="sm"

@@ -1,7 +1,8 @@
-import { ChevronRight, Pause, Play, Square } from 'lucide-react';
+import { ChevronRight, ClipboardList, Pause, Play, Square } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import type { ExecutionStatus, TestSuite, User, UserStory } from '@/lib/api/types';
+import { reportsApi } from '@/lib/api/reports';
 import { cn, initials } from '@/lib/utils';
 import { ExecutionDetail } from './execution-detail';
 import { RunTimer } from './run-timer';
@@ -105,6 +106,16 @@ export function SuiteExecutionBlock({
         </div>
 
         <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            title="Estado actual: último estado guardado de cada TC"
+            onClick={() => window.open(reportsApi.currentStateUrl(run.id), '_blank', 'noopener')}
+          >
+            <ClipboardList />
+            Estado actual
+          </Button>
+
           {isRunning ? (
             <Button
               variant="ghost"
