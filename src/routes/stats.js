@@ -284,10 +284,55 @@ router.get('/overview', requireAuth, async (req, res) => {
             ORDER BY cu.id
         `, [project_id]);
 
+        // Exploratorias activas: sesiones RUNNING/PAUSED con avance y bloqueos.
+        const exploratory = await query(`
+            SELECT r.id, r.name, r.status, r.started_at, r.deadline_at,
+                   COALESCE(u.name, 'Sin tester') AS tester_name,
+                   (SELECT COUNT(*)::int FROM qa_executions e WHERE e.run_id = r.id) AS total,
+                   (SELECT COUNT(*)::int FROM qa_executions e
+                     WHERE e.run_id = r.id AND e.status <> 'PENDING') AS executed,
+                   (SELECT COUNT(*)::int FROM qa_executions e
+                     WHERE e.run_id = r.id AND e.status = 'FAIL') AS fail,
+                   (SELECT COUNT(*)::int FROM qa_executions e
+                     WHERE e.run_id = r.id AND e.status = 'BLOCK') AS block,
+                   EXISTS (
+                     SELECT 1 FROM qa_exploratory_blocks b
+                      WHERE b.run_id = r.id AND b.blocked_to IS NULL
+                   ) AS is_blocked,
+                   (SELECT COUNT(*)::int FROM qa_defects d
+                     WHERE d.exploratory_run_id = r.id
+                       AND d.execution_id IS NULL
+                       AND d.status IN ('OPEN', 'IN_PROGRESS')) AS open_hallazgos
+              FROM qa_test_runs r
+              LEFT JOIN qa_users u ON u.id = r.created_by
+             WHERE r.project_id = ? AND r.run_type = 'EXPLORATORY'
+               AND r.status IN ('RUNNING', 'PAUSED')
+             ORDER BY r.id DESC
+        `, [project_id]);
+
+        // Bugs (defectos de ejecución) y hallazgos (sin ejecución) por estado.
+        const defects = await query(`
+            SELECT CASE WHEN d.execution_id IS NULL THEN 'hallazgo' ELSE 'bug' END AS kind,
+                   COALESCE(d.status, 'OPEN') AS status,
+                   COUNT(*)::int AS count
+              FROM qa_defects d
+             WHERE d.project_id = ?
+             GROUP BY kind, COALESCE(d.status, 'OPEN')
+             ORDER BY kind, count DESC
+        `, [project_id]);
+
+        const bugs = defects.rows.filter((row) => row.kind === 'bug');
+        const hallazgos = defects.rows.filter((row) => row.kind === 'hallazgo');
+
         res.json({
-            summary: summary.rows[0],
+            summary: {
+                ...summary.rows[0],
+                active_exploratory: exploratory.rows.length,
+            },
             statuses: statuses.rows,
-            coverage: coverage.rows
+            coverage: coverage.rows,
+            exploratory: exploratory.rows,
+            defects: { bugs, hallazgos },
         });
     } catch (err) {
         res.status(500).json({ error: err.message });

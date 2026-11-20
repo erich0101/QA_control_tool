@@ -2,10 +2,40 @@ import { apiFetch } from './client';
 
 // ── Tipos de respuesta (espejo de /api/stats/*) ──────────────────
 
+export interface OverviewStatusCount {
+  status: string;
+  count: number;
+}
+
+export interface OverviewExploratorySession {
+  id: number;
+  name?: string | null;
+  status: string;
+  started_at?: string | null;
+  deadline_at?: string | null;
+  tester_name?: string | null;
+  total: number;
+  executed: number;
+  fail: number;
+  block: number;
+  is_blocked: boolean;
+  open_hallazgos: number;
+}
+
 export interface OverviewStats {
-  summary: { total_cu: number; total_suites: number; total_tc: number };
-  statuses: Array<{ status: string; count: number }>;
+  summary: {
+    total_cu: number;
+    total_suites: number;
+    total_tc: number;
+    active_exploratory?: number;
+  };
+  statuses: OverviewStatusCount[];
   coverage: Array<{ title: string; total: number; ok: number }>;
+  exploratory?: OverviewExploratorySession[];
+  defects?: {
+    bugs: OverviewStatusCount[];
+    hallazgos: OverviewStatusCount[];
+  };
 }
 
 export interface SuiteRunStats {
