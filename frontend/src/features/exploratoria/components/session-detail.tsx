@@ -192,6 +192,15 @@ export function SessionDetail({
           ? 'bg-warn-soft text-warn'
           : 'bg-fail-soft text-fail';
 
+  const openDefectsFor = (flow: ExploratoryFlow) => {
+    const resolved = new Set([
+      'FIXED', 'CLOSED', 'CERRADO', 'WONT_FIX', 'DISMISSED', 'RESUELTO', 'RESOLVED', 'DESCARTADO',
+    ]);
+    return defectsFor(flow).filter(
+      (defect) => !resolved.has(String(defect.status || 'OPEN').toUpperCase()),
+    );
+  };
+
   const defectsFor = (flow: ExploratoryFlow) => {
     const exec = execByTc.get(flow.id);
     return exec ? defects.filter((defect) => defect.execution_id === exec.id) : [];
@@ -972,6 +981,24 @@ export function SessionDetail({
                     <Badge tone={STATUS_TONE[status] ?? 'neutral'}>
                       {STATUS_LABEL[status] ?? status}
                     </Badge>
+                  );
+                },
+              },
+              {
+                id: 'bugs',
+                header: 'Bugs',
+                headerClassName: 'w-28',
+                cell: (row) => {
+                  if (row.kind === 'hallazgo') return <span className="text-fg-subtle">—</span>;
+                  const open = openDefectsFor(row.flow);
+                  if (open.length === 0) return <span className="text-fg-subtle">—</span>;
+                  return (
+                    <span
+                      className="inline-flex"
+                      title={open.map((defect) => `#${defect.id} · ${defect.title}`).join('\n')}
+                    >
+                      <Badge tone="fail">{open.length} abierto(s)</Badge>
+                    </span>
                   );
                 },
               },

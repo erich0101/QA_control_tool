@@ -169,7 +169,20 @@ async function buildCurrentStateReportData(runId) {
     const acceptanceEvaluatedPct = evaluated > 0 ? Math.round((counts.OK / evaluated) * 100) : null;
     const evidenceCount = Object.values(evidByExec).reduce((acc, list) => acc + list.length, 0)
         + Object.values(evidByDef).reduce((acc, list) => acc + list.length, 0);
-    const openBugs = defects.filter((defect) => isOpenDefect(defect.status));
+    const testByExec = new Map(
+        tests.filter((test) => test.execution).map((test) => [test.execution.id, test]),
+    );
+    const openBugs = defects
+        .filter((defect) => isOpenDefect(defect.status))
+        .map((defect) => {
+            const test = testByExec.get(defect.execution_id);
+            return {
+                ...defect,
+                tc_key: test?.key_id ?? null,
+                tc_title: test?.title ?? null,
+                tc_status: test?.status ?? null,
+            };
+        });
     const openHallazgos = hallazgos.filter((hallazgo) => isOpenDefect(hallazgo.status));
     const criticalOpenBugs = openBugs.filter(
         (defect) => defect.severity === 'Crítica' || defect.severity === 'Alta',

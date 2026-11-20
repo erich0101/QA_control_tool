@@ -106,6 +106,24 @@ function renderTest(test) {
     </details>`;
 }
 
+function renderOpenBugs(openBugs) {
+    if (!openBugs || openBugs.length === 0) return '';
+    return `<div class="card">
+        <div class="section-title">Bugs abiertos que impactan la entrega (${openBugs.length})</div>
+        ${openBugs.map((bug) => `<div style="padding:8px 10px;border-radius:6px;margin-top:5px;background:#fef2f2;border-left:3px solid #dc2626;">
+            <div style="font-weight:700;font-size:.78rem;">#${bug.id} · ${esc(bug.title)}</div>
+            <div style="font-size:.68rem;color:#6b7280;">
+                TC: <strong>${esc(bug.tc_key || '—')}</strong> · ${esc(bug.tc_title || 'Sin TC')}
+                · Estado TC: <strong>${esc(bug.tc_status || '—')}</strong>
+                · Severidad: ${esc(bug.severity || 'Media')}
+                · Estado bug: <strong>${esc(bug.status || 'OPEN')}</strong>
+                ${bug.jira_key ? ` · Jira: ${esc(bug.jira_key)}` : ''}
+            </div>
+            ${bug.actual_result ? `<div style="font-size:.7rem;margin-top:2px;">${esc(bug.actual_result)}</div>` : ''}
+        </div>`).join('')}
+    </div>`;
+}
+
 function renderHallazgos(hallazgos) {
     if (!hallazgos || hallazgos.length === 0) return '';
     return `<div class="card">
@@ -192,6 +210,7 @@ function renderCurrentStateReport(data) {
             </div>
         </div>
 
+        ${renderOpenBugs(data.openBugs)}
         ${renderHallazgos(data.hallazgos)}
 
         <div class="card">
