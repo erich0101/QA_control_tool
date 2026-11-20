@@ -342,6 +342,12 @@ await query(`ALTER TABLE qa_defects ADD COLUMN IF NOT EXISTS observations TEXT`)
         await query(`ALTER TABLE qa_test_cases ADD COLUMN IF NOT EXISTS created_by INTEGER REFERENCES qa_users(id)`);
         await query(`ALTER TABLE qa_test_cases ADD COLUMN IF NOT EXISTS updated_by INTEGER REFERENCES qa_users(id)`);
         await query(`ALTER TABLE qa_test_cases ADD COLUMN IF NOT EXISTS jira_epic_key TEXT`);
+        // Los títulos de matrices pueden superar 255 caracteres. La UI ya los
+        // muestra completos; la base no debe truncarlos.
+        await query(`ALTER TABLE qa_test_cases ALTER COLUMN title TYPE TEXT`);
+        await query(`ALTER TABLE qa_test_suites ALTER COLUMN title TYPE TEXT`);
+        await query(`ALTER TABLE qa_user_stories ALTER COLUMN title TYPE TEXT`);
+        await query(`ALTER TABLE qa_use_cases ALTER COLUMN title TYPE TEXT`);
         await query(`ALTER TABLE qa_test_cases ADD COLUMN IF NOT EXISTS observations TEXT`);
         await query(`ALTER TABLE qa_test_cases ADD COLUMN IF NOT EXISTS is_exploratory BOOLEAN DEFAULT false`);
         try { await query(`CREATE INDEX IF NOT EXISTS idx_tc_is_exploratory ON qa_test_cases (is_exploratory) WHERE is_exploratory = true`); } catch(e) { console.warn('⚠️ idx_tc_is_exploratory no creado (limitación Supabase):', e.message); }

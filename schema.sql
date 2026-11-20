@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS qa_use_cases (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     project_id INTEGER REFERENCES qa_projects(id) ON DELETE CASCADE,
     key_id VARCHAR(50) UNIQUE NOT NULL, -- ej: CU-001
-    title VARCHAR(255) NOT NULL,
+    title TEXT NOT NULL,
     description TEXT DEFAULT '',
     status VARCHAR(50) DEFAULT 'Activo', -- Activo, Cerrado
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS qa_user_stories (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     use_case_id INTEGER REFERENCES qa_use_cases(id) ON DELETE CASCADE,
     key_id VARCHAR(50) UNIQUE NOT NULL, -- ej: US-101
-    title VARCHAR(255) NOT NULL,
+    title TEXT NOT NULL,
     epic VARCHAR(255),
     status VARCHAR(50) DEFAULT 'En Análisis', -- En Análisis, Finalizada, Deprecada, Rechazada
     priority VARCHAR(50) DEFAULT 'Media',      -- Alta, Media, Baja
@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS qa_user_stories (
 CREATE TABLE IF NOT EXISTS qa_test_suites (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     use_case_id INTEGER REFERENCES qa_use_cases(id) ON DELETE CASCADE,
-    title VARCHAR(255) NOT NULL,
+    title TEXT NOT NULL,
     description TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
@@ -61,7 +61,7 @@ CREATE TABLE IF NOT EXISTS qa_test_cases (
     suite_id INTEGER REFERENCES qa_test_suites(id) ON DELETE CASCADE,
     us_id INTEGER REFERENCES qa_user_stories(id) ON DELETE SET NULL,
     assigned_to INTEGER REFERENCES qa_users(id) ON DELETE SET NULL,
-    title VARCHAR(255) NOT NULL,
+    title TEXT NOT NULL,
     description TEXT,
     expected_result TEXT,
     version INTEGER DEFAULT 1, -- Histórico
