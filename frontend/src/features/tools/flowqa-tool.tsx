@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Copy, FilePlus2, Save, Trash2, Workflow } from 'lucide-react';
+import { Copy, FilePlus2, Save, Trash2, Upload, Workflow } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,11 @@ import type { FlowDiagramPayload, FlowLinkEntityType } from '@/lib/api/flow-diag
 import { formatDate } from '@/lib/utils';
 import { useUiStore } from '@/stores/ui';
 import { FlowQaEditor } from './flowqa/flowqa-editor';
+import {
+  FLOWQA_IMPORT_ACCEPT,
+  FLOWQA_IMPORT_MAX_BYTES,
+  parseFlowQaJson,
+} from './flowqa/import';
 import { DEFAULT_SETTINGS, type FlowState } from './flowqa/model';
 import {
   useFlowDiagram,
@@ -34,6 +39,7 @@ export function FlowQaTool() {
   const [entity, setEntity] = useState('none');
   const [dirty, setDirty] = useState(false);
   const stateRef = useRef<FlowState>(EMPTY_STATE);
+  const importInputRef = useRef<HTMLInputElement>(null);
   const { data: activeDiagram, isLoading: isLoadingDiagram } = useFlowDiagram(activeId);
   const { data: linkTargets = [] } = useFlowLinkTargets(projectId);
   const { create, update, remove } = useFlowDiagramMutations(projectId);
@@ -149,6 +155,53 @@ export function FlowQaTool() {
     setDirty(false);
   };
 
+  const importDiagram = async (file: File) => {
+    if (!projectId) return;
+    if (file.size > FLOWQA_IMPORT_MAX_BYTES) {
+      toast.error('El archivo supera el máximo permitido de 2 MB.');
+      return;
+    }
+    if (!(await confirmDiscard())) return;
+
+    try {
+      const parsed = parseFlowQaJson(
+        await file.text(),
+        file.name.replace(/\.json$/i, '') || 'Diagrama importado',
+      );
+
+      // El vínculo solo se conserva si la entidad existe en este proyecto.
+      const validLink = parsed.entity_type && parsed.entity_id
+        ? linkTargets.find(
+            (target) => target.type === parsed.entity_type && target.id === parsed.entity_id,
+          )
+        : null;
+
+      const baseName = parsed.name.trim() || 'Diagrama importado';
+      const nameTaken = diagrams.some(
+        (diagram) => diagram.name.toLowerCase() === baseName.toLowerCase(),
+      );
+      const finalName = (nameTaken ? `${baseName} (importado)` : baseName).slice(0, 160);
+
+      const created = await create.mutateAsync({
+        name: finalName,
+        description: parsed.description,
+        nodes: parsed.nodes,
+        edges: parsed.edges,
+        settings: parsed.settings,
+        entity_type: validLink?.type ?? null,
+        entity_id: validLink?.id ?? null,
+      });
+
+      setActiveId(created.id);
+      setDirty(false);
+      toast.success(
+        `Diagrama importado: ${parsed.nodes.length} nodo(s) y ${parsed.edges.length} conexión(es)`,
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'No se pudo importar el diagrama.');
+    }
+  };
+
   const deleteDiagram = async () => {
     if (!activeId) return;
     const ok = await confirm({
@@ -218,6 +271,27 @@ export function FlowQaTool() {
 
           <div className="flex-1" />
 
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => importInputRef.current?.click()}
+            loading={create.isPending}
+            title="Importar un JSON nativo exportado por FlowQA Studio"
+          >
+            <Upload />
+            Importar
+          </Button>
+          <input
+            ref={importInputRef}
+            type="file"
+            accept={FLOWQA_IMPORT_ACCEPT}
+            className="hidden"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = '';
+              if (file) void importDiagram(file);
+            }}
+          />
           <Button variant="ghost" size="sm" onClick={newDiagram}>
             <FilePlus2 />
             Nuevo
@@ -316,6 +390,10 @@ export function FlowQaTool() {
             initial={activeDiagram ?? null}
             onChange={onChange}
             onDirty={onDirty}
+            diagramName={name}
+            diagramDescription={description}
+            entityType={entity === 'none' ? null : entity.split(':')[0]}
+            entityId={entity === 'none' ? null : Number(entity.split(':')[1]) || null}
             onToast={(message, type) =>
               type === 'error'
                 ? toast.error(message)

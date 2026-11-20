@@ -140,6 +140,8 @@ export interface TestCase {
   id: number;
   suite_id?: number;
   us_id?: number | null;
+  us_key?: string | null;
+  us_title?: string | null;
   scenario_id?: number | null;
   assigned_to?: number | null;
   key_id: string;
@@ -320,6 +322,13 @@ export interface StatusHistoryEntry {
   changed_by_name?: string | null;
   run_name?: string | null;
   run_type?: string | null;
+  /** Evidencias conservadas del intento anterior (ej. FAIL → OK). */
+  evidence?: Array<{
+    id: number;
+    file_name?: string | null;
+    mime_type?: string | null;
+    evidence_category?: string | null;
+  }>;
 }
 
 // ── Testing exploratorio ──────────────────────────────────────

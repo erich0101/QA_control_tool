@@ -12,12 +12,13 @@ interface BugsViewProps {
   bugs: Defect[];
   isLoading: boolean;
   onDismiss: (bug: Defect) => void;
+  onSetStatus: (bug: Defect, status: string) => void;
   isBusy: boolean;
 }
 
 const isCritical = (bug: Defect) => bug.severity === 'Crítica' || bug.severity === 'Alta';
 
-export function BugsView({ bugs, isLoading, onDismiss, isBusy }: BugsViewProps) {
+export function BugsView({ bugs, isLoading, onDismiss, onSetStatus, isBusy }: BugsViewProps) {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -152,6 +153,7 @@ export function BugsView({ bugs, isLoading, onDismiss, isBusy }: BugsViewProps) 
                                             key={bug.id}
                                             bug={bug}
                                             onDismiss={onDismiss}
+                                            onSetStatus={onSetStatus}
                                             isBusy={isBusy}
                                           />
                                         ))

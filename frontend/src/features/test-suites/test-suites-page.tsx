@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { FlaskConical, Plus } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
+import { FileSpreadsheet, FlaskConical, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -14,6 +15,7 @@ import { useUiStore } from '@/stores/ui';
 import { useUseCases, useUserStories } from '@/features/use-cases/use-use-cases';
 import { InconsistenciesPanel } from './components/inconsistencies-panel';
 import { InconsistencyDialog } from './components/inconsistency-dialog';
+import { MatrixImportDialog } from './components/matrix-import-dialog';
 import { SuiteDialog } from './components/suite-dialog';
 import { SuiteHeader } from './components/suite-header';
 import { SuiteList } from './components/suite-list';
@@ -41,6 +43,8 @@ export function TestSuitesPage() {
   const { useCaseId, suiteId, testCaseId, selectUseCase, selectSuite, selectTestCase } =
     useSuiteParams();
   const [dialog, setDialog] = useState<DialogMode>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const queryClient = useQueryClient();
 
   const { data: suites = [], isLoading } = useTestSuites(projectId);
   const { data: useCases = [] } = useUseCases(projectId);
@@ -108,6 +112,15 @@ export function TestSuitesPage() {
       confirmLabel: 'Resolver',
     });
     if (ok) inconsistencyMutations.remove.mutate(inconsistency.id);
+  };
+
+  const handleMatrixImported = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['test-suites'] }),
+      queryClient.invalidateQueries({ queryKey: ['use-cases'] }),
+      queryClient.invalidateQueries({ queryKey: ['user-stories'] }),
+      queryClient.invalidateQueries({ queryKey: ['project-user-stories'] }),
+    ]);
   };
 
   const handleRunSuite = async () => {
@@ -178,6 +191,17 @@ export function TestSuitesPage() {
           >
             <Plus />
             Nueva suite
+          </Button>
+
+          <Button
+            variant="secondary"
+            size="sm"
+            className="w-full"
+            disabled={!canCreateSuite}
+            onClick={() => setImportOpen(true)}
+          >
+            <FileSpreadsheet />
+            Importar matriz
           </Button>
         </div>
 
@@ -275,6 +299,15 @@ export function TestSuitesPage() {
           </div>
         )}
       </section>
+
+      <MatrixImportDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        projectId={projectId}
+        useCases={useCases}
+        suites={suites}
+        onImported={handleMatrixImported}
+      />
 
       <SuiteDialog
         open={dialog === 'suite-create' || dialog === 'suite-edit'}

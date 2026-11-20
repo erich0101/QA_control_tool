@@ -78,5 +78,22 @@ export function useHistoryMutations(projectId: number | null) {
     onError: (error: Error) => toast.error(error.message),
   });
 
-  return { retest, dismiss };
+  const setStatus = useMutation({
+    mutationFn: ({ id, status }: { id: number; status: string }) =>
+      defectsApi.setStatus(id, status),
+    onSuccess: async (_data, variables) => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.defects(projectId) });
+      await queryClient.invalidateQueries({ queryKey: ['defect-status-history'] });
+      await queryClient.invalidateQueries({ queryKey: ['jira-tracking'] });
+      await queryClient.invalidateQueries({ queryKey: ['run-bugs'] });
+      toast.success(
+        variables.status === 'FIXED'
+          ? 'Bug marcado como resuelto: ya no impacta el reporte de estatus'
+          : 'Estado del bug actualizado',
+      );
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  return { retest, dismiss, setStatus };
 }

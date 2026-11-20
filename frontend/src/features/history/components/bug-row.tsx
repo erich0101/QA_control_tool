@@ -3,6 +3,7 @@ import { ChevronRight, Rocket, RotateCcw, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ReadField } from '@/components/ui/read-field';
+import { SelectField } from '@/components/ui/select-field';
 import type { Defect } from '@/lib/api/types';
 import { cn } from '@/lib/utils';
 import { useDefectStatusHistory } from '@/features/execution/use-status-history';
@@ -14,8 +15,13 @@ import { useUiStore } from '@/stores/ui';
 interface BugRowProps {
   bug: Defect;
   onDismiss: (bug: Defect) => void;
+  onSetStatus: (bug: Defect, status: string) => void;
   isBusy: boolean;
 }
+
+const STATUS_OPTIONS = ['OPEN', 'IN_PROGRESS', 'FIXED', 'CLOSED', 'WONT_FIX', 'DISMISSED'].map(
+  (value) => ({ value, label: value }),
+);
 
 const SEVERITY_TONE: Record<string, 'fail' | 'warn' | 'ok'> = {
   Crítica: 'fail',
@@ -24,13 +30,7 @@ const SEVERITY_TONE: Record<string, 'fail' | 'warn' | 'ok'> = {
   Baja: 'ok',
 };
 
-const STATUS_TONE: Record<string, 'ok' | 'warn' | 'neutral'> = {
-  FIXED: 'ok',
-  OPEN: 'warn',
-  DISMISSED: 'neutral',
-};
-
-export function BugRow({ bug, onDismiss, isBusy }: BugRowProps) {
+export function BugRow({ bug, onDismiss, onSetStatus, isBusy }: BugRowProps) {
   const [expanded, setExpanded] = useState(false);
   const [jiraOpen, setJiraOpen] = useState(false);
   const projectId = useUiStore((state) => state.activeProjectId);
@@ -68,7 +68,15 @@ export function BugRow({ bug, onDismiss, isBusy }: BugRowProps) {
           {bug.severity ?? 'Media'}
         </Badge>
 
-        <Badge tone={STATUS_TONE[bug.status ?? 'OPEN'] ?? 'neutral'}>{bug.status ?? 'OPEN'}</Badge>
+        <div className="w-32 shrink-0">
+          <SelectField
+            value={bug.status ?? 'OPEN'}
+            onValueChange={(status) => onSetStatus(bug, status)}
+            options={STATUS_OPTIONS}
+            aria-label="Estado del bug"
+            disabled={isBusy}
+          />
+        </div>
 
         <JiraTraceBadge
           jiraKey={bug.jira_key}

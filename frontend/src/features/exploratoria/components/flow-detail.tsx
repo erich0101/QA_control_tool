@@ -28,7 +28,7 @@ import type {
   ExploratoryFlow,
   ExploratoryStatus,
 } from '@/lib/api/types';
-import { FREQUENCIES, IMPACTS } from '@/lib/api/types';
+import { FREQUENCIES, HALLZGO_STATUSES, IMPACTS } from '@/lib/api/types';
 import { cn } from '@/lib/utils';
 import { useExploratoriaMutations } from '../use-exploratoria';
 import { useTcStatusHistory, useDefectStatusHistory } from '@/features/execution/use-status-history';
@@ -149,7 +149,8 @@ export function FlowDetail({
   coverageReady = true,
 }: FlowDetailProps) {
   const confirm = useConfirm();
-  const { executeFlow, uploadEvidence, deleteEvidence } = useExploratoriaMutations(projectId, runId);
+  const { executeFlow, uploadEvidence, deleteEvidence, setDefectStatus } =
+    useExploratoriaMutations(projectId, runId);
   const { data: statusHistory = [] } = useTcStatusHistory(flow.id);
 
   const [status, setStatus] = useState<ExploratoryStatus>(
@@ -208,6 +209,14 @@ export function FlowDetail({
   // reportados" y no se repite el formulario.
   const statusChanged = status !== savedStatus;
   const showDefectForm = editingDefectId != null || (allowsBug && statusChanged);
+  // Re-test exitoso: el intento anterior era fallido y ahora se marca OK.
+  const isReopeningPass =
+    savedStatus != null &&
+    ['FAIL', 'WARNING', 'BLOCK'].includes(savedStatus) &&
+    status === 'OK';
+  const openDefects = defects.filter((defect) =>
+    ['OPEN', 'IN_PROGRESS'].includes(String(defect.status ?? 'OPEN').toUpperCase()),
+  );
   const executionAttachments = execution
     ? attachments.filter((item) => item.execution_id === execution.id)
     : [];
@@ -241,6 +250,29 @@ export function FlowDetail({
       return;
     }
 
+    // Re-test a OK: exigir evidencia nueva y avisar por los defectos abiertos.
+    let defectsToFix: Defect[] = [];
+    if (isReopeningPass) {
+      if (pending.length === 0) {
+        toast.warning(
+          'Para pasar a OK debés adjuntar al menos una evidencia nueva. Las evidencias del intento anterior se conservarán en el historial.',
+        );
+        return;
+      }
+
+      defectsToFix = openDefects;
+      const ok = await confirm({
+        title: 'Re-test a OK: evidencias y defectos',
+        description:
+          `El TC pasa de ${savedStatus} a OK. Las evidencias actuales se moverán al historial y las nuevas quedarán asociadas al OK.` +
+          (defectsToFix.length > 0
+            ? ` Los ${defectsToFix.length} defecto(s) abierto(s) asociados deben quedar en FIXED o CLOSED.`
+            : ' No hay defectos abiertos asociados.'),
+        confirmLabel: defectsToFix.length > 0 ? 'Marcar FIXED y guardar' : 'Guardar OK',
+      });
+      if (!ok) return;
+    }
+
     const result = await executeFlow.mutateAsync({
       tcId: flow.id,
       input: {
@@ -256,6 +288,13 @@ export function FlowDetail({
     // "Defectos reportados" y no se duplica como edición abierta.
     cancelEditing();
     setSavedStatus(status);
+
+    if (defectsToFix.length > 0) {
+      for (const defect of defectsToFix) {
+        await setDefectStatus.mutateAsync({ id: defect.id, status: 'FIXED' });
+      }
+      toast.success('Defectos asociados marcados como FIXED');
+    }
 
     if (result.execution_id && pending.length > 0) {
       for (const file of pending) {
@@ -299,6 +338,13 @@ export function FlowDetail({
 
       <StatusHistoryTimeline entries={statusHistory} title="Histórico de estados del TC" />
 
+      {isReopeningPass ? (
+        <div className="rounded-md border border-warn/40 bg-warn-soft px-3 py-2 text-caption text-warn">
+          <strong>Re-test a OK.</strong> Las evidencias actuales se moverán al historial. Adjuntá al
+          menos una evidencia nueva del OK y actualizá los defectos asociados a FIXED o CLOSED.
+        </div>
+      ) : null}
+
       {defects.length > 0 ? (
         <div className="space-y-2">
           <span className="text-caption font-bold uppercase tracking-wide text-fg-subtle">
@@ -325,7 +371,16 @@ export function FlowDetail({
                   >
                     {defect.severity ?? 'Media'}
                   </Badge>
-                  <Badge tone="outline">{defect.status ?? 'OPEN'}</Badge>
+                  <div className="w-32">
+                    <SelectField
+                      value={defect.status ?? 'OPEN'}
+                      onValueChange={(status) =>
+                        setDefectStatus.mutate({ id: defect.id, status })
+                      }
+                      options={HALLZGO_STATUSES.map((value) => ({ value, label: value }))}
+                      aria-label="Estado del bug"
+                    />
+                  </div>
                   <span className="text-caption text-fg-subtle">#{defect.id}</span>
                   <JiraTraceBadge jiraKey={defect.jira_key} jiraUrl={defect.jira_url} />
 

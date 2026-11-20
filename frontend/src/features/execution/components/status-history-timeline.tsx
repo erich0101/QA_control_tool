@@ -71,6 +71,43 @@ export function StatusHistoryTimeline({
                 </span>
               </div>
               {entry.reason ? <p className="mt-0.5 text-fg-muted">{entry.reason}</p> : null}
+              {entry.evidence && entry.evidence.length > 0 ? (
+                <div className="mt-1.5">
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-fg-subtle">
+                    Evidencias conservadas ({entry.evidence.length})
+                  </p>
+                  <div className="mt-1 flex flex-wrap gap-1.5">
+                    {entry.evidence.map((ev) =>
+                      (ev.mime_type ?? '').startsWith('video/') ? (
+                        <video
+                          key={ev.id}
+                          src={`/api/evidence/${ev.id}`}
+                          controls
+                          preload="none"
+                          className="h-14 w-20 rounded border border-border object-cover"
+                          title={ev.file_name ?? 'Evidencia'}
+                        />
+                      ) : (
+                        <a
+                          key={ev.id}
+                          href={`/api/evidence/${ev.id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title={ev.file_name ?? 'Evidencia'}
+                          className="block"
+                        >
+                          <img
+                            src={`/api/evidence/${ev.id}`}
+                            alt={ev.file_name ?? 'Evidencia'}
+                            loading="lazy"
+                            className="h-14 w-20 rounded border border-border object-cover"
+                          />
+                        </a>
+                      ),
+                    )}
+                  </div>
+                </div>
+              ) : null}
             </li>
           ))}
         </ol>

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { CornerUpLeft, ExternalLink, Send, X } from 'lucide-react';
+import { CheckCircle2, CornerUpLeft, ExternalLink, RotateCcw, Send, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -10,7 +10,11 @@ import type { JiraTrackingItem } from '@/lib/api/types';
 import { cn, formatDate } from '@/lib/utils';
 import { adfToText } from '../lib/adf';
 import { jiraTrackingOrigin, jiraTrackingOriginHref, jiraTrackingRunLabel } from '../lib/origin';
-import { useAddJiraComment, useJiraComments } from '../use-jira-tracking';
+import {
+  useAddJiraComment,
+  useJiraComments,
+  useSetTrackingOriginStatus,
+} from '../use-jira-tracking';
 
 const STATUS_TONE = (status: string): 'ok' | 'warn' | 'brand' | 'neutral' => {
   const value = status.toUpperCase();
@@ -31,6 +35,7 @@ export function JiraTicketDrawer({
 }) {
   const { data: comments = [], isLoading, error } = useJiraComments(projectId, ticket.jira_key);
   const addComment = useAddJiraComment(projectId, ticket.jira_key);
+  const setOriginStatus = useSetTrackingOriginStatus(projectId);
 
   const [text, setText] = useState('');
   const [replyTo, setReplyTo] = useState<{ id?: string; name: string } | null>(null);
@@ -97,6 +102,8 @@ export function JiraTicketDrawer({
             const origin = jiraTrackingOrigin(ticket);
             const href = jiraTrackingOriginHref(ticket);
             const runLabel = jiraTrackingRunLabel(ticket);
+            const localStatus = (ticket.status ?? 'OPEN').toUpperCase();
+            const isResolved = ['FIXED', 'CLOSED', 'WONT_FIX', 'DISMISSED'].includes(localStatus);
             return (
               <div className="mt-2 rounded-lg border border-border bg-surface-2 p-2.5 text-caption">
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-fg-subtle">
@@ -108,6 +115,9 @@ export function JiraTicketDrawer({
                     <p className="mt-0.5 flex flex-wrap items-center gap-1">
                       <Badge tone={origin.isHallazgo ? 'brand' : 'warn'}>
                         {origin.isHallazgo ? 'HALLAZGO' : 'BUG'}
+                      </Badge>
+                      <Badge tone={isResolved ? 'ok' : localStatus === 'IN_PROGRESS' ? 'brand' : 'warn'}>
+                        {localStatus}
                       </Badge>
                       {href ? (
                         <Link to={href} className="font-semibold text-brand hover:underline">
@@ -139,6 +149,53 @@ export function JiraTicketDrawer({
                     </div>
                   ) : null}
                 </div>
+
+                <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-2">
+                  <p className="text-[10px] uppercase tracking-wide text-fg-subtle">
+                    Estado local del {origin.isHallazgo ? 'hallazgo' : 'bug'}
+                  </p>
+                  {isResolved ? (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="h-7"
+                      loading={setOriginStatus.isPending}
+                      onClick={() =>
+                        setOriginStatus.mutate({
+                          origin: ticket.origin,
+                          id: ticket.id,
+                          status: 'OPEN',
+                        })
+                      }
+                    >
+                      <RotateCcw />
+                      Reabrir
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="h-7"
+                      loading={setOriginStatus.isPending}
+                      onClick={() =>
+                        setOriginStatus.mutate({
+                          origin: ticket.origin,
+                          id: ticket.id,
+                          status: 'FIXED',
+                        })
+                      }
+                    >
+                      <CheckCircle2 />
+                      Marcar resuelto
+                    </Button>
+                  )}
+                </div>
+
+                <p className="mt-1 text-[10px] leading-snug text-fg-subtle">
+                  Los resueltos no impactan el reporte de estatus, pero se mantienen en el reporte
+                  de bugs y en la trazabilidad.
+                </p>
+
                 {href ? (
                   <Link
                     to={href}

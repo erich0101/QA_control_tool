@@ -15,6 +15,9 @@ export const historyApi = {
     apiFetch<{ ok: true; suite_id?: number }>(`/api/runs/${runId}/retest`, { method: 'POST' }),
 
   reportUrl: (runId: number) => `/api/reports/${runId}`,
+
+  /** Estado de entrega del ciclo, con resultados efectivos y retest incluidos. */
+  deliveryReportUrl: (runId: number) => `/api/reports/${runId}/delivery`,
 };
 
 export const defectsApi = {
@@ -31,6 +34,13 @@ export const defectsApi = {
     apiFetch<{ ok: true }>(`/api/defects/${id}/dismiss`, {
       method: 'POST',
       body: { dismissed },
+    }),
+
+  /** Cambia el estado local del defecto (OPEN, IN_PROGRESS, FIXED, CLOSED, WONT_FIX). */
+  setStatus: (id: number, status: string) =>
+    apiFetch<{ ok: true }>(`/api/defects/${id}/status`, {
+      method: 'PUT',
+      body: { status },
     }),
 };
 

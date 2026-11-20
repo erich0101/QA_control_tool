@@ -11,10 +11,11 @@ import {
 } from '@/components/ui/dialog';
 import { Field } from '@/components/ui/field';
 import { DatePicker } from '@/components/ui/date-picker';
+import { Combobox } from '@/components/ui/combobox';
 import { Skeleton } from '@/components/ui/skeleton';
 import { exploratoriaApi } from '@/lib/api/exploratoria';
 import { cn } from '@/lib/utils';
-import { useStatusReportTesters } from '../use-exploratoria';
+import { useStatusReportSessions, useStatusReportTesters } from '../use-exploratoria';
 
 interface StatusReportDialogProps {
   open: boolean;
@@ -46,17 +47,34 @@ const testerKey = (tester: Tester) =>
 export function StatusReportDialog({ open, onOpenChange, projectId }: StatusReportDialogProps) {
   const [dateFrom, setDateFrom] = useState(daysAgo(7));
   const [dateTo, setDateTo] = useState(today());
+  const [selectedSession, setSelectedSession] = useState('all');
   const [selected, setSelected] = useState('all');
 
   useEffect(() => {
     if (!open) return;
     setDateFrom(daysAgo(7));
     setDateTo(today());
+    setSelectedSession('all');
     setSelected('all');
   }, [open]);
 
   const { data, isLoading, error } = useStatusReportTesters(projectId, dateFrom, dateTo, open);
   const testers = useMemo(() => data?.testers ?? [], [data]);
+
+  const {
+    data: sessionData,
+    isLoading: sessionsLoading,
+    error: sessionsError,
+  } = useStatusReportSessions(projectId, open);
+  const sessions = useMemo(() => sessionData ?? [], [sessionData]);
+
+  // Si la sesión elegida desapareciera de la lista, se vuelve a "Todas".
+  useEffect(() => {
+    if (selectedSession === 'all') return;
+    if (!sessions.some((session) => `id:${session.id}` === selectedSession)) {
+      setSelectedSession('all');
+    }
+  }, [sessions, selectedSession]);
 
   // Si el tester elegido dejó de tener actividad en el rango, se vuelve a "Todos".
   useEffect(() => {
@@ -64,14 +82,32 @@ export function StatusReportDialog({ open, onOpenChange, projectId }: StatusRepo
     if (!testers.some((tester) => testerKey(tester) === selected)) setSelected('all');
   }, [testers, selected]);
 
+  const sessionOptions = useMemo(
+    () => [
+      {
+        value: 'all',
+        label: 'Todas las sesiones',
+        description: 'Consolidado del rango (comportamiento actual)',
+      },
+      ...sessions.map((session) => ({
+        value: `id:${session.id}`,
+        label: `#${session.id} · ${session.name || 'Sesión sin nombre'}`,
+        description: `${session.status === 'RUNNING' ? 'En curso' : 'Finalizada'} · ${session.tester_name} · ${session.executions} test(s) · ${session.hallazgos} hallazgo(s)`,
+      })),
+    ],
+    [sessions],
+  );
+
   const invalidRange = !dateFrom || !dateTo || dateFrom > dateTo;
 
   const generate = () => {
     if (!projectId || invalidRange) return;
     const tester = testers.find((option) => testerKey(option) === selected);
+    const runId = selectedSession === 'all' ? null : Number(selectedSession.replace('id:', ''));
     const url = exploratoriaApi.statusReportUrl(projectId, {
       dateFrom,
       dateTo,
+      runId,
       testerId: tester?.id ?? null,
       tester: tester?.name ?? null,
     });
@@ -86,7 +122,8 @@ export function StatusReportDialog({ open, onOpenChange, projectId }: StatusRepo
           <DialogTitle>Reporte de estatus</DialogTitle>
           <DialogDescription>
             Todo lo realizado en Exploratoria en el rango: tests ejecutados, defectos y hallazgos.
-            Elegí el rango y, si querés, un tester en particular.
+            Elegí el rango y, si querés, un tester en particular. Los defectos marcados como
+            resueltos (FIXED/CLOSED) no cuentan como abiertos en el estado de entrega.
           </DialogDescription>
         </DialogHeader>
 
@@ -112,6 +149,33 @@ export function StatusReportDialog({ open, onOpenChange, projectId }: StatusRepo
         {invalidRange ? (
           <p className="text-caption text-fail">El rango de fechas es inválido.</p>
         ) : null}
+
+        <div className="space-y-2">
+          <p className="text-caption font-semibold uppercase tracking-wide text-fg-subtle">
+            Sesión
+          </p>
+
+          {sessionsLoading ? (
+            <Skeleton className="h-9" />
+          ) : sessionsError ? (
+            <p className="text-caption text-fail">
+              No se pudieron cargar las sesiones: {(sessionsError as Error).message}
+            </p>
+          ) : (
+            <Combobox
+              options={sessionOptions}
+              value={selectedSession}
+              onValueChange={setSelectedSession}
+              placeholder="Todas las sesiones"
+              searchPlaceholder="Buscar sesión…"
+              emptyText="Sin sesiones exploratorias"
+              aria-label="Sesión del reporte"
+            />
+          )}
+          <p className="text-caption text-fg-subtle">
+            Elegí una sesión puntual o “Todas las sesiones” para el consolidado del rango.
+          </p>
+        </div>
 
         <div className="space-y-2">
           <p className="text-caption font-semibold uppercase tracking-wide text-fg-subtle">
@@ -181,7 +245,8 @@ export function StatusReportDialog({ open, onOpenChange, projectId }: StatusRepo
         </div>
 
         <p className="text-caption text-fg-subtle">
-          Se informan dos aceptaciones: <strong>evaluada</strong> (OK / OK+FAIL+WARNING, calidad de
+          Los filtros de sesión y tester se combinan. Se informan dos aceptaciones:{' '}
+          <strong>evaluada</strong> (OK / OK+FAIL+WARNING, calidad de
           lo probado) y <strong>total</strong> (OK / total de TC, donde pendientes, BLOCK y SKIP
           cuentan como no aceptados). Las evidencias se incluyen sólo si están disponibles en esta
           máquina (o en la copia de Postgres); las ausentes se omiten sin bloquear el reporte.

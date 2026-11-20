@@ -29,7 +29,7 @@ export function HistoryPage() {
 
   const runsQuery = useHistoryRuns(projectId, page);
   const defectsQuery = useProjectDefects(projectId);
-  const { retest, dismiss } = useHistoryMutations(projectId);
+  const { retest, dismiss, setStatus } = useHistoryMutations(projectId);
 
   const runs = runsQuery.data?.runs ?? [];
   const defects = defectsQuery.data ?? [];
@@ -140,7 +140,8 @@ export function HistoryPage() {
             bugs={defects}
             isLoading={defectsQuery.isLoading}
             onDismiss={handleDismiss}
-            isBusy={dismiss.isPending}
+            onSetStatus={(bug, status) => setStatus.mutate({ id: bug.id, status })}
+            isBusy={dismiss.isPending || setStatus.isPending}
           />
         )}
       </div>

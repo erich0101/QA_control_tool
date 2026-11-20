@@ -60,6 +60,11 @@ interface FlowQaEditorProps {
   onChange: (state: FlowState) => void;
   onDirty?: () => void;
   onToast?: (message: string, type?: 'success' | 'error' | 'info') => void;
+  /** Metadatos para que el JSON exportado se pueda volver a importar. */
+  diagramName?: string;
+  diagramDescription?: string;
+  entityType?: string | null;
+  entityId?: number | null;
 }
 
 interface Selection {
@@ -143,7 +148,16 @@ function diagramSettings(diagram?: FlowDiagram | null): FlowSettings {
   };
 }
 
-export function FlowQaEditor({ initial, onChange, onDirty, onToast }: FlowQaEditorProps) {
+export function FlowQaEditor({
+  initial,
+  onChange,
+  onDirty,
+  onToast,
+  diagramName,
+  diagramDescription,
+  entityType,
+  entityId,
+}: FlowQaEditorProps) {
   const [nodes, setNodes] = useState<FlowNode[]>(() => diagramNodes(initial));
   const [edges, setEdges] = useState<FlowEdge[]>(() => diagramEdges(initial));
   const [settings, setSettings] = useState<FlowSettings>(() => diagramSettings(initial));
@@ -685,7 +699,21 @@ export function FlowQaEditor({ initial, onChange, onDirty, onToast }: FlowQaEdit
 
         <div className="flex-1" />
 
-        <Button variant="ghost" size="sm" onClick={() => downloadJson({ nodes, edges, settings })}>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() =>
+            downloadJson(
+              { nodes, edges, settings },
+              {
+                name: diagramName,
+                description: diagramDescription,
+                entityType,
+                entityId,
+              },
+            )
+          }
+        >
           <Download />
           JSON
         </Button>

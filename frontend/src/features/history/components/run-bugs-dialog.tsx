@@ -4,21 +4,27 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { EmptyState } from '@/components/ui/empty-state';
+import { SelectField } from '@/components/ui/select-field';
 import { Skeleton } from '@/components/ui/skeleton';
 import { JiraTicketDialog } from '@/features/jira-tickets/jira-ticket-dialog';
 import { JiraTraceBadge } from '@/features/jira-tickets/jira-trace-badge';
 import type { TestRun } from '@/lib/api/types';
 import { useUiStore } from '@/stores/ui';
-import { useRunBugs } from '../use-history';
+import { useHistoryMutations, useRunBugs } from '../use-history';
 
 interface RunBugsDialogProps {
   run: TestRun | null;
   onOpenChange: (open: boolean) => void;
 }
 
+const DEFECT_STATUS_OPTIONS = ['OPEN', 'IN_PROGRESS', 'FIXED', 'CLOSED', 'WONT_FIX', 'DISMISSED'].map(
+  (value) => ({ value, label: value }),
+);
+
 export function RunBugsDialog({ run, onOpenChange }: RunBugsDialogProps) {
   const projectId = useUiStore((s) => s.activeProjectId);
   const { data: bugs = [], isLoading } = useRunBugs(run?.id ?? null);
+  const { setStatus } = useHistoryMutations(projectId);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [jiraOpen, setJiraOpen] = useState(false);
 
@@ -104,7 +110,10 @@ export function RunBugsDialog({ run, onOpenChange }: RunBugsDialogProps) {
                       />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-start justify-between gap-2">
-                          <p className="text-footnote font-medium text-fg">{bug.title}</p>
+                          <div className="flex min-w-0 items-center gap-2">
+                            <p className="truncate text-footnote font-medium text-fg">{bug.title}</p>
+                            {bug.is_historical ? <Badge tone="warn">HISTÓRICO</Badge> : null}
+                          </div>
                           <Badge
                             tone={
                               bug.severity === 'Crítica' || bug.severity === 'Alta'
@@ -119,9 +128,22 @@ export function RunBugsDialog({ run, onOpenChange }: RunBugsDialogProps) {
                         </div>
                         <p className="mt-1 text-caption text-fg-subtle">
                           {bug.tc_title ? `${bug.tc_title} · ` : ''}
-                          {bug.status ?? 'OPEN'}
+                          {bug.is_historical
+                            ? `Defecto del ciclo original${bug.origin_run_id ? ` #${bug.origin_run_id}` : ''}`
+                            : 'Defecto del ciclo'}
                         </p>
-                        <div className="mt-1">
+                        <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                          <div className="w-36">
+                            <SelectField
+                              value={bug.status ?? 'OPEN'}
+                              onValueChange={(status) =>
+                                setStatus.mutate({ id: bug.id, status })
+                              }
+                              options={DEFECT_STATUS_OPTIONS}
+                              aria-label={`Estado del bug #${bug.id}`}
+                              disabled={setStatus.isPending}
+                            />
+                          </div>
                           <JiraTraceBadge
                             jiraKey={bug.jira_key}
                             jiraUrl={bug.jira_url}

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronRight, Eye, RefreshCw, Target } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -48,6 +48,16 @@ export function JiraTrackingPage() {
   const [statusFilter, setStatusFilter] = useState('');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
+
+  // El drawer guarda una copia del ticket: al refrescar el tracking tras
+  // cambiar el estado local, se sincroniza la selección abierta.
+  useEffect(() => {
+    if (!selected) return;
+    const next = tracking.find(
+      (item) => item.id === selected.id && item.origin === selected.origin,
+    );
+    if (next && (next !== selected)) setSelected(next);
+  }, [tracking, selected]);
 
   const filtersActive = Boolean(
     spaceFilter || keyFilter.trim() || epicFilter || statusFilter || fromDate || toDate,

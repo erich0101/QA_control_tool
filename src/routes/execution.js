@@ -90,14 +90,54 @@ runsRouter.post('/:id/retest', requireAuth, async (req, res) => {
 
 runsRouter.get('/:id/bugs', requireAuth, async (req, res) => {
     try {
+        const runId = parseInt(req.params.id, 10);
+        const runRes = await query(
+            `SELECT id, run_type, parent_run_id FROM qa_test_runs WHERE id = ?`,
+            [runId]
+        );
+        if (runRes.rows.length === 0) return res.status(404).json({ error: 'Run no encontrado' });
+        const run = runRes.rows[0];
+
         const bugs = await query(`
-            SELECT b.*, tc.title as tc_title 
+            SELECT b.*, tc.title as tc_title
             FROM qa_defects b
             JOIN qa_executions e ON b.execution_id = e.id
             JOIN qa_test_cases tc ON e.tc_id = tc.id
             WHERE e.run_id = ?
-        `, [req.params.id]);
-        res.json({ bugs: bugs.rows });
+        `, [runId]);
+
+        // Trazabilidad del retest: incluir los defectos de todos los ciclos
+        // ancestros (retest de retest incluido) para los TC re-testeados.
+        let historical = [];
+        if (run.run_type === 'RETEST' && run.parent_run_id) {
+            const histRes = await query(`
+                WITH RECURSIVE chain AS (
+                    SELECT id, parent_run_id
+                      FROM qa_test_runs WHERE id = ?
+                    UNION ALL
+                    SELECT r.id, r.parent_run_id
+                      FROM qa_test_runs r
+                      JOIN chain c ON r.id = c.parent_run_id
+                )
+                SELECT b.*, tc.title as tc_title, e_parent.run_id as origin_run_id
+                FROM qa_defects b
+                JOIN qa_executions e_parent ON b.execution_id = e_parent.id
+                JOIN qa_test_cases tc ON e_parent.tc_id = tc.id
+                WHERE e_parent.run_id IN (SELECT id FROM chain WHERE id <> ?)
+                  AND e_parent.tc_id IN (
+                      SELECT tc_id FROM qa_executions WHERE run_id = ?
+                  )
+            `, [runId, runId, runId]);
+            historical = histRes.rows.map((bug) => ({ ...bug, is_historical: true }));
+        }
+
+        const seen = new Set(bugs.rows.map((bug) => bug.id));
+        const merged = [
+            ...bugs.rows,
+            ...historical.filter((bug) => !seen.has(bug.id)),
+        ];
+
+        res.json({ bugs: merged });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

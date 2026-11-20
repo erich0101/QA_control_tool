@@ -41,18 +41,30 @@ export function downloadBlob(blob: Blob, filename: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export function downloadJson(state: FlowState) {
+export function downloadJson(
+  state: FlowState,
+  meta: { name?: string; description?: string | null; entityType?: string | null; entityId?: number | null } = {},
+) {
   const payload = {
     app: 'FlowQA Studio',
     version: 1,
+    name: meta.name ?? 'Diagrama FlowQA',
+    description: meta.description ?? null,
+    entity_type: meta.entityType ?? null,
+    entity_id: meta.entityId ?? null,
     exportedAt: new Date().toISOString(),
     nodes: state.nodes,
     edges: state.edges,
     settings: state.settings,
   };
+  const safeName = String(meta.name ?? 'flowqa')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 60) || 'flowqa';
   downloadBlob(
     new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }),
-    `flowqa-proyecto-${Date.now()}.json`,
+    `${safeName}-${Date.now()}.json`,
   );
 }
 

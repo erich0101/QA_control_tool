@@ -154,7 +154,9 @@ export function TestCaseDetail({
             {...register('title', { required: true })}
           />
         ) : (
-          <h3 className="flex-1 truncate text-footnote font-semibold text-fg">{testCase.title}</h3>
+          <h3 className="min-w-0 flex-1 break-words text-footnote font-semibold text-fg">
+            {testCase.title}
+          </h3>
         )}
 
         <Badge tone={testCase.status === 'FAIL' ? 'fail' : testCase.status === 'OK' ? 'ok' : 'neutral'}>

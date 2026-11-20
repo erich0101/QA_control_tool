@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { CirclePlay, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -37,6 +38,48 @@ export function TestCaseTable({
 }: TestCaseTableProps) {
   const teamById = new Map(team.map((user) => [user.id, user]));
 
+  // Agrupación por HU, igual que Exploratoria. Si ningún TC tiene HU, se
+  // mantiene la tabla plana histórica.
+  const huGroups = useMemo(() => {
+    if (!testCases.some((testCase) => testCase.us_id)) return undefined;
+    const groups = new Map<
+      string,
+      { key: string | null; title: string | null; rows: TestCase[] }
+    >();
+    for (const testCase of testCases) {
+      const key = testCase.us_id ? `us-${testCase.us_id}` : 'sin-hu';
+      const current = groups.get(key) ?? {
+        key: testCase.us_key ?? null,
+        title: testCase.us_title ?? null,
+        rows: [],
+      };
+      current.rows.push(testCase);
+      groups.set(key, current);
+    }
+    return [...groups.entries()]
+      .sort(([a], [b]) => {
+        if (a === 'sin-hu') return 1;
+        if (b === 'sin-hu') return -1;
+        return a.localeCompare(b);
+      })
+      .map(([id, group]) => ({
+        id,
+        header: (
+          <span className="flex flex-wrap items-center gap-2">
+            <Badge tone={id === 'sin-hu' ? 'warn' : 'brand'} className="shrink-0">
+              {id === 'sin-hu' ? 'SIN HU' : 'HU'}
+            </Badge>
+            <span className="font-semibold text-fg">{group.key ?? 'Sin HU'}</span>
+            <span className="text-fg-muted">{group.title ?? 'Sin vincular'}</span>
+            <span className="text-caption text-fg-subtle">
+              {group.rows.length} TC{group.rows.length === 1 ? '' : 's'}
+            </span>
+          </span>
+        ),
+        rows: group.rows,
+      }));
+  }, [testCases]);
+
   if (testCases.length === 0) {
     return (
       <div className="rounded-xl border border-dashed border-border p-10 text-center">
@@ -50,6 +93,8 @@ export function TestCaseTable({
 
   return (
     <DataTable
+      groups={huGroups}
+      rows={testCases}
       columns={[
         {
           id: 'key',
@@ -73,7 +118,12 @@ export function TestCaseTable({
                       : 'bg-fg-subtle',
                 )}
               />
-              <span className="truncate font-medium text-fg">{testCase.title}</span>
+              <span
+                className="min-w-0 break-words font-medium text-fg"
+                title={testCase.title}
+              >
+                {testCase.title}
+              </span>
             </div>
           ),
         },
@@ -177,7 +227,6 @@ export function TestCaseTable({
           ),
         },
       ]}
-      rows={testCases}
       getRowId={(testCase) => testCase.id}
       onRowClick={(testCase) => onSelect(testCase.id === selectedId ? null : testCase.id)}
       activeRowId={selectedId}

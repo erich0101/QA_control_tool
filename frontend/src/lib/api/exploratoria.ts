@@ -151,16 +151,41 @@ export const exploratoriaApi = {
       query: { project_id: projectId, date_from: dateFrom, date_to: dateTo },
     }),
 
-  /** Reporte de estatus (todo lo realizado en el rango, por tester o todos). */
+  /** Sesiones exploratorias del proyecto (para elegir una en el reporte). */
+  statusReportSessions: (projectId: number) =>
+    apiFetch<{
+      sessions: Array<{
+        id: number;
+        name: string | null;
+        charter: string | null;
+        status: string;
+        started_at: string | null;
+        finished_at: string | null;
+        tester_name: string;
+        executions: number;
+        hallazgos: number;
+      }>;
+    }>('/api/explorations/reports/status/sessions', {
+      query: { project_id: projectId },
+    }),
+
+  /** Reporte de estatus (todo lo realizado en el rango, por sesión/tester o todos). */
   statusReportUrl: (
     projectId: number,
-    options: { dateFrom: string; dateTo: string; testerId?: number | null; tester?: string | null },
+    options: {
+      dateFrom: string;
+      dateTo: string;
+      runId?: number | null;
+      testerId?: number | null;
+      tester?: string | null;
+    },
   ) => {
     const params = new URLSearchParams({
       project_id: String(projectId),
       date_from: options.dateFrom,
       date_to: options.dateTo,
     });
+    if (options.runId) params.set('run_id', String(options.runId));
     if (options.testerId) params.set('tester_id', String(options.testerId));
     if (options.tester) params.set('tester', options.tester);
     return `/api/explorations/reports/status?${params.toString()}`;

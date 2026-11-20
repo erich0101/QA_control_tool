@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { executionApi, type EvidenceUploadInput, type SaveExecutionInput } from '@/lib/api/execution';
+import { defectsApi } from '@/lib/api/history';
 import { queryKeys } from '@/lib/query-keys';
 
 /**
@@ -74,6 +75,25 @@ export function useExecutionMutations(projectId: number | null) {
     onError: (error: Error) => toast.error(error.message),
   });
 
+  /** Marca/actualiza el estado de un defecto (incluidos los históricos del retest). */
+  const setDefectStatus = useMutation({
+    mutationFn: ({ id, status }: { id: number; status: string }) =>
+      defectsApi.setStatus(id, status),
+    onSuccess: async (_data, variables) => {
+      await Promise.all([
+        invalidate(),
+        queryClient.invalidateQueries({ queryKey: queryKeys.defects(projectId) }),
+        queryClient.invalidateQueries({ queryKey: ['run-bugs'] }),
+      ]);
+      toast.success(
+        variables.status === 'FIXED'
+          ? 'Bug marcado como resuelto'
+          : 'Estado del bug actualizado',
+      );
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
   const deleteEvidence = useMutation({
     mutationFn: (attachmentId: number) => executionApi.deleteEvidence(attachmentId),
     onSuccess: async () => {
@@ -83,5 +103,14 @@ export function useExecutionMutations(projectId: number | null) {
     onError: (error: Error) => toast.error(error.message),
   });
 
-  return { pause, resume, finish, startAll, saveResult, uploadEvidence, deleteEvidence };
+  return {
+    pause,
+    resume,
+    finish,
+    startAll,
+    saveResult,
+    uploadEvidence,
+    deleteEvidence,
+    setDefectStatus,
+  };
 }

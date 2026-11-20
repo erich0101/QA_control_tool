@@ -6,6 +6,7 @@ const { upload } = require('../lib/upload');
 const { sanitizeInput } = require('../lib/helpers');
 const { generateKey } = require('../lib/sequences');
 const { processFlatImport, processDualImport } = require('../lib/import-processors');
+const { previewMatrixImport, commitMatrixImport } = require('../lib/matrix-import');
 
 const router = express.Router();
 
@@ -87,6 +88,47 @@ router.post(['/test-suites/:id/import-dual', '/use-cases/:id/import-dual'], requ
             detalle: err.message,
             stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
         });
+    }
+});
+
+// ── Importación de matrices desde el nivel proyecto ─────────────────────────
+// Preview: valida columnas, CU/HU, conflictos y devuelve un resumen sin escribir.
+router.post('/projects/:id/import-matrix/preview', requireAuth, upload.single('xlsx'), async (req, res) => {
+    try {
+        const projectId = parseInt(req.params.id, 10);
+        if (!Number.isInteger(projectId) || projectId <= 0) {
+            return res.status(400).json({ error: 'Project ID inválido' });
+        }
+        if (!req.file) return res.status(400).json({ error: 'Archivo no recibido' });
+
+        const preview = await previewMatrixImport(projectId, req.file.buffer, {
+            ...req.body,
+            filename: req.file.originalname,
+        });
+        res.json(preview);
+    } catch (err) {
+        res.status(err.status || 500).json({ error: err.message, details: err.details || undefined });
+    }
+});
+
+// Commit: importa la matriz. No hay transacción real por RPC; las operaciones
+// son idempotentes (find-or-create) para poder reintentar sin duplicar.
+router.post('/projects/:id/import-matrix/commit', requireAuth, upload.single('xlsx'), async (req, res) => {
+    try {
+        const projectId = parseInt(req.params.id, 10);
+        if (!Number.isInteger(projectId) || projectId <= 0) {
+            return res.status(400).json({ error: 'Project ID inválido' });
+        }
+        if (!req.file) return res.status(400).json({ error: 'Archivo no recibido' });
+
+        const result = await commitMatrixImport(projectId, req.file.buffer, {
+            ...req.body,
+            user_id: req.user.id,
+            filename: req.file.originalname,
+        });
+        res.json(result);
+    } catch (err) {
+        res.status(err.status || 500).json({ error: err.message, details: err.details || undefined });
     }
 });
 

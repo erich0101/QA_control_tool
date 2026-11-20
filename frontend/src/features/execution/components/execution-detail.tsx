@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
 import { ReadField } from '@/components/ui/read-field';
+import { SelectField } from '@/components/ui/select-field';
 import { Textarea } from '@/components/ui/input';
 import type { BugDraft, ExecutionStatus, TestCase } from '@/lib/api/types';
 import { cn } from '@/lib/utils';
@@ -19,7 +20,13 @@ import { JiraTraceBadge } from '@/features/jira-tickets/jira-trace-badge';
 interface ExecutionDetailProps {
   testCase: TestCase;
   projectId: number | null;
+  /** Ciclo de retest: muestra defectos del ciclo original y permite resolverlos. */
+  isRetest?: boolean;
 }
+
+const DEFECT_STATUS_OPTIONS = ['OPEN', 'IN_PROGRESS', 'FIXED', 'CLOSED', 'WONT_FIX', 'DISMISSED'].map(
+  (value) => ({ value, label: value }),
+);
 
 const STATUS_BUTTONS: Array<{
   value: ExecutionStatus;
@@ -60,8 +67,9 @@ const STATUS_BUTTONS: Array<{
  * Detalle de ejecución de un test case.
  * Un solo guardado persiste status + justificación + resultado real + bugs.
  */
-export function ExecutionDetail({ testCase, projectId }: ExecutionDetailProps) {
-  const { saveResult, uploadEvidence, deleteEvidence } = useExecutionMutations(projectId);
+export function ExecutionDetail({ testCase, projectId, isRetest = false }: ExecutionDetailProps) {
+  const { saveResult, uploadEvidence, deleteEvidence, setDefectStatus } =
+    useExecutionMutations(projectId);
   const { data: statusHistory = [] } = useTcStatusHistory(testCase.id);
 
   const initialStatus = (testCase.status as ExecutionStatus) || 'PENDING';
@@ -74,6 +82,9 @@ export function ExecutionDetail({ testCase, projectId }: ExecutionDetailProps) {
   const needsJustification = status === 'BLOCK' || status === 'SKIP';
   const existingDefects = testCase.defects ?? [];
   const jiraDefect = existingDefects.find((defect) => defect.id === jiraDefectId) ?? null;
+  // En el retest se puede reportar un defecto nuevo incluso si el TC pasa,
+  // porque puede ser un problema distinto al del ciclo original.
+  const canReportDefect = status === 'FAIL' || (isRetest && status === 'PASS');
 
   const handleSave = async () => {
     if (status === 'PENDING') {
@@ -96,7 +107,7 @@ export function ExecutionDetail({ testCase, projectId }: ExecutionDetailProps) {
         status,
         ...(needsJustification ? { observations: observations.trim() } : {}),
         ...(obtained.trim() ? { obtained_result: obtained.trim() } : {}),
-        ...(status === 'FAIL' && bugs.length > 0 ? { bugs } : {}),
+        ...(canReportDefect && bugs.length > 0 ? { bugs } : {}),
       },
     });
 
@@ -119,45 +130,82 @@ export function ExecutionDetail({ testCase, projectId }: ExecutionDetailProps) {
         />
       </div>
 
+      {isRetest ? (
+        <div className="rounded-md border border-brand/30 bg-brand-soft px-3 py-2 text-caption text-fg-muted">
+          <strong className="text-fg">Retest:</strong> los defectos del ciclo original se muestran
+          como HISTÓRICO. Marcá FIXED o CLOSED los que ya estén corregidos y, si encontrás otro
+          problema, podés reportar un defecto nuevo incluso con resultado PASS.
+        </div>
+      ) : null}
+
       {existingDefects.length > 0 ? (
         <div className="space-y-2">
           <span className="text-caption font-bold uppercase tracking-wide text-fg-subtle">
             Defectos reportados ({existingDefects.length})
           </span>
-          {existingDefects.map((defect) => (
-            <div
-              key={defect.id}
-              className="flex flex-wrap items-center gap-2 rounded-md border border-fail/30 bg-fail-soft/40 px-3 py-2"
-            >
-              <Bug className="size-3.5 shrink-0 text-fail" />
-              <span className="min-w-0 flex-1 truncate text-footnote font-medium text-fg">
-                {defect.title}
-              </span>
-              <Badge tone="fail">{defect.severity ?? 'Media'}</Badge>
-              <JiraTraceBadge
-                jiraKey={defect.jira_key}
-                jiraUrl={defect.jira_url}
-                jiraStatus={defect.jira_status}
-              />
-              {defect.jira_key ? null : (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  className="h-7"
-                  disabled={defect.status === 'DISMISSED'}
-                  title={
-                    defect.status === 'DISMISSED'
-                      ? 'El bug está descartado: reabrilo para exportarlo a Jira'
-                      : 'Crear un ticket de error en Jira a partir de este bug'
-                  }
-                  onClick={() => setJiraDefectId(defect.id)}
-                >
-                  <Rocket />
-                  Ticket Jira
-                </Button>
-              )}
-            </div>
-          ))}
+          {existingDefects.map((defect) => {
+            const isHistorical = Boolean(defect.is_historical);
+            return (
+              <div
+                key={`${isHistorical ? 'hist' : 'cur'}-${defect.id}`}
+                className="space-y-2 rounded-md border border-fail/30 bg-fail-soft/40 px-3 py-2"
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <Bug className="size-3.5 shrink-0 text-fail" />
+                  <span className="min-w-0 flex-1 truncate text-footnote font-medium text-fg">
+                    {defect.title}
+                  </span>
+                  {isHistorical ? (
+                    <Badge tone="warn" title="Defecto del ciclo original que se está re-testeando">
+                      HISTÓRICO
+                    </Badge>
+                  ) : null}
+                  <Badge tone="fail">{defect.severity ?? 'Media'}</Badge>
+                  <JiraTraceBadge
+                    jiraKey={defect.jira_key}
+                    jiraUrl={defect.jira_url}
+                    jiraStatus={defect.jira_status}
+                  />
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-caption text-fg-subtle">Estado del bug</span>
+                  <div className="w-36">
+                    <SelectField
+                      value={defect.status ?? 'OPEN'}
+                      onValueChange={(nextStatus) =>
+                        setDefectStatus.mutate({ id: defect.id, status: nextStatus })
+                      }
+                      options={DEFECT_STATUS_OPTIONS}
+                      aria-label={`Estado del bug #${defect.id}`}
+                      disabled={setDefectStatus.isPending}
+                    />
+                  </div>
+                  <span className="text-caption text-fg-subtle">
+                    Marcá FIXED o CLOSED cuando el retest confirme la corrección.
+                  </span>
+
+                  {defect.jira_key ? null : (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="ml-auto h-7"
+                      disabled={defect.status === 'DISMISSED'}
+                      title={
+                        defect.status === 'DISMISSED'
+                          ? 'El bug está descartado: reabrilo para exportarlo a Jira'
+                          : 'Crear un ticket de error en Jira a partir de este bug'
+                      }
+                      onClick={() => setJiraDefectId(defect.id)}
+                    >
+                      <Rocket />
+                      Ticket Jira
+                    </Button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </div>
       ) : null}
 
@@ -201,7 +249,7 @@ export function ExecutionDetail({ testCase, projectId }: ExecutionDetailProps) {
         />
       </Field>
 
-      {status === 'FAIL' ? (
+      {canReportDefect ? (
         drafts.length === 0 ? (
           <Button
             type="button"
@@ -210,7 +258,7 @@ export function ExecutionDetail({ testCase, projectId }: ExecutionDetailProps) {
             onClick={() => setDrafts([emptyBugDraft(testCase.expected_result ?? '')])}
           >
             <Bug />
-            Reportar defecto
+            {status === 'PASS' ? 'Reportar otro defecto en el retest' : 'Reportar defecto'}
           </Button>
         ) : (
           <BugDrafts

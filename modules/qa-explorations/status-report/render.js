@@ -38,13 +38,15 @@ function fmtReportDay(value) {
  */
 function renderStatusReport(data) {
     const {
-        project, from, to, testerLabel,
+        project, from, to, testerLabel, sessionLabel,
         runIds, runsById, hallazgos,
         extensionsByRun, planChangesByRun, blocksByRun,
         totalsByRun, transitionsRes, totalTransitions,
         execHistoryByTc, hallazgoHistoryById,
         evidByExec, evidByDef, omittedEvidence,
         defectsByExec, defectsByRun, totalDefects, totalFindings,
+        resolvedDefectsByExec, resolvedDefectsByRun, resolvedHallazgosByRun,
+        resolvedHallazgos, totalResolvedDefects, totalResolvedFindings,
         counts, totalTests, execByRun, hallazgosByRun,
         sessionTotals, acceptanceEvaluatedPct, acceptanceTotalPct,
         coveredCount, coveragePct, verdictTone, verdictLabel, verdictDetail,
@@ -117,6 +119,7 @@ const alertsHTML = alerts.length === 0 ? `
             if (!run) continue;
             const runExecs = execByRun.get(runId) || [];
             const runHallazgos = hallazgosByRun.get(runId) || [];
+            const runResolvedHallazgos = resolvedHallazgosByRun.get(runId) || [];
 
             // Resumen por sesión para la tabla de decisión.
             const st = totalsByRun.get(run.id) || {
@@ -181,8 +184,11 @@ const alertsHTML = alerts.length === 0 ? `
                         ? '<span class="badge" style="background:#dcfce7;color:#15803d;">Declarado</span>'
                         : '<span class="badge" style="background:#fef3c7;color:#b45309;">Sin declarar</span>'}
                 </td>
-                <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;font-size:.68rem;text-align:center;color:#4b5563;font-weight:700;" title="Defectos de ejecución / hallazgos">
+                <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;font-size:.68rem;text-align:center;color:#4b5563;font-weight:700;" title="Defectos de ejecución abiertos / hallazgos abiertos. Los resueltos no impactan la entrega.">
                     ${defectsByRun.get(run.id) || 0} / ${runHallazgos.length}
+                    ${(resolvedDefectsByRun?.get(run.id) || 0) + runResolvedHallazgos.length > 0
+                        ? `<div style="font-size:.6rem;color:#15803d;font-weight:600;">+${(resolvedDefectsByRun?.get(run.id) || 0) + runResolvedHallazgos.length} resueltos</div>`
+                        : ''}
                 </td>
             </tr>`;
 
@@ -200,6 +206,7 @@ const alertsHTML = alerts.length === 0 ? `
             const testCard = (e) => {
                 const color = STATUS_STYLE[e.status] || { bg: '#e5e7eb', fg: '#4b5563' };
                 const execDefects = defectsByExec.get(e.id) || [];
+                const execResolvedDefects = resolvedDefectsByExec?.get(e.id) || [];
                 const evidList = evidByExec[e.id] || [];
                 const evidHTML = evidList.map(ev => evidenceHTML(ev, 180)).join('');
                 const evidBlock = evidHTML ? `<details style="margin-top:5px;">
@@ -248,6 +255,10 @@ const alertsHTML = alerts.length === 0 ? `
                         ${defEvidBlock}
                     </div>`;
                 }).join('');
+                const resolvedDefectsHTML = execResolvedDefects.map(d => `<div style="padding:5px 9px;background:#f0fdf4;border-radius:6px;margin-top:4px;">
+                    <div style="font-weight:700;font-size:.72rem;color:#166534;">${htmlEscape(d.title)}</div>
+                    <div style="font-size:.66rem;color:#6b7280;">Severidad: ${htmlEscape(d.severity)} · Estado: <strong>${htmlEscape(d.status)}</strong>${d.jira_key ? ' · Jira: ' + (d.jira_url ? `<a href="${htmlEscape(d.jira_url)}" target="_blank" style="color:#2563eb;font-weight:600;text-decoration:none;">${htmlEscape(d.jira_key)} ↗</a>` : htmlEscape(d.jira_key)) : ''}</div>
+                </div>`).join('');
 
                 return `<div class="test-card" data-status="${htmlEscape(e.status)}" style="padding:12px;background:#fff;border-radius:8px;margin-bottom:9px;border-left:4px solid ${color.fg};box-shadow:0 1px 3px rgba(0,0,0,.07);">
                     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
@@ -258,7 +269,8 @@ const alertsHTML = alerts.length === 0 ? `
                     ${e.obtained_result ? `<div style="font-size:.74rem;margin-top:4px;"><strong>Obtenido:</strong> ${htmlEscape(e.obtained_result)}</div>` : ''}
                     ${showObservations ? `<div style="font-size:.74rem;margin-top:2px;"><strong>Observaciones:</strong> ${htmlEscape(e.observations)}</div>` : ''}
                     ${evidBlock}
-                    ${execDefects.length > 0 ? `<div style="margin-top:6px;"><div style="font-size:.66rem;font-weight:700;color:#6b7280;text-transform:uppercase;">Defectos (${execDefects.length})</div>${defectsHTML}</div>` : ''}
+                    ${execDefects.length > 0 ? `<div style="margin-top:6px;"><div style="font-size:.66rem;font-weight:700;color:#6b7280;text-transform:uppercase;">Defectos abiertos (${execDefects.length})</div>${defectsHTML}</div>` : ''}
+                    ${execResolvedDefects.length > 0 ? `<details style="margin-top:6px;"><summary style="cursor:pointer;font-size:.66rem;font-weight:700;color:#15803d;text-transform:uppercase;">Defectos resueltos (${execResolvedDefects.length}) · no impactan la entrega</summary>${resolvedDefectsHTML}</details>` : ''}
                     ${historyHTML}
                 </div>`;
             };
@@ -308,10 +320,15 @@ const alertsHTML = alerts.length === 0 ? `
                 </div>`;
             }).join('');
 
+            const resolvedHallazgosHTML = runResolvedHallazgos.map(h => `<div style="padding:6px 9px;background:#f0fdf4;border-radius:6px;margin-top:4px;border-left:3px solid #16a34a;">
+                <div style="font-weight:700;font-size:.74rem;color:#166534;">H-${h.id} · ${htmlEscape(h.title)}</div>
+                <div style="font-size:.68rem;color:#6b7280;">Severidad: ${htmlEscape(h.severity || 'Media')} · Estado: <strong>${htmlEscape(h.status)}</strong> · ${htmlEscape(h.reporter_name)} · ${fmtReportDate(h.created_at)}</div>
+            </div>`).join('');
+
             sessionsHTML += `<details id="sesion-${run.id}" class="session-block" style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;margin-bottom:12px;">
                 <summary class="session-summary" style="cursor:pointer;padding:10px 14px;font-size:.76rem;font-weight:700;color:#111827;">
                     Detalle de la sesión #${run.id} · ${htmlEscape(run.name || 'Sesión exploratoria')}
-                    <span style="float:right;font-size:.64rem;font-weight:400;color:#6b7280;">${runExecs.length} test(s) en el rango · ${defectsByRun.get(run.id) || 0} defecto(s) · ${runHallazgos.length} hallazgo(s)</span>
+                    <span style="float:right;font-size:.64rem;font-weight:400;color:#6b7280;">${runExecs.length} test(s) en el rango · ${defectsByRun.get(run.id) || 0} defecto(s) abierto(s) · ${runHallazgos.length} hallazgo(s) abierto(s)${(resolvedDefectsByRun?.get(run.id) || 0) + runResolvedHallazgos.length > 0 ? ` · ${(resolvedDefectsByRun?.get(run.id) || 0) + runResolvedHallazgos.length} resuelto(s)` : ''}</span>
                 </summary>
                 <div style="border-top:1px solid #e5e7eb;padding:12px 14px;">
                 <div style="background:#f8fafc;border-radius:8px;padding:10px 12px;margin-bottom:10px;border-left:3px solid #4f46e5;">
@@ -378,7 +395,8 @@ const alertsHTML = alerts.length === 0 ? `
                         </ol>
                     </details>`;
                 })()}
-                ${runHallazgos.length > 0 ? `<div style="margin-top:6px;"><div style="font-size:.66rem;font-weight:700;color:#6b7280;text-transform:uppercase;">Hallazgos exploratorios (${runHallazgos.length})</div>${hallazgosHTML}</div>` : ''}
+                ${runHallazgos.length > 0 ? `<div style="margin-top:6px;"><div style="font-size:.66rem;font-weight:700;color:#6b7280;text-transform:uppercase;">Hallazgos exploratorios abiertos (${runHallazgos.length})</div>${hallazgosHTML}</div>` : ''}
+                ${runResolvedHallazgos.length > 0 ? `<details style="margin-top:6px;"><summary style="cursor:pointer;font-size:.66rem;font-weight:700;color:#15803d;text-transform:uppercase;">Hallazgos resueltos (${runResolvedHallazgos.length}) · no impactan la entrega</summary>${resolvedHallazgosHTML}</details>` : ''}
                 </div>
             </details>`;
         }
@@ -437,7 +455,7 @@ const alertsHTML = alerts.length === 0 ? `
         @media print{body{background:#fff;padding:0}.kpi{box-shadow:none;border:1px solid #e5e7eb}.toolbar{display:none}.test-card,.ok-row{break-inside:avoid;page-break-inside:avoid}.ok-title{white-space:normal}}</style></head><body>
         <div class="header">
             <h1>Reporte de estatus — Exploratoria</h1>
-            <p>${htmlEscape(project.name)} · ${htmlEscape(testerLabel)} · ${from} → ${to} · generado ${new Date().toLocaleString('es-AR', { timeZone: REPORT_TZ })}</p>
+            <p>${htmlEscape(project.name)} · ${htmlEscape(sessionLabel || 'Todas las sesiones')} · ${htmlEscape(testerLabel)} · ${from} → ${to} · generado ${new Date().toLocaleString('es-AR', { timeZone: REPORT_TZ })}</p>
             ${omittedEvidence > 0 ? `<p style="margin:6px 0 0;font-size:.7rem;opacity:.85;" title="El reporte se generó en modo offline: las evidencias no disponibles en esta máquina no se embeben. Los archivos siguen asociados a cada ejecución en el sistema.">ⓘ ${omittedEvidence} evidencia(s) no adjuntas en este reporte (modo offline)</p>` : ''}
         </div>
 
@@ -477,8 +495,8 @@ const alertsHTML = alerts.length === 0 ? `
             </div>
             <div class="kpi" style="border-top-color:#4f46e5;">
                 <div class="kpi-val" style="color:#4f46e5;">${totalFindings}</div>
-                <div class="kpi-lab">Defectos / Hallazgos</div>
-                <div class="kpi-sub">${totalDefects} de ejecución · ${hallazgos.rows.length} hallazgos exploratorios</div>
+                <div class="kpi-lab">Defectos / Hallazgos abiertos</div>
+                <div class="kpi-sub">${totalDefects} de ejecución · ${totalFindings - totalDefects} hallazgos${totalResolvedFindings > 0 ? ` · ${totalResolvedFindings} resuelto(s) excluido(s)` : ''}</div>
             </div>
         </div>
         <div style="font-size:.64rem;color:#6b7280;margin:6px 0 16px 2px;">

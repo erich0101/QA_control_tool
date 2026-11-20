@@ -278,7 +278,9 @@ router.put('/:id', requireAuth, async (req, res) => {
                 }
             };
 
-            if ((status === 'FAIL' || status === 'WARNING')) {
+            // Un retest puede encontrar un defecto nuevo incluso si el
+            // resultado del TC es PASS; si el cliente envía bugs, se registran.
+            if (status === 'FAIL' || status === 'WARNING' || (Array.isArray(bugs) && bugs.length > 0)) {
                 // Nuevo formato: array de bugs
                 if (Array.isArray(bugs) && bugs.length > 0) {
                     for (const b of bugs) {

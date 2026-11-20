@@ -5,6 +5,8 @@ const { generateReport, generateMultiReport } = require('../../report-generator'
 const { generateTesterReport, renderTesterReportHTML } = require('../lib/tester-report');
 const { buildHallazgosReportData } = require('../lib/report-templates/hallazgos-data');
 const { renderHallazgosReport } = require('../lib/report-templates/hallazgos-render');
+const { buildDeliveryReportData } = require('../lib/report-templates/delivery-data');
+const { renderDeliveryReport } = require('../lib/report-templates/delivery-render');
 
 const router = express.Router();
 
@@ -100,6 +102,19 @@ router.get('/tester/projects', requireAuth, async (req, res) => {
         res.json({ projects: projects.rows });
     } catch (err) {
         res.status(500).json({ error: err.message });
+    }
+});
+
+// GET /api/reports/:runId/delivery
+// Estado de entrega del ciclo: resultados efectivos (incluye retest),
+// defectos abiertos y adjuntos de todas las ejecuciones de la cadena.
+router.get('/:runId/delivery', requireAuth, async (req, res) => {
+    try {
+        const data = await buildDeliveryReportData(parseInt(req.params.runId, 10));
+        res.setHeader('Content-Type', 'text/html');
+        res.send(renderDeliveryReport(data));
+    } catch (err) {
+        res.status(err.status || 500).json({ error: err.message });
     }
 });
 

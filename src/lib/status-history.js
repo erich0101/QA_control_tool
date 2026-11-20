@@ -85,7 +85,34 @@ async function getTcStatusHistory(tcId, limit = 200) {
           LIMIT ${Number(limit) || 200}`,
         [tcId]
     );
-    return res.rows;
+    return attachHistoryEvidence(res.rows);
+}
+
+/**
+ * Adjunta a cada evento de histórico las evidencias que se conservaron al
+ * pasar de un estado fallido a OK (qa_attachments.status_history_id).
+ */
+async function attachHistoryEvidence(rows) {
+    if (!rows || rows.length === 0) return rows;
+    const ids = rows.map((row) => row.id);
+    const att = await query(
+        `SELECT id, status_history_id, file_name, mime_type, evidence_category
+           FROM qa_attachments
+          WHERE status_history_id IN (${ids.map(() => '?').join(',')})
+          ORDER BY id ASC`,
+        ids
+    );
+    const byHistory = new Map();
+    for (const item of att.rows) {
+        if (!byHistory.has(item.status_history_id)) byHistory.set(item.status_history_id, []);
+        byHistory.get(item.status_history_id).push({
+            id: item.id,
+            file_name: item.file_name,
+            mime_type: item.mime_type,
+            evidence_category: item.evidence_category,
+        });
+    }
+    return rows.map((row) => ({ ...row, evidence: byHistory.get(row.id) || [] }));
 }
 
 /** Histórico de un hallazgo (qa_defects sin ejecución). */

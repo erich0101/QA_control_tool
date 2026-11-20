@@ -138,6 +138,18 @@ await query(`ALTER TABLE qa_defects ADD COLUMN IF NOT EXISTS observations TEXT`)
             CREATE INDEX IF NOT EXISTS idx_qa_status_history_project
                 ON qa_status_history (project_id, changed_at)
         `);
+        // Evidencias históricas: al pasar de FAIL/WARNING/BLOCK a OK, las
+        // evidencias del intento anterior se reasocian al evento de histórico
+        // para conservarlas en el detalle sin mezclarlas con el nuevo OK.
+        await query(`
+            ALTER TABLE qa_attachments
+            ADD COLUMN IF NOT EXISTS status_history_id INTEGER
+            REFERENCES qa_status_history(id) ON DELETE SET NULL
+        `);
+        await query(`
+            CREATE INDEX IF NOT EXISTS idx_qa_attachments_status_history
+                ON qa_attachments (status_history_id)
+        `);
         // Backfill: evento inicial con el estado actual de cada ejecución y
         // hallazgo existente (solo si todavía no tiene histórico).
         await query(`

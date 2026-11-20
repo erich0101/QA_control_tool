@@ -494,21 +494,49 @@ router.post('/flows/:tcId/execute', async (req, res) => {
             execId = ins.rows[0].id;
         }
 
+        // Re-test exitoso: FAIL/WARNING/BLOCK → OK. Las evidencias del intento
+        // anterior se mueven al evento de histórico para que sigan visibles en
+        // el detalle, y el nuevo OK exige evidencias propias.
+        const toStatus = status || 'PENDING';
+        const isPassReopen = ['FAIL', 'WARNING', 'BLOCK'].includes(String(previousStatus || '').toUpperCase())
+            && ['OK', 'PASS'].includes(String(toStatus).toUpperCase());
+        let historicalEvidenceIds = [];
+        if (isPassReopen) {
+            const evRes = await query(
+                `SELECT id FROM qa_attachments WHERE execution_id = ? ORDER BY id ASC`,
+                [execId]
+            );
+            historicalEvidenceIds = evRes.rows.map((row) => row.id);
+        }
+
         // Trazabilidad temporal del estado del TC. El motivo se compone con
         // título+descripción (FAIL/WARNING) o la justificación (SKIP/BLOCK).
+        let historyId = null;
         try {
-            const reason = buildStatusReason({ status: status || 'PENDING', observations, obtained: obtained_result, bugs });
-            await recordStatusChange({
+            const baseReason = buildStatusReason({ status: toStatus, observations, obtained: obtained_result, bugs });
+            const reason = isPassReopen
+                ? [baseReason, 'Re-test a OK: evidencias del intento anterior conservadas en el histórico'].filter(Boolean).join(' · ')
+                : baseReason;
+            historyId = await recordStatusChange({
                 projectId: runRes.rows[0].project_id,
                 entityType: 'execution',
                 entityId: execId,
                 runId: run_id,
                 tcId,
                 fromStatus: previousStatus,
-                toStatus: status || 'PENDING',
+                toStatus,
                 reason,
                 changedBy: req.user.id,
             });
+
+            if (isPassReopen && historyId && historicalEvidenceIds.length > 0) {
+                await query(
+                    `UPDATE qa_attachments
+                        SET execution_id = NULL, status_history_id = ?
+                      WHERE id = ANY(?)`,
+                    [historyId, historicalEvidenceIds]
+                );
+            }
         } catch (historyErr) {
             console.error('No se pudo registrar el histórico de estado:', historyErr.message);
         }
@@ -1190,7 +1218,33 @@ router.get('/reports/status/testers', async (req, res) => {
     }
 });
 
-// GET /api/explorations/reports/status?project_id=&date_from=&date_to=&tester_id=&tester=
+// GET /api/explorations/reports/status/sessions?project_id=
+// Sesiones exploratorias del proyecto para elegir una en el reporte.
+router.get('/reports/status/sessions', async (req, res) => {
+    try {
+        const projectId = parseInt(req.query.project_id, 10);
+        if (!projectId) return res.status(400).json({ error: 'project_id requerido' });
+
+        const sessionsRes = await query(`
+            SELECT r.id, r.name, r.charter, r.status, r.started_at, r.finished_at,
+                   COALESCE(u.name, 'Sin tester') AS tester_name,
+                   (SELECT COUNT(*)::int FROM qa_executions e
+                     WHERE e.run_id = r.id AND e.status <> 'PENDING') AS executions,
+                   (SELECT COUNT(*)::int FROM qa_defects d
+                     WHERE d.exploratory_run_id = r.id AND d.execution_id IS NULL) AS hallazgos
+              FROM qa_test_runs r
+              LEFT JOIN qa_users u ON u.id = r.created_by
+             WHERE r.project_id = ? AND r.run_type = 'EXPLORATORY'
+             ORDER BY COALESCE(r.started_at, r.finished_at) DESC, r.id DESC
+        `, [projectId]);
+
+        res.json({ sessions: sessionsRes.rows });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// GET /api/explorations/reports/status?project_id=&date_from=&date_to=&run_id=&tester_id=&tester=
 router.get('/reports/status', async (req, res) => {
     try {
         const projectId = parseInt(req.query.project_id, 10);
@@ -1198,8 +1252,9 @@ router.get('/reports/status', async (req, res) => {
         const { from, to } = reportRange(req.query);
         const testerId = req.query.tester_id ? parseInt(req.query.tester_id, 10) : null;
         const testerName = req.query.tester ? String(req.query.tester) : null;
+        const runId = req.query.run_id ? parseInt(req.query.run_id, 10) : null;
 
-        const data = await buildStatusReportData({ projectId, from, to, testerId, testerName });
+        const data = await buildStatusReportData({ projectId, from, to, testerId, testerName, runId });
         res.setHeader('Content-Type', 'text/html');
         res.send(renderStatusReport(data));
     } catch (err) {

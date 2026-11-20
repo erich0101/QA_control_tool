@@ -30,7 +30,13 @@ router.get('/', requireAuth, async (req, res) => {
         const activeRunIds = suites.map(s => s.active_run_id).filter(id => id !== null);
 
         // 1. Fetch all Test Cases for these suites
-        const casesRes = await query(`SELECT * FROM qa_test_cases WHERE suite_id = ANY(?) ORDER BY id`, [suiteIds]);
+        const casesRes = await query(`
+            SELECT tc.*, us.key_id AS us_key, us.title AS us_title
+              FROM qa_test_cases tc
+              LEFT JOIN qa_user_stories us ON us.id = tc.us_id
+             WHERE tc.suite_id = ANY(?)
+             ORDER BY tc.id
+        `, [suiteIds]);
         const allTestCases = casesRes.rows;
 
         // 2. Fetch all Active Runs info (Including RUNNING and PAUSED)
@@ -57,8 +63,30 @@ router.get('/', requireAuth, async (req, res) => {
             activeRunExecs = runExecsRes.rows;
         }
 
-        // 5. Fetch Parent Executions (RETEST)
-        const parentRunIds = activeRuns.map(r => r.parent_run_id).filter(id => id !== null);
+        // 5. Fetch Parent Executions (RETEST). Se incluyen todos los ancestros
+        // (retest de retest) para no perder el bug original del TC.
+        const retestRunIds = activeRuns
+            .filter(r => r.run_type === 'RETEST' && r.parent_run_id)
+            .map(r => r.id);
+        let ancestorRunIds = [];
+        if (retestRunIds.length > 0) {
+            const ancRes = await query(`
+                WITH RECURSIVE chain AS (
+                    SELECT id, parent_run_id, 0 AS depth
+                      FROM qa_test_runs WHERE id = ANY(?)
+                    UNION ALL
+                    SELECT r.id, r.parent_run_id, c.depth + 1
+                      FROM qa_test_runs r
+                      JOIN chain c ON r.id = c.parent_run_id
+                )
+                SELECT DISTINCT id FROM chain WHERE depth > 0
+            `, [retestRunIds]);
+            ancestorRunIds = ancRes.rows.map(row => row.id);
+        }
+        const parentRunIds = [...new Set([
+            ...activeRuns.map(r => r.parent_run_id).filter(id => id !== null),
+            ...ancestorRunIds,
+        ])];
         let parentExecs = [];
         if (parentRunIds.length > 0) {
             const pExecsRes = await query(`
@@ -104,9 +132,14 @@ router.get('/', requireAuth, async (req, res) => {
         // Latest exec (sin run activo): tc_id -> exec
         const latestExecByTc = new Map();
         for (const e of latestExecs) latestExecByTc.set(e.tc_id, e);
-        // Parent execs (RETEST): tc_id -> exec
+        // Parent execs (RETEST): tc_id -> exec y tc_id -> [execs de ancestros]
         const parentExecByTc = new Map();
-        for (const e of parentExecs) parentExecByTc.set(e.tc_id, e);
+        const parentExecsByTc = new Map();
+        for (const e of parentExecs) {
+            parentExecByTc.set(e.tc_id, e);
+            if (!parentExecsByTc.has(e.tc_id)) parentExecsByTc.set(e.tc_id, []);
+            parentExecsByTc.get(e.tc_id).push(e);
+        }
         // Defects por execution_id
         const defectsByExec = new Map();
         for (const d of allDefects) {
@@ -156,18 +189,28 @@ router.get('/', requireAuth, async (req, res) => {
 
                 const defects = defectsByExec.get(exec ? exec.id : -1) || [];
 
-                if (activeRun && activeRun.run_type === 'RETEST' && exec && exec.status === 'PENDING' && activeRun.parent_run_id) {
-                    const pExec = parentExecByTc.get(tc.id);
-                    if (pExec) {
-                        const historicalDefs = defectsByExec.get(pExec.id) || [];
+                // En un retest, los defectos del ciclo original se muestran
+                // siempre (aunque el nuevo intento ya esté PASS/FAIL) para que
+                // el tester pueda marcarlos FIXED/CLOSED desde el mismo TC.
+                if (activeRun && activeRun.run_type === 'RETEST' && exec && activeRun.parent_run_id) {
+                    const ancestorExecs = parentExecsByTc.get(tc.id) || [];
+                    for (const ancestorExec of ancestorExecs) {
+                        const historicalDefs = defectsByExec.get(ancestorExec.id) || [];
                         for (const hd of historicalDefs) {
-                            if (!defects.find(d => d.id === hd.id)) defects.push({ ...hd, is_historical: true });
+                            if (!defects.find(d => d.id === hd.id)) {
+                                defects.push({
+                                    ...hd,
+                                    is_historical: true,
+                                    origin_run_id: ancestorExec.run_id,
+                                });
+                            }
                         }
                     }
                 }
 
                 return {
-                    id: tc.id, us_id: tc.us_id, scenario_id: tc.scenario_id, assigned_to: tc.assigned_to, title: tc.title,
+                    id: tc.id, us_id: tc.us_id, us_key: tc.us_key, us_title: tc.us_title,
+                    scenario_id: tc.scenario_id, assigned_to: tc.assigned_to, title: tc.title,
                     steps: tc.steps || tc.description, expected_result: tc.expected_result, preconditions: tc.preconditions,
                     status: exec ? exec.status : 'PENDING', execution_id: exec ? exec.id : null,
                     is_from_parent: exec ? !!exec.is_from_parent : false,

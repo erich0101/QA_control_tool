@@ -4,11 +4,22 @@ const { getEvidenceBase64 } = require('../../../src/lib/report-evidence');
 const REPORT_TZ = 'America/Argentina/Buenos_Aires';
 
 /**
+ * Estados de defecto/hallazgo que cuentan como "presentes" en la entrega.
+ * FIXED, CLOSED, WONT_FIX y DISMISSED ya no son trabajo abierto: se muestran
+ * como trazabilidad, pero no impactan el estado de entrega del reporte.
+ */
+const OPEN_DEFECT_STATUSES = new Set(['OPEN', 'IN_PROGRESS']);
+
+function isOpenDefect(item) {
+    return OPEN_DEFECT_STATUSES.has(String(item?.status || 'OPEN').toUpperCase());
+}
+
+/**
  * Construye los datos del reporte de estatus (sin HTML).
  * Consulta ejecuciones, defectos, hallazgos, fechas y evidencias, y deriva
  * métricas/alertas. La presentación vive en ./render.js.
  */
-async function buildStatusReportData({ projectId, from, to, testerId, testerName }) {
+async function buildStatusReportData({ projectId, from, to, testerId, testerName, runId = null }) {
 
 
         const projectRes = await query(`SELECT id, name FROM qa_projects WHERE id = ?`, [projectId]);
@@ -19,9 +30,27 @@ async function buildStatusReportData({ projectId, from, to, testerId, testerName
         }
         const project = projectRes.rows[0];
 
+        // Etiqueta de la sesión elegida (si el reporte es de una sesión puntual).
+        let sessionLabel = 'Todas las sesiones';
+        if (runId) {
+            const sessionRes = await query(
+                `SELECT id, name FROM qa_test_runs WHERE id = ? AND project_id = ? AND run_type = 'EXPLORATORY'`,
+                [runId, projectId]
+            );
+            if (sessionRes.rows.length === 0) {
+                const error = new Error('Sesión exploratoria no encontrada');
+                error.status = 404;
+                throw error;
+            }
+            sessionLabel = `Sesión #${runId} · ${sessionRes.rows[0].name || 'Sin nombre'}`;
+        }
+
+        const runFilter = runId ? 'AND r.id = ?' : '';
+        const historyRunFilter = runId ? 'AND h.run_id = ?' : '';
+
         // Ejecuciones del rango (se excluyen PENDING: no representan trabajo hecho).
         let execFilter = '';
-        const execParams = [projectId, from, to];
+        const execParams = [projectId, ...(runId ? [runId] : []), from, to];
         if (testerId && testerName) {
             execFilter = 'AND (e.tester_id = ? OR e.tester = ?)';
             execParams.push(testerId, testerName);
@@ -42,6 +71,7 @@ async function buildStatusReportData({ projectId, from, to, testerId, testerName
               JOIN qa_test_cases tc ON e.tc_id = tc.id
               JOIN qa_test_runs r ON e.run_id = r.id
              WHERE r.project_id = ? AND r.run_type = 'EXPLORATORY' AND e.status <> 'PENDING'
+               ${runFilter}
                AND (e.executed_at AT TIME ZONE '${REPORT_TZ}')::date BETWEEN ? AND ?
                ${execFilter}
              ORDER BY e.executed_at ASC
@@ -57,7 +87,7 @@ async function buildStatusReportData({ projectId, from, to, testerId, testerName
 
         // Hallazgos creados en sesiones exploratorias dentro del rango.
         let hallazgoFilter = '';
-        const hallazgoParams = [projectId, from, to];
+        const hallazgoParams = [projectId, ...(runId ? [runId] : []), from, to];
         if (testerId) {
             hallazgoFilter = 'AND d.created_by = ?';
             hallazgoParams.push(testerId);
@@ -73,16 +103,24 @@ async function buildStatusReportData({ projectId, from, to, testerId, testerName
               JOIN qa_test_runs r ON d.exploratory_run_id = r.id
               LEFT JOIN qa_users rep ON rep.id = d.created_by
              WHERE r.project_id = ? AND r.run_type = 'EXPLORATORY' AND d.execution_id IS NULL
+               ${runFilter}
                AND (d.created_at AT TIME ZONE '${REPORT_TZ}')::date BETWEEN ? AND ?
                ${hallazgoFilter}
              ORDER BY d.created_at ASC
         `, hallazgoParams);
 
+        // Universo "presente" del reporte: solo lo que sigue abierto. Los
+        // resueltos/descartados se conservan aparte para trazabilidad.
+        const openDefects = defects.rows.filter(isOpenDefect);
+        const resolvedDefects = defects.rows.filter((defect) => !isOpenDefect(defect));
+        const openHallazgos = hallazgos.rows.filter(isOpenDefect);
+        const resolvedHallazgos = hallazgos.rows.filter((hallazgo) => !isOpenDefect(hallazgo));
+
         // Sesiones con bloqueos o cambios de fechas en el rango: deben
         // aparecer en el informe aunque no tengan tests ejecutados (por
         // ejemplo, una sesión que estuvo bloqueada todo el período).
-        const traceParams = [projectId, to, from];
-        const extTraceParams = [projectId, from, to];
+        const traceParams = [projectId, ...(runId ? [runId] : []), to, from];
+        const extTraceParams = [projectId, ...(runId ? [runId] : []), from, to];
         let blockAuthor = '';
         let extAuthor = '';
         if (testerId && testerName) {
@@ -108,6 +146,7 @@ async function buildStatusReportData({ projectId, from, to, testerId, testerName
                   JOIN qa_test_runs r ON r.id = b.run_id
                   LEFT JOIN qa_users bu ON bu.id = b.created_by
                  WHERE r.project_id = ? AND r.run_type = 'EXPLORATORY'
+                   ${runFilter}
                    AND (b.blocked_from AT TIME ZONE '${REPORT_TZ}')::date <= ?
                    AND (COALESCE(b.blocked_to, CURRENT_TIMESTAMP) AT TIME ZONE '${REPORT_TZ}')::date >= ?
                    ${blockAuthor}
@@ -117,6 +156,7 @@ async function buildStatusReportData({ projectId, from, to, testerId, testerName
                   JOIN qa_test_runs r ON r.id = e.run_id
                   LEFT JOIN qa_users eu ON eu.id = e.created_by
                  WHERE r.project_id = ? AND r.run_type = 'EXPLORATORY'
+                   ${runFilter}
                    AND (e.created_at AT TIME ZONE '${REPORT_TZ}')::date BETWEEN ? AND ?
                    ${extAuthor}
             ) x
@@ -215,7 +255,7 @@ async function buildStatusReportData({ projectId, from, to, testerId, testerName
         // (a través de todos sus runs) y por hallazgo, usando LAG sobre el
         // histórico. Se excluye PENDING para no ensuciar las transiciones.
         let historyUserFilter = '';
-        const historyParams = [projectId];
+        const historyParams = [projectId, ...(runId ? [runId] : [])];
         if (testerId) {
             historyUserFilter = 'AND h.changed_by = ?';
             historyParams.push(testerId);
@@ -235,6 +275,7 @@ async function buildStatusReportData({ projectId, from, to, testerId, testerName
                   FROM qa_status_history h
                   LEFT JOIN qa_users hu ON hu.id = h.changed_by
                  WHERE h.project_id = ? AND h.to_status <> 'PENDING'
+                   ${historyRunFilter}
                    ${historyUserFilter}
             )
             SELECT entity_type, prev_status, to_status, count(*)::int AS total
@@ -256,10 +297,11 @@ async function buildStatusReportData({ projectId, from, to, testerId, testerName
               LEFT JOIN qa_users hu ON hu.id = h.changed_by
              WHERE h.entity_type = 'execution'
                AND h.tc_id IN (${execTcIds.map(() => '?').join(',')})
+               ${historyRunFilter}
                AND (h.changed_at AT TIME ZONE '${REPORT_TZ}')::date BETWEEN ? AND ?
                ${historyUserFilter}
              ORDER BY h.changed_at ASC, h.id ASC
-        `, [...execTcIds, from, to, ...(testerId ? [testerId] : testerName ? [testerName] : [])]);
+        `, [...execTcIds, ...(runId ? [runId] : []), from, to, ...(testerId ? [testerId] : testerName ? [testerName] : [])]);
         const execHistoryByTc = new Map();
         for (const row of execHistoryRes.rows) {
             if (!execHistoryByTc.has(row.tc_id)) execHistoryByTc.set(row.tc_id, []);
@@ -275,10 +317,11 @@ async function buildStatusReportData({ projectId, from, to, testerId, testerName
               LEFT JOIN qa_users hu ON hu.id = h.changed_by
              WHERE h.entity_type = 'hallazgo'
                AND h.entity_id IN (${hallazgoIds.map(() => '?').join(',')})
+               ${historyRunFilter}
                AND (h.changed_at AT TIME ZONE '${REPORT_TZ}')::date BETWEEN ? AND ?
                ${historyUserFilter}
              ORDER BY h.changed_at ASC, h.id ASC
-        `, [...hallazgoIds, from, to, ...(testerId ? [testerId] : testerName ? [testerName] : [])]);
+        `, [...hallazgoIds, ...(runId ? [runId] : []), from, to, ...(testerId ? [testerId] : testerName ? [testerName] : [])]);
         const hallazgoHistoryById = new Map();
         for (const row of hallazgoHistoryRes.rows) {
             if (!hallazgoHistoryById.has(row.entity_id)) hallazgoHistoryById.set(row.entity_id, []);
@@ -340,6 +383,14 @@ async function buildStatusReportData({ projectId, from, to, testerId, testerName
                 refs: [],
             });
         }
+        if (openDefects.length > 0 || openHallazgos.length > 0) {
+            alerts.push({
+                tone: 'fail',
+                title: `${openDefects.length + openHallazgos.length} defecto(s)/hallazgo(s) abierto(s)`,
+                detail: 'Solo los defectos abiertos impactan la entrega. Si un bug ya fue resuelto, marcalo como FIXED/CLOSED para que deje de contar como presente en este reporte.',
+                refs: [],
+            });
+        }
         if (activeBlockRuns.length > 0) {
             alerts.push({
                 tone: 'fail',
@@ -382,7 +433,7 @@ async function buildStatusReportData({ projectId, from, to, testerId, testerName
                 : verdictTone === 'warn' ? 'Con observaciones' : 'No apto / requiere atención';
         const verdictDetail = !hasActivity
             ? 'No se encontraron sesiones con actividad ni cambios de fechas en el rango seleccionado.'
-            : `Aceptación total ${acceptanceTotalPct ?? '—'}% · Cobertura TC ${coveragePct ?? '—'}% · Acumulado de sesión: ${sessionTotals.executed}/${sessionTotals.total} TC ejecutados`;
+            : `Aceptación total ${acceptanceTotalPct ?? '—'}% · Cobertura TC ${coveragePct ?? '—'}% · Acumulado de sesión: ${sessionTotals.executed}/${sessionTotals.total} TC ejecutados · Defectos abiertos: ${openDefects.length + openHallazgos.length}`;
 
         const defectIds = defects.rows.map(d => d.id);
         const attachments = (execs.rows.length === 0 && defectIds.length === 0) ? { rows: [] } : await query(`
@@ -403,18 +454,30 @@ async function buildStatusReportData({ projectId, from, to, testerId, testerName
         }
 
         const defectsByExec = new Map();
-        for (const d of defects.rows) {
+        const resolvedDefectsByExec = new Map();
+        for (const d of openDefects) {
             if (!defectsByExec.has(d.execution_id)) defectsByExec.set(d.execution_id, []);
             defectsByExec.get(d.execution_id).push(d);
         }
+        for (const d of resolvedDefects) {
+            if (!resolvedDefectsByExec.has(d.execution_id)) resolvedDefectsByExec.set(d.execution_id, []);
+            resolvedDefectsByExec.get(d.execution_id).push(d);
+        }
         const runIdByExec = new Map(execs.rows.map((exec) => [exec.id, exec.run_id]));
         const defectsByRun = new Map();
-        for (const defect of defects.rows) {
+        const resolvedDefectsByRun = new Map();
+        for (const defect of openDefects) {
             const runId = runIdByExec.get(defect.execution_id);
             if (runId) defectsByRun.set(runId, (defectsByRun.get(runId) || 0) + 1);
         }
-        const totalDefects = defects.rows.length;
-        const totalFindings = totalDefects + hallazgos.rows.length;
+        for (const defect of resolvedDefects) {
+            const runId = runIdByExec.get(defect.execution_id);
+            if (runId) resolvedDefectsByRun.set(runId, (resolvedDefectsByRun.get(runId) || 0) + 1);
+        }
+        const totalDefects = openDefects.length;
+        const totalResolvedDefects = resolvedDefects.length;
+        const totalFindings = totalDefects + openHallazgos.length;
+        const totalResolvedFindings = totalResolvedDefects + resolvedHallazgos.length;
 
         const counts = { OK: 0, FAIL: 0, WARNING: 0, BLOCK: 0, SKIP: 0 };
         for (const e of execs.rows) {
@@ -429,9 +492,14 @@ async function buildStatusReportData({ projectId, from, to, testerId, testerName
             execByRun.get(e.run_id).push(e);
         }
         const hallazgosByRun = new Map();
-        for (const h of hallazgos.rows) {
+        const resolvedHallazgosByRun = new Map();
+        for (const h of openHallazgos) {
             if (!hallazgosByRun.has(h.exploratory_run_id)) hallazgosByRun.set(h.exploratory_run_id, []);
             hallazgosByRun.get(h.exploratory_run_id).push(h);
+        }
+        for (const h of resolvedHallazgos) {
+            if (!resolvedHallazgosByRun.has(h.exploratory_run_id)) resolvedHallazgosByRun.set(h.exploratory_run_id, []);
+            resolvedHallazgosByRun.get(h.exploratory_run_id).push(h);
         }
 
         const accumulatedCounts = {
@@ -445,7 +513,7 @@ async function buildStatusReportData({ projectId, from, to, testerId, testerName
                 const testerLabel = testerName || 'Todos los testers';
 
         return {
-            project, from, to, testerId, testerName, testerLabel,
+            project, from, to, testerId, testerName, testerLabel, runId, sessionLabel,
             execs, defects, hallazgos,
             runIds, runsById, extensionsByRun, planChangesByRun, blocksByRun,
             totalsByRun, totalPending, totalExtensions, totalPlanChanges,
@@ -454,6 +522,9 @@ async function buildStatusReportData({ projectId, from, to, testerId, testerName
             execHistoryByTc, hallazgoHistoryById,
             evidByExec, evidByDef, omittedEvidence,
             defectsByExec, defectsByRun, totalDefects, totalFindings,
+            resolvedDefectsByExec, resolvedDefectsByRun, resolvedHallazgosByRun,
+            openHallazgos, resolvedHallazgos,
+            totalResolvedDefects, totalResolvedFindings,
             counts, totalTests, execByRun, hallazgosByRun,
             sessionTotals, acceptanceEvaluatedPct, acceptanceTotalPct,
             coveredCount, coveragePct, uncoveredRuns, alerts, hasActivity,

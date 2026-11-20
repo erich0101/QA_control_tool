@@ -190,7 +190,12 @@ export function SuiteExecutionBlock({
                             E{scenarioIndex + 1}
                           </Badge>
                         ) : null}
-                        <span className="truncate text-footnote text-fg">{testCase.title}</span>
+                        <span
+                          className="line-clamp-2 min-w-0 break-words text-footnote text-fg"
+                          title={testCase.title}
+                        >
+                          {testCase.title}
+                        </span>
                       </button>
 
                       <span
@@ -218,7 +223,11 @@ export function SuiteExecutionBlock({
 
                     {isTcExpanded ? (
                       <div className="border-t border-border bg-surface-2">
-                        <ExecutionDetail testCase={testCase} projectId={projectId} />
+                        <ExecutionDetail
+                          testCase={testCase}
+                          projectId={projectId}
+                          isRetest={run.run_type === 'RETEST'}
+                        />
                       </div>
                     ) : null}
                   </li>

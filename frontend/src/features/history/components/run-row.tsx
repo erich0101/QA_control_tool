@@ -1,4 +1,4 @@
-import { Bug, FileText, RotateCcw } from 'lucide-react';
+import { Bug, ClipboardCheck, FileText, RotateCcw } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import type { TestRun } from '@/lib/api/types';
@@ -94,9 +94,20 @@ export function RunRow({ run, onViewBugs, onRetest, isRetesting }: RunRowProps) 
       <div className="flex items-center gap-1">
         <Button
           variant="ghost"
+          size="sm"
+          className="text-brand"
+          title="Reporte de estado de entrega (incluye retest y adjuntos)"
+          onClick={() => window.open(historyApi.deliveryReportUrl(run.id), '_blank', 'noopener')}
+        >
+          <ClipboardCheck />
+          Estado de entrega
+        </Button>
+
+        <Button
+          variant="ghost"
           size="icon-sm"
-          aria-label="Ver reporte"
-          title="Ver reporte"
+          aria-label="Ver auditoría detallada"
+          title="Ver auditoría detallada"
           onClick={() => window.open(historyApi.reportUrl(run.id), '_blank', 'noopener')}
         >
           <FileText />

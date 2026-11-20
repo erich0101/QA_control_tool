@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { exploratoriaApi, type StartSessionInput } from '@/lib/api/exploratoria';
 import { evidenceApi, hallazgosApi } from '@/lib/api/hallazgos';
+import { defectsApi } from '@/lib/api/history';
 import { testSuitesApi } from '@/lib/api/test-suites';
 import { queryKeys } from '@/lib/query-keys';
 
@@ -46,6 +47,18 @@ export function useStatusReportTesters(
     queryKey: queryKeys.exploratoryStatusTesters(projectId, dateFrom, dateTo),
     queryFn: () => exploratoriaApi.statusReportTesters(projectId as number, dateFrom, dateTo),
     enabled: projectId != null && enabled && Boolean(dateFrom) && Boolean(dateTo),
+    staleTime: 30_000,
+    retry: false,
+  });
+}
+
+/** Sesiones exploratorias disponibles para filtrar el reporte de estatus. */
+export function useStatusReportSessions(projectId: number | null, enabled: boolean) {
+  return useQuery({
+    queryKey: queryKeys.exploratoryStatusSessions(projectId),
+    queryFn: () => exploratoriaApi.statusReportSessions(projectId as number),
+    enabled: projectId != null && enabled,
+    select: (data) => data.sessions ?? [],
     staleTime: 30_000,
     retry: false,
   });
@@ -325,6 +338,25 @@ export function useExploratoriaMutations(projectId: number | null, runId: number
     onError: (error: Error) => toast.error(error.message),
   });
 
+  /**
+   * Estado de un defecto de ejecución (BUG). FIXED/CLOSED lo saca del
+   * universo "abierto" del reporte de estatus sin borrarlo del reporte de bugs.
+   */
+  const setDefectStatus = useMutation({
+    mutationFn: ({ id, status }: { id: number; status: string }) =>
+      defectsApi.setStatus(id, status),
+    onSuccess: async (_data, variables) => {
+      await invalidateAll();
+      await queryClient.invalidateQueries({ queryKey: queryKeys.defects(projectId) });
+      toast.success(
+        variables.status === 'FIXED'
+          ? 'Bug marcado como resuelto: ya no impacta el reporte de estatus'
+          : 'Estado del bug actualizado',
+      );
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
   const assignHallazgo = useMutation({
     mutationFn: ({ id, userId }: { id: number; userId: number | null }) =>
       hallazgosApi.assign(id, userId),
@@ -391,6 +423,7 @@ export function useExploratoriaMutations(projectId: number | null, runId: number
     updateHallazgo,
     removeHallazgo,
     setHallazgoStatus,
+    setDefectStatus,
     assignHallazgo,
   };
 }
