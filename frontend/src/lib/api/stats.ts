@@ -35,6 +35,8 @@ export interface OverviewStats {
   defects?: {
     bugs: OverviewStatusCount[];
     hallazgos: OverviewStatusCount[];
+    open_bugs_by_severity?: Array<{ severity: string; count: number }>;
+    open_hallazgos_by_severity?: Array<{ severity: string; count: number }>;
   };
 }
 

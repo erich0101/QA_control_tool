@@ -314,15 +314,46 @@ router.get('/overview', requireAuth, async (req, res) => {
         const defects = await query(`
             SELECT CASE WHEN d.execution_id IS NULL THEN 'hallazgo' ELSE 'bug' END AS kind,
                    COALESCE(d.status, 'OPEN') AS status,
+                   COALESCE(NULLIF(d.severity, ''), 'Media') AS severity,
                    COUNT(*)::int AS count
               FROM qa_defects d
              WHERE d.project_id = ?
-             GROUP BY kind, COALESCE(d.status, 'OPEN')
+             GROUP BY kind, COALESCE(d.status, 'OPEN'), COALESCE(NULLIF(d.severity, ''), 'Media')
              ORDER BY kind, count DESC
         `, [project_id]);
 
-        const bugs = defects.rows.filter((row) => row.kind === 'bug');
-        const hallazgos = defects.rows.filter((row) => row.kind === 'hallazgo');
+        const RESOLVED_DEFECT_STATUSES = new Set([
+            'FIXED', 'CLOSED', 'CERRADO', 'WONT_FIX', 'DISMISSED',
+            'RESUELTO', 'RESOLVED', 'DESCARTADO',
+        ]);
+        const isOpenDefectStatus = (status) =>
+            !RESOLVED_DEFECT_STATUSES.has(String(status || 'OPEN').toUpperCase());
+
+        function groupByStatus(kind) {
+            const map = new Map();
+            for (const row of defects.rows) {
+                if (row.kind !== kind) continue;
+                map.set(row.status, (map.get(row.status) || 0) + Number(row.count));
+            }
+            return [...map.entries()]
+                .map(([status, count]) => ({ status, count }))
+                .sort((a, b) => b.count - a.count);
+        }
+
+        function groupOpenBySeverity(kind) {
+            const map = new Map();
+            for (const row of defects.rows) {
+                if (row.kind !== kind || !isOpenDefectStatus(row.status)) continue;
+                map.set(row.severity, (map.get(row.severity) || 0) + Number(row.count));
+            }
+            const order = ['Crítica', 'Alta', 'Media', 'Baja'];
+            return [...map.entries()]
+                .map(([severity, count]) => ({ severity, count }))
+                .sort((a, b) => order.indexOf(a.severity) - order.indexOf(b.severity));
+        }
+
+        const bugs = groupByStatus('bug');
+        const hallazgos = groupByStatus('hallazgo');
 
         res.json({
             summary: {
@@ -332,7 +363,12 @@ router.get('/overview', requireAuth, async (req, res) => {
             statuses: statuses.rows,
             coverage: coverage.rows,
             exploratory: exploratory.rows,
-            defects: { bugs, hallazgos },
+            defects: {
+                bugs,
+                hallazgos,
+                open_bugs_by_severity: groupOpenBySeverity('bug'),
+                open_hallazgos_by_severity: groupOpenBySeverity('hallazgo'),
+            },
         });
     } catch (err) {
         res.status(500).json({ error: err.message });
