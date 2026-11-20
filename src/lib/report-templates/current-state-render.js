@@ -173,7 +173,7 @@ function renderCurrentStateReport(data) {
             ${kpi('TC OK', data.counts.OK, 'Último estado guardado', '#15803d')}
             ${kpi('TC FAIL / BLOCK', data.counts.FAIL + data.counts.BLOCK, 'Requieren atención', data.counts.FAIL + data.counts.BLOCK > 0 ? '#dc2626' : '#15803d')}
             ${kpi('Pendientes', data.counts.PENDING, 'Sin ejecutar / sin guardar', data.counts.PENDING > 0 ? '#b45309' : '#15803d')}
-            ${kpi('Adjuntos', data.evidenceCount, `${data.omittedEvidence} no disponible(s)`, '#4f46e5')}
+            ${kpi('Adjuntos disponibles', data.evidenceCount, `${data.evidenceCount + data.omittedEvidence} detectado(s) · ${data.omittedEvidence} no disponible(s)`, '#4f46e5')}
             ${kpi('Bugs abiertos', data.openBugs.length, `${data.defects.length - data.openBugs.length} resuelto(s)`, data.openBugs.length > 0 ? '#dc2626' : '#15803d')}
             ${kpi('Hallazgos abiertos', data.openHallazgos.length, `${data.hallazgos.length - data.openHallazgos.length} resuelto(s)`, data.openHallazgos.length > 0 ? '#b45309' : '#15803d')}
         </div>

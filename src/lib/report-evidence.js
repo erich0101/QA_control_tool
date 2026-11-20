@@ -9,7 +9,9 @@ const EMBED_MAX_BYTES = Number(process.env.EVIDENCE_EMBED_MAX_BYTES || 10 * 1024
 async function getEvidenceBase64(attachmentId) {
     try {
         const result = await query(
-            `SELECT id, mime_type, storage_kind, storage_path, file_data FROM qa_attachments WHERE id = ?`,
+            `SELECT id, mime_type, storage_kind, storage_path,
+                    encode(file_data, 'base64') AS file_data_b64
+               FROM qa_attachments WHERE id = ?`,
             [attachmentId]
         );
         if (result.rows.length === 0) return null;
@@ -17,15 +19,15 @@ async function getEvidenceBase64(attachmentId) {
 
         let buffer;
         if (r.storage_kind === 'legacy_pg' || !r.storage_kind || !r.storage_path) {
-            if (!r.file_data) return null;
-            buffer = Buffer.from(r.file_data, 'base64');
+            if (!r.file_data_b64) return null;
+            buffer = Buffer.from(r.file_data_b64, 'base64');
         } else {
             const abs = evidenceStore.absolutePath(r.storage_path);
             if (fs.existsSync(abs)) {
                 buffer = fs.readFileSync(abs);
-            } else if (r.file_data) {
+            } else if (r.file_data_b64) {
                 // El archivo local no está en esta máquina pero hay respaldo en PG.
-                buffer = Buffer.from(r.file_data, 'base64');
+                buffer = Buffer.from(r.file_data_b64, 'base64');
             } else {
                 return null;
             }

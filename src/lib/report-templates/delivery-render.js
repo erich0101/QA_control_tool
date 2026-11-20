@@ -192,7 +192,7 @@ function renderDeliveryReport(data) {
             ${kpi('TC FAIL / BLOCK', data.counts.FAIL + data.counts.BLOCK, 'Requieren atención', data.counts.FAIL + data.counts.BLOCK > 0 ? '#dc2626' : '#15803d')}
             ${kpi('Pendientes', data.counts.PENDING, 'Sin ejecutar', data.counts.PENDING > 0 ? '#b45309' : '#15803d')}
             ${kpi('Retest', data.retestRuns.length, `${data.retestedTests.length} TC re-testeados`, data.retestRuns.length > 0 ? '#4f46e5' : '#6b7280')}
-            ${kpi('Adjuntos', data.evidenceCount, `${data.omittedEvidence} no disponible(s)`, '#4f46e5')}
+            ${kpi('Adjuntos disponibles', data.evidenceCount, `${data.evidenceCount + data.omittedEvidence} detectado(s) · ${data.omittedEvidence} no disponible(s)`, '#4f46e5')}
             ${kpi('Defectos abiertos', data.openDefects.length, `${data.resolvedDefects.length} resuelto(s)`, data.openDefects.length > 0 ? '#dc2626' : '#15803d')}
         </div>
 
