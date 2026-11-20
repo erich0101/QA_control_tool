@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/dialog';
 import { Field } from '@/components/ui/field';
 import { SelectField } from '@/components/ui/select-field';
-import type { TestSuite, UseCase } from '@/lib/api/types';
+import type { UseCase } from '@/lib/api/types';
 import {
   matrixImportApi,
   type MatrixImportOptions,
@@ -25,11 +25,10 @@ interface MatrixImportDialogProps {
   onOpenChange: (open: boolean) => void;
   projectId: number | null;
   useCases: UseCase[];
-  suites: TestSuite[];
   onImported: () => void | Promise<void>;
 }
 
-type Destination = 'create' | 'existing_cu' | 'existing_suite';
+type Destination = 'create' | 'existing_cu';
 
 /**
  * Importación de matrices QA desde proyecto.
@@ -41,7 +40,6 @@ export function MatrixImportDialog({
   onOpenChange,
   projectId,
   useCases,
-  suites,
   onImported,
 }: MatrixImportDialogProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -52,10 +50,7 @@ export function MatrixImportDialog({
   const [isCommitting, setIsCommitting] = useState(false);
 
   const [destination, setDestination] = useState<Destination>('create');
-  const [createUserStories, setCreateUserStories] = useState(true);
-  const [groupByHu, setGroupByHu] = useState(true);
   const [existingUseCaseId, setExistingUseCaseId] = useState('');
-  const [existingSuiteId, setExistingSuiteId] = useState('');
   const [conflictPolicy, setConflictPolicy] = useState<'skip' | 'update'>('skip');
   const [cuMapping, setCuMapping] = useState<Record<string, string>>({});
 
@@ -65,10 +60,7 @@ export function MatrixImportDialog({
     setPreview(null);
     setError(null);
     setDestination('create');
-    setCreateUserStories(true);
-    setGroupByHu(true);
     setExistingUseCaseId('');
-    setExistingSuiteId('');
     setConflictPolicy('skip');
     setCuMapping({});
   }, [open]);
@@ -82,12 +74,11 @@ export function MatrixImportDialog({
 
   const options = (): MatrixImportOptions => ({
     create_use_cases: destination === 'create',
-    create_user_stories: createUserStories,
-    group_by_hu: groupByHu,
+    // En Test Suites el vínculo CU-HU-TC es obligatorio.
+    create_user_stories: true,
+    group_by_hu: true,
     existing_use_case_id:
       destination === 'existing_cu' && existingUseCaseId ? Number(existingUseCaseId) : null,
-    existing_suite_id:
-      destination === 'existing_suite' && existingSuiteId ? Number(existingSuiteId) : null,
     conflict_policy: conflictPolicy,
     cu_mapping:
       destination === 'create'
@@ -112,10 +103,6 @@ export function MatrixImportDialog({
     }
     if (destination === 'existing_cu' && !existingUseCaseId) {
       toast.warning('Seleccioná el CU existente');
-      return;
-    }
-    if (destination === 'existing_suite' && !existingSuiteId) {
-      toast.warning('Seleccioná la suite existente');
       return;
     }
 
@@ -211,7 +198,6 @@ export function MatrixImportDialog({
                 options={[
                   { value: 'create', label: 'Crear CU y HU desde la matriz' },
                   { value: 'existing_cu', label: 'Usar un CU existente' },
-                  { value: 'existing_suite', label: 'Usar una suite existente' },
                 ]}
               />
             </Field>
@@ -247,52 +233,12 @@ export function MatrixImportDialog({
               </Field>
             ) : null}
 
-            {destination === 'existing_suite' ? (
-              <Field label="Suite existente" htmlFor="matrix-existing-suite">
-                <SelectField
-                  id="matrix-existing-suite"
-                  value={existingSuiteId}
-                  onValueChange={(value) => {
-                    setExistingSuiteId(value);
-                    setPreview(null);
-                  }}
-                  allowEmpty
-                  placeholder="Seleccionar suite"
-                  options={suites.map((item) => ({
-                    value: String(item.id),
-                    label: `#${item.id} · ${item.title}`,
-                  }))}
-                />
-              </Field>
-            ) : null}
           </div>
 
-          <div className="flex flex-wrap gap-4 rounded-lg border border-border p-3 text-footnote">
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                className="size-4 accent-brand"
-                checked={createUserStories}
-                onChange={(event) => {
-                  setCreateUserStories(event.target.checked);
-                  setPreview(null);
-                }}
-              />
-              Crear HU/Features desde la matriz
-            </label>
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                className="size-4 accent-brand"
-                checked={groupByHu}
-                disabled={!createUserStories}
-                onChange={(event) => {
-                  setGroupByHu(event.target.checked);
-                  setPreview(null);
-                }}
-              />
-              Agrupar TC por HU (una suite por HU)
-            </label>
+          <div className="rounded-lg border border-brand/30 bg-brand-soft px-3 py-2 text-caption text-fg-muted">
+            <strong className="text-fg">Vínculo obligatorio:</strong> en Test Suites cada TC debe
+            quedar asociado a un CU/Módulo y a una HU/Feature. La importación crea una suite por
+            HU y no permite importar TC sueltos.
           </div>
 
           <Button

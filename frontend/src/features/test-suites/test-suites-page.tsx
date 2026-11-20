@@ -305,7 +305,6 @@ export function TestSuitesPage() {
         onOpenChange={setImportOpen}
         projectId={projectId}
         useCases={useCases}
-        suites={suites}
         onImported={handleMatrixImported}
       />
 

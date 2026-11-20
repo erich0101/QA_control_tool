@@ -243,6 +243,33 @@ function buildPlan(parsed, options, context) {
   const useCasesMode = options.createUseCases && useCreateHierarchy;
   const userStoriesMode = options.createUserStories;
 
+  // En Test Suites el vínculo CU → HU → TC es obligatorio. No se acepta
+  // importar TCs sueltos ni omitir la creación de HU.
+  if (!userStoriesMode) {
+    errors.push({
+      row: null,
+      field: 'HU / Requerimiento',
+      message:
+        'En Test Suites el vínculo CU-HU-TC es obligatorio: la importación debe crear/vincular HU.',
+    });
+  }
+  if (!options.groupByHu) {
+    errors.push({
+      row: null,
+      field: 'Agrupación por HU',
+      message:
+        'En Test Suites los TC deben agruparse por HU: activá “Agrupar TC por HU”.',
+    });
+  }
+  if (context.existingSuite && !context.existingSuite.use_case_id) {
+    errors.push({
+      row: null,
+      field: 'CU / Módulo',
+      message:
+        'La suite seleccionada no tiene CU asociado. En Test Suites el vínculo CU-HU-TC es obligatorio.',
+    });
+  }
+
   for (const row of parsed.rows) {
     if (!row.title) {
       errors.push({ row: row.excelRow, field: 'Escenario / Título', message: 'El título del TC está vacío.' });
