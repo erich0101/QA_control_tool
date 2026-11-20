@@ -157,6 +157,7 @@ function renderCurrentStateReport(data) {
             <h1>Estado actual de entrega — QA</h1>
             <p>${esc(data.project.name)} · ${esc(data.suite.title)} · ${esc(cycleLabel)} · ${esc(stateLabel)}</p>
             <p style="margin-top:4px;">${esc(data.useCase.key || '')} ${esc(data.useCase.title || '')} · ${esc(data.run.name || 'Sin nombre')} · Generado ${fmt(new Date())}</p>
+            ${!data.isFinished ? `<p style="margin:6px 0 0;font-size:.7rem;opacity:.9;">Sesión activa: este reporte es una foto del último estado guardado al momento de generación. Volvé a generarlo para actualizar los datos.</p>` : ''}
         </div>
 
         <div style="background:${tone.bg};border:1px solid ${tone.border};border-left:6px solid ${tone.accent};border-radius:10px;padding:13px 16px;margin-bottom:14px;">
